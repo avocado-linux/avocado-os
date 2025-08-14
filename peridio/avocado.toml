@@ -1,0 +1,36 @@
+[runtime.dev]
+target = "qemux86-64"
+
+[runtime.dev.dependencies]
+avocado-img-bootfiles = "*"
+avocado-img-rootfs = "*"
+avocado-img-initramfs = "*"
+avocado-dev = {ext = "avocado-dev"}
+peridio = {ext = "peridio"}
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"
+
+[sdk.dependencies]
+nativesdk-qemu-system-x86-64 = "*"
+
+[ext.avocado-dev]
+types = ["sysext", "confext"]
+scopes = ["system"]
+modprobe = ["nfs"]
+
+[ext.avocado-dev.dependencies]
+avocado-hitl = "*"
+openssh = "*"
+
+[ext.avocado-dev.sdk.dependencies]
+nativesdk-avocado-hitl = "*"
+
+[ext.peridio]
+types = ["sysext", "confext"]
+enable_services = ["peridiod.service"]
+# overlay = {dir = "peridiod-overlay", mode = "opaque"}
+overlay = "peridio-overlay"
+
+[ext.peridio.dependencies]
+peridiod = "*"
