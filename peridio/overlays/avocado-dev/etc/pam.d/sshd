@@ -1,0 +1,16 @@
+# /etc/pam.d/sshd
+# Allow login to be blocked by /etc/nologin if present
+auth       required     pam_nologin.so
+
+# Allow empty passwords for accounts that have them (e.g., root after `passwd -d`)
+# 'sufficient' short-circuits on success so we don't also run the common stack
+auth       sufficient   pam_unix.so nullok
+
+# Keep the rest of your normal policy (2FA, faillock, etc.) for non-empty passwords
+auth       include      common-auth
+
+account    include      common-account
+password   include      common-password
+session    optional     pam_keyinit.so force revoke
+session    include      common-session
+session    required     pam_loginuid.so

@@ -17,7 +17,19 @@ nativesdk-qemu-system-x86-64 = "*"
 [ext.avocado-dev]
 types = ["sysext", "confext"]
 scopes = ["system"]
+overlay = "overlays/avocado-dev"
 modprobe = ["nfs"]
+enable_services = ["sshd.socket"]
+
+[ext.avocado-dev.users.root]
+password = ""
+
+[ext.avocado-dev.users.avocado]
+groups = ["avocado"]
+password = "$6$9YieAo4LtYEIqB6K$og/ykbnIiXP21yc6WHAVKkkIMNE5jaho8Ijj6zFo0UlOxWGpH9xrduFc0P9UYBtQXz2LrJjx7DK7/XAObLoqh0"
+
+[ext.avocado-dev.groups.avocado]
+gid = 1000
 
 [ext.avocado-dev.dependencies]
 avocado-hitl = "*"
@@ -30,7 +42,7 @@ nativesdk-avocado-hitl = "*"
 types = ["sysext", "confext"]
 enable_services = ["peridiod.service"]
 # overlay = {dir = "peridiod-overlay", mode = "opaque"}
-overlay = "peridio-overlay"
+overlay = "overlays/peridio"
 
 [ext.peridio.dependencies]
 peridiod = "*"
