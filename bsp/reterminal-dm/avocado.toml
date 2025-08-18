@@ -1,0 +1,20 @@
+default_target = "reterminal-dm"
+supported_targets = ["reterminal-dm"]
+
+[ext.avocado-bsp-reterminal-dm]
+version = "1.0.0"
+release = "r0"
+vendor = "Avocado Linux <info@avocadolinux.org>"
+summary = "Board support for the ReTerminal DM"
+description = "Board support for the ReTerminal DM"
+license = "Apache-2.0"
+url = "https://github.com/avocadolinux/avocado-ext"
+types = ["sysext", "confext"]
+
+modprobe = ["panel-ilitek-ili9881c"]
+
+[ext.avocado-bsp-reterminal-dm.dependencies]
+kernel-module-panel-ilitek-ili9881c = "*"
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"

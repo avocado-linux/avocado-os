@@ -1,0 +1,20 @@
+supported_targets = "*"
+
+[ext.avocado-ext-webkit]
+version = "1.0.0"
+release = "r0"
+vendor = "Avocado Linux <info@avocadolinux.org>"
+summary = "WPE WebKit browser and display utilities"
+description = "WPE WebKit browser and display utilities"
+license = "Apache-2.0"
+url = "https://github.com/avocadolinux/avocado-ext"
+types = ["sysext", "confext"]
+
+[ext.avocado-ext-webkit.dependencies]
+cog = "*"
+weston = "*"
+wpewebkit = "*"
+wpebackend-fdo = "*"
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"

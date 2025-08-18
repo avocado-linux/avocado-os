@@ -1,0 +1,17 @@
+default_target = "reterminal"
+supported_targets = ["reterminal"]
+
+[ext.avocado-bsp-reterminal]
+version = "1.0.0"
+release = "r0"
+vendor = "Avocado Linux <info@avocadolinux.org>"
+summary = "Board support for the ReTerminal"
+description = "Board support for the ReTerminal"
+license = "Apache-2.0"
+url = "https://github.com/avocadolinux/avocado-ext"
+types = ["sysext", "confext"]
+
+[ext.avocado-bsp-reterminal.dependencies]
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"

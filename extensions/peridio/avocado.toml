@@ -1,0 +1,19 @@
+supported_targets = "*"
+
+[ext.avocado-ext-peridio]
+version = "1.0.0"
+release = "r0"
+vendor = "Avocado Linux <info@avocadolinux.org>"
+summary = "Peridio firmware updater"
+description = "Peridio firmware updater"
+license = "Apache-2.0"
+url = "https://github.com/avocadolinux/avocado-ext"
+types = ["sysext", "confext"]
+enable_services = ["peridiod.service"]
+overlay = "overlay"
+
+[ext.avocado-ext-peridio.dependencies]
+peridiod = "*"
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"

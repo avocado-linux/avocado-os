@@ -1,0 +1,17 @@
+default_target = "raspberrypi4"
+supported_targets = ["raspberrypi4"]
+
+[ext.avocado-bsp-raspberrypi4]
+version = "1.0.0"
+release = "r0"
+vendor = "Avocado Linux <info@avocadolinux.org>"
+summary = "Board support for the Raspberry Pi 4"
+description = "Board support for the Raspberry Pi 4"
+license = "Apache-2.0"
+url = "https://github.com/avocadolinux/avocado-ext"
+types = ["sysext", "confext"]
+
+[ext.avocado-bsp-raspberrypi4.dependencies]
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"

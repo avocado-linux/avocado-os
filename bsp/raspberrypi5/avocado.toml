@@ -1,0 +1,17 @@
+default_target = "raspberrypi5"
+supported_targets = ["raspberrypi5"]
+
+[ext.avocado-bsp-raspberrypi5]
+version = "1.0.0"
+release = "r0"
+vendor = "Avocado Linux <info@avocadolinux.org>"
+summary = "Board support for the Raspberry Pi 5"
+description = "Board support for the Raspberry Pi 5"
+license = "Apache-2.0"
+url = "https://github.com/avocadolinux/avocado-ext"
+types = ["sysext", "confext"]
+
+[ext.avocado-bsp-raspberrypi5.dependencies]
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"

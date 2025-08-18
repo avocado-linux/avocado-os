@@ -1,0 +1,21 @@
+supported_targets = "*"
+
+[ext.avocado-ext-sshd-dev]
+version = "1.0.0"
+release = "r0"
+vendor = "Avocado Linux <info@avocadolinux.org>"
+summary = "SSH server with root login"
+description = "SSH server that allows root login with no password. DO NOT USE IN PRODUCTION."
+license = "Apache-2.0"
+url = "https://github.com/avocadolinux/avocado-ext"
+
+types = ["sysext", "confext"]
+enable_services = ["sshd.socket"]
+# on_merge = ["systemctl restart sshd.socket"]
+overlay = "overlay"
+
+[ext.avocado-ext-sshd-dev.dependencies]
+openssh = "*"
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"

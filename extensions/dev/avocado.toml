@@ -1,0 +1,22 @@
+supported_targets = "*"
+src_dir = "../../"
+
+[ext.avocado-ext-dev]
+version = "1.0.0"
+release = "r0"
+vendor = "Avocado Linux <info@avocadolinux.org>"
+summary = "Avocado development tools"
+description = "Avocado development tools"
+license = "Apache-2.0"
+url = "https://github.com/avocadolinux/avocado-ext"
+types = ["sysext", "confext"]
+
+[ext.avocado-ext-dev.dependencies]
+avocado-hitl = "*"
+avocado-ext-sshd-dev = { ext = "avocado-ext-sshd-dev", config = "extensions/sshd-dev/avocado.toml" }
+
+[ext.avocado-ext-dev.sdk.dependencies]
+nativesdk-avocado-hitl = "*"
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"
