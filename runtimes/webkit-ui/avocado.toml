@@ -13,6 +13,29 @@ avocado-img-rootfs = "*"
 avocado-img-initramfs = "*"
 avocado-ext-dev = { ext = "avocado-ext-dev", config = "extensions/dev/avocado.toml" }
 avocado-ext-webkit = { ext = "avocado-ext-webkit", config = "extensions/webkit/avocado.toml" }
+config = { ext = "config" }
+app = { ext = "app" }
+
+[ext.app]
+types = ["sysext", "confext"]
+
+[ext.app.dependencies]
+
+[ext.config]
+types = ["confext"]
+
+[ext.config.users.root]
+password = ""
+
+[provision.usb]
+container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
+
+[provision.sd]
+container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"
+container_args = ["--network=host"]
 
 [runtime.webkit-ui.reterminal-dm.dependencies]
 avocado-bsp-reterminal-dm = { ext = "avocado-bsp-reterminal-dm", config = "bsp/reterminal-dm/avocado.toml" }
@@ -25,6 +48,3 @@ avocado-bsp-raspberrypi5 = { ext = "avocado-bsp-raspberrypi5", config = "bsp/ras
 
 [runtime.webkit-ui.raspberrypi4.dependencies]
 avocado-bsp-raspberrypi4 = { ext = "avocado-bsp-raspberrypi4", config = "bsp/raspberrypi4/avocado.toml" }
-
-[sdk]
-image = "avocadolinux/sdk:apollo-edge"

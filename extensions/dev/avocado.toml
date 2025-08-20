@@ -10,13 +10,18 @@ description = "Avocado development tools"
 license = "Apache-2.0"
 url = "https://github.com/avocadolinux/avocado-ext"
 types = ["sysext", "confext"]
+on_merge = ["btrfs filesystem resize max /var"]
 
 [ext.avocado-ext-dev.dependencies]
 avocado-hitl = "*"
 avocado-ext-sshd-dev = { ext = "avocado-ext-sshd-dev", config = "extensions/sshd-dev/avocado.toml" }
+rsync = "*"
 
 [ext.avocado-ext-dev.sdk.dependencies]
 nativesdk-avocado-hitl = "*"
+nativesdk-openssh-ssh = "*"
+nativesdk-openssh-scp = "*"
+nativesdk-rsync = "*"
 
 [sdk]
 image = "avocadolinux/sdk:apollo-edge"

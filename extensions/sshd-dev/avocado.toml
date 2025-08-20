@@ -1,5 +1,7 @@
 supported_targets = "*"
 
+src_dir = "../../"
+
 [ext.avocado-ext-sshd-dev]
 version = "1.0.0"
 release = "r0"
@@ -11,8 +13,8 @@ url = "https://github.com/avocadolinux/avocado-ext"
 
 types = ["sysext", "confext"]
 enable_services = ["sshd.socket"]
-# on_merge = ["systemctl restart sshd.socket"]
-overlay = "overlay"
+on_merge = ["systemctl restart --no-block sshd.socket"]
+overlay = "extensions/sshd-dev/overlay"
 
 [ext.avocado-ext-sshd-dev.dependencies]
 openssh = "*"

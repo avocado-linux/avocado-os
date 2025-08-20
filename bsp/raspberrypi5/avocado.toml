@@ -10,8 +10,10 @@ description = "Board support for the Raspberry Pi 5"
 license = "Apache-2.0"
 url = "https://github.com/avocadolinux/avocado-ext"
 types = ["sysext", "confext"]
+on_merge = ["udevadm trigger --action=add"]
 
 [ext.avocado-bsp-raspberrypi5.dependencies]
+fwup = "*"
 
 [sdk]
 image = "avocadolinux/sdk:apollo-edge"
