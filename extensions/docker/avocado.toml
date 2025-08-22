@@ -1,0 +1,22 @@
+supported_targets = "*"
+src_dir = "../../"
+
+[ext.avocado-ext-docker]
+version = "1.0.0"
+release = "r0"
+vendor = "Avocado Linux <info@avocadolinux.org>"
+summary = "Avocado Docker container engine"
+description = "Avocado Docker container engine"
+license = "Apache-2.0"
+url = "https://github.com/avocadolinux/avocado-ext"
+types = ["sysext", "confext"]
+enable_services = ["docker.service"]
+
+[ext.avocado-ext-docker.dependencies]
+docker = "*"
+kernel-module-br-netfilter = "*"
+kernel-module-veth = "*"
+kernel-module-bridge = "*"
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"
