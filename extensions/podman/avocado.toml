@@ -1,0 +1,21 @@
+supported_targets = "*"
+src_dir = "../../"
+
+[ext.avocado-ext-podman]
+version = "1.0.0"
+release = "r0"
+vendor = "Avocado Linux <info@avocadolinux.org>"
+summary = "Avocado Podman container engine"
+description = "Avocado Podman container engine"
+license = "Apache-2.0"
+url = "https://github.com/avocadolinux/avocado-ext"
+types = ["sysext", "confext"]
+
+[ext.avocado-ext-podman.dependencies]
+podman = "*"
+kernel-module-br-netfilter = "*"
+kernel-module-veth = "*"
+kernel-module-bridge = "*"
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"
