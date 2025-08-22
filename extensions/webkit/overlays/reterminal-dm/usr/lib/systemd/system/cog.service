@@ -1,0 +1,21 @@
+[Unit]
+Description=Cog Webkit Launcher for reTerminalDM
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Ensure environment substitution works
+EnvironmentFile=-/etc/default/cog-avocado
+
+# Default URL (can be overridden in EnvironmentFile)
+Environment=COG_URL=https://avocadolinux.org
+
+# Build the CA bundle before starting cog
+ExecStartPre=/bin/sh -c "cat /usr/share/ca-certificates/mozilla/*.crt > /etc/ssl/certs/ca-certificates.crt"
+
+# Launch cog
+ExecStart=/usr/bin/cog --platform-params='renderer=gles,rotation=3' ${COG_URL}
+
+Restart=always
+
+

@@ -1,4 +1,5 @@
 supported_targets = "*"
+src_dir = "../../"
 
 [ext.avocado-ext-webkit]
 version = "1.0.0"
@@ -9,12 +10,23 @@ description = "WPE WebKit browser and display utilities"
 license = "Apache-2.0"
 url = "https://github.com/avocadolinux/avocado-ext"
 types = ["sysext", "confext"]
+enable_services = ["cog.service"]
+on_merge = ["systemctl restart --no-block cog.service"]
+
+[ext.avocado-ext-webkit.reterminal-dm]
+overlay = "extensions/webkit/overlays/reterminal-dm"
+
+[ext.avocado-ext-webkit.reterminal]
+overlay = "extensions/webkit/overlays/reterminal"
 
 [ext.avocado-ext-webkit.dependencies]
 cog = "*"
-weston = "*"
 wpewebkit = "*"
+weston = "*"
 wpebackend-fdo = "*"
+ca-certificates = "*"
+p11-kit = "*"
+ethtool = "*"
 
 [sdk]
 image = "avocadolinux/sdk:apollo-edge"

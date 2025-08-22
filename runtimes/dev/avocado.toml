@@ -7,7 +7,38 @@ avocado-img-rootfs = "*"
 avocado-img-initramfs = "*"
 avocado-ext-dev = { ext = "avocado-ext-dev", config = "extensions/dev/avocado.toml" }
 config = { ext = "config" }
+app = { ext = "app" }
 
+[ext.app]
+types = ["sysext", "confext"]
+
+[ext.app.dependencies]
+i2c-tools = "*"
+
+[ext.config]
+types = ["confext"]
+
+[ext.config.users.root]
+password = ""
+
+[provision.usb]
+container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
+
+[provision.sd]
+container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"
+container_args = ["--network=host"]
+
+
+[sdk.qemux86-64]
+container_args = ["--net=host"]
+
+[sdk.qemuarm64]
+container_args = ["--net=host"]
+
+# BSPs
 [runtime.dev.reterminal-dm.dependencies]
 avocado-bsp-reterminal-dm = { ext = "avocado-bsp-reterminal-dm", config = "bsp/reterminal-dm/avocado.toml" }
 
@@ -19,18 +50,3 @@ avocado-bsp-raspberrypi5 = { ext = "avocado-bsp-raspberrypi5", config = "bsp/ras
 
 [runtime.dev.raspberrypi4.dependencies]
 avocado-bsp-raspberrypi4 = { ext = "avocado-bsp-raspberrypi4", config = "bsp/raspberrypi4/avocado.toml" }
-
-[ext.config]
-types = ["confext"]
-
-[ext.config.users.root]
-password = ""
-
-[sdk]
-image = "avocadolinux/sdk:apollo-edge"
-
-[sdk.qemux86-64]
-container_args = ["--net=host"]
-
-[sdk.qemuarm64]
-container_args = ["--net=host"]

@@ -20,6 +20,10 @@ app = { ext = "app" }
 types = ["sysext", "confext"]
 
 [ext.app.dependencies]
+libdrm-tests = "*"
+i2c-tools = "*"
+curl = "*"
+iperf3 = "*"
 
 [ext.config]
 types = ["confext"]

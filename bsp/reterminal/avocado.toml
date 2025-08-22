@@ -1,5 +1,6 @@
 default_target = "reterminal"
 supported_targets = ["reterminal"]
+src_dir = "../../"
 
 [ext.avocado-bsp-reterminal]
 version = "1.0.0"
@@ -10,8 +11,12 @@ description = "Board support for the ReTerminal"
 license = "Apache-2.0"
 url = "https://github.com/avocadolinux/avocado-ext"
 types = ["sysext", "confext"]
-on_merge = ["udevadm trigger --action=add"]
-modprobe = ["mipi_dsi", "lis3lv02d"]
+modprobe = ["gpio-pca953x", "rtc-pcf8563"]
+on_merge = [
+  "udevadm control --reload",
+  "udevadm trigger --type=subsystems --action=add --settle",
+  "udevadm trigger --type=devices --action=add --settle"
+]
 
 [ext.avocado-bsp-reterminal.dependencies]
 kernel-module-v3d = "*"
@@ -50,10 +55,12 @@ kernel-module-uio = "*"
 kernel-module-fuse = "*"
 kernel-module-sch-fq-codel = "*"
 kernel-module-ipv6 = "*"
+kernel-module-gpio-pca953x = "*"
+kernel-module-rtc-pcf8563 = "*"
 
-kernel-module-mipi-dsi = "*"
+kernel-module-seeed-mipi-dsi = "*"
 kernel-module-lis3lv02d = "*"
-kernel-modules = "*"
+kernel-module-ltr30x = "*"
 
 fwup = "*"
 
