@@ -1,4 +1,4 @@
-supported_targets = "*"
+supported_targets = ["raspberrypi4", "raspberrypi5", "reterminal", "reterminal-dm"]
 src_dir = "../../"
 
 [ext.avocado-ext-webkit]

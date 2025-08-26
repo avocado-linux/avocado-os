@@ -13,6 +13,7 @@ avocado-img-rootfs = "*"
 avocado-img-initramfs = "*"
 avocado-ext-dev = { ext = "avocado-ext-dev", config = "extensions/dev/avocado.toml" }
 avocado-ext-webkit = { ext = "avocado-ext-webkit", config = "extensions/webkit/avocado.toml" }
+avocado-ext-docker = { ext = "avocado-ext-docker", config = "extensions/docker/avocado.toml" }
 config = { ext = "config" }
 app = { ext = "app" }
 

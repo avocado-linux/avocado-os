@@ -1,4 +1,7 @@
-supported_targets = "*"
+supported_targets = ["raspberrypi4", "raspberrypi5", "reterminal", "reterminal-dm"]
+# Working on adding full support for all targets
+# supported_targets = "*"
+
 src_dir = "../../"
 
 [ext.avocado-ext-docker]

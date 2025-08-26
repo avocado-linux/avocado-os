@@ -1,0 +1,3 @@
+[submodule "distro"]
+	path = distro
+	url = git@github.com:avocado-linux/meta-avocado.git
