@@ -22,7 +22,6 @@ types = ["sysext", "confext"]
 
 [ext.app.dependencies]
 libdrm-tests = "*"
-i2c-tools = "*"
 curl = "*"
 iperf3 = "*"
 
