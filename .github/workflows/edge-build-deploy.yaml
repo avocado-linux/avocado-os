@@ -155,14 +155,16 @@ jobs:
           echo "SDKMACHINE: ${{ matrix.build_config.sdk_machine }}"
           echo "DISTRO_CODENAME: ${{ needs.determine_build_matrix.outputs.distro_codename }}"
 
-          source ./distro/scripts/init-build distro/kas/machine/${{ matrix.machine }}.yml
-          PARALLEL_MAKE_ERLANG="-j16" kas build distro/kas/machine/${{ matrix.machine }}.yml --target ${{ matrix.build_config.target }}
+          cd distro
+          source ./scripts/init-build kas/machine/${{ matrix.machine }}.yml
+          PARALLEL_MAKE_ERLANG="-j16" kas build kas/machine/${{ matrix.machine }}.yml --target ${{ matrix.build_config.target }}
 
       - name: Stage target repos for ${{ matrix.machine }}
         run: |
           echo "Staging repos for ${{ matrix.machine }} to ${{ env.STAGING_PATH }}"
-          ls ./build-${{ matrix.machine }}/build/tmp/deploy/rpm
-          ./distro/scripts/repo-stage-rpms.sh ./build-${{ matrix.machine }}/build/tmp/deploy/rpm ${{ env.STAGING_PATH }} ${{ needs.determine_build_matrix.outputs.distro_codename }}
+          ls ./distro/build-${{ matrix.machine }}/build/tmp/deploy/rpm
+          cd distro
+          ./scripts/repo-stage-rpms.sh ./build-${{ matrix.machine }}/build/tmp/deploy/rpm ${{ env.STAGING_PATH }} ${{ needs.determine_build_matrix.outputs.distro_codename }}
 
   aggregate_packages:
     needs:
@@ -247,12 +249,15 @@ jobs:
           submodules: recursive
 
       - name: Make cleanup script executable
-        run: chmod +x ./distro/scripts/repo-purge-window.sh
+        run: |
+          cd distro
+          chmod +x ./scripts/repo-purge-window.sh
 
       - name: Run cleanup script on packages directory
         run: |
           echo "Running cleanup script on ${{ env.PACKAGES_PATH }}"
-          ./distro/scripts/repo-purge-window.sh "${{ env.PACKAGES_PATH }}"
+          cd distro
+          ./scripts/repo-purge-window.sh "${{ env.PACKAGES_PATH }}"
 
   create_release_metadata:
     needs:
@@ -281,7 +286,8 @@ jobs:
           echo "Reading packages from: ${{ env.PACKAGES_PATH }}"
           echo "Writing metadata to: ${{ env.RELEASES_PATH }}"
           echo "Metadata will reference packages at: ${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}"
-          ./distro/scripts/repo-update-metadata.sh "${{ env.PACKAGES_PATH }}" "${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}" "${{ env.RELEASES_PATH }}"
+          cd distro
+          ./scripts/repo-update-metadata.sh "${{ env.PACKAGES_PATH }}" "${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}" "${{ env.RELEASES_PATH }}"
 
   sync_to_s3:
     needs:
