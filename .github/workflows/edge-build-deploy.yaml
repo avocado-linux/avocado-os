@@ -157,7 +157,8 @@ jobs:
 
           cd distro
           source ./scripts/init-build kas/machine/${{ matrix.machine }}.yml
-          PARALLEL_MAKE_ERLANG="-j16" kas build kas/machine/${{ matrix.machine }}.yml --target ${{ matrix.build_config.target }}
+          source .envrc
+          kas build "$KAS_YML" --target ${{ matrix.build_config.target }}
 
       - name: Stage target repos for ${{ matrix.machine }}
         run: |
