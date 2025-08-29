@@ -203,13 +203,6 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
-
     - name: Download and install avocado-cli
       run: |
         VERSION="${{ needs.generate-matrix.outputs.avocado_version }}"
@@ -267,11 +260,10 @@ jobs:
         echo "Using package repo URL: $AVOCADO_SDK_REPO_URL"
         echo "Using Docker network: $AVOCADO_CONTAINER_NETWORK"
 
-        echo "Running avocado install -f..."
+        echo "Building extension package ..."
         avocado ext install -e avocado-ext-"${{ matrix.extension }}" -f --target "${{ matrix.target }}" --container-arg "--network" --container-arg "$AVOCADO_CONTAINER_NETWORK"
         avocado ext build -e avocado-ext-"${{ matrix.extension }}" --target "${{ matrix.target }}" --container-arg "--network" --container-arg "$AVOCADO_CONTAINER_NETWORK"
         avocado ext package -e avocado-ext-"${{ matrix.extension }}" --target "${{ matrix.target }}" --out-dir "${{ matrix.extension }}-${{ matrix.target }}" --container-arg "--network" --container-arg "$AVOCADO_CONTAINER_NETWORK"
-        avocado clean
 
     - name: Copy package to cache directory
       run: |
@@ -293,6 +285,73 @@ jobs:
 
         echo "Package copied successfully to cache directory"
         ls -la "$CACHE_DIR"
+
+    - name: Cleanup avocado state
+      if: always()
+      run: |
+        cd extensions/${{ matrix.extension }}
+        echo "Cleaning up avocado state for extension: ${{ matrix.extension }}"
+
+        # Try normal cleanup first
+        if ! avocado clean; then
+          echo "Normal avocado clean failed, attempting force cleanup..."
+
+          # Extract volume name from error if present
+          VOLUME_ERROR=$(avocado clean 2>&1 | grep -o "volume is in use - \[.*\]" | sed 's/volume is in use - \[\(.*\)\]/\1/' || true)
+
+          if [ -n "$VOLUME_ERROR" ]; then
+            echo "Found container using volume: $VOLUME_ERROR"
+
+            # Force kill the container
+            echo "Force killing container: $VOLUME_ERROR"
+            docker kill "$VOLUME_ERROR" 2>/dev/null || true
+            docker rm -f "$VOLUME_ERROR" 2>/dev/null || true
+
+            # Wait a moment for cleanup
+            sleep 2
+          fi
+
+          # Find and remove any avocado-related volumes
+          echo "Finding and removing avocado-related volumes..."
+          AVOCADO_VOLUMES=$(docker volume ls -q | grep "^avo-" || true)
+
+          if [ -n "$AVOCADO_VOLUMES" ]; then
+            echo "Found avocado volumes to remove:"
+            echo "$AVOCADO_VOLUMES"
+
+            # Force remove each volume
+            for volume in $AVOCADO_VOLUMES; do
+              echo "Removing volume: $volume"
+
+              # First, try to find and kill any containers using this volume
+              CONTAINERS_USING_VOLUME=$(docker ps -aq --filter volume="$volume" 2>/dev/null || true)
+              if [ -n "$CONTAINERS_USING_VOLUME" ]; then
+                echo "Force killing containers using volume $volume: $CONTAINERS_USING_VOLUME"
+                docker kill $CONTAINERS_USING_VOLUME 2>/dev/null || true
+                docker rm -f $CONTAINERS_USING_VOLUME 2>/dev/null || true
+                sleep 1
+              fi
+
+              # Now remove the volume
+              docker volume rm -f "$volume" 2>/dev/null || echo "Failed to remove volume $volume, but continuing..."
+            done
+          fi
+
+          # Clean up any remaining avocado containers
+          echo "Cleaning up any remaining avocado containers..."
+          AVOCADO_CONTAINERS=$(docker ps -aq --filter name="avocado" 2>/dev/null || true)
+          if [ -n "$AVOCADO_CONTAINERS" ]; then
+            echo "Force removing avocado containers: $AVOCADO_CONTAINERS"
+            docker kill $AVOCADO_CONTAINERS 2>/dev/null || true
+            docker rm -f $AVOCADO_CONTAINERS 2>/dev/null || true
+          fi
+
+          # Try avocado clean one more time
+          echo "Attempting final avocado clean..."
+          avocado clean || echo "Final cleanup attempt failed, but continuing..."
+        fi
+
+        echo "Cleanup completed for extension: ${{ matrix.extension }}"
 
   cleanup-package-repo:
     needs: [setup-package-repo, build-extensions]

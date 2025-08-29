@@ -11,14 +11,7 @@ on:
         description: "Release date timestamp"
         type: string
         required: true
-      packages_path:
-        description: "Path to packages directory"
-        type: string
-        required: true
-      releases_path:
-        description: "Path to releases directory"
-        type: string
-        required: true
+
   workflow_dispatch:
     inputs:
       distro_codename:
@@ -29,14 +22,7 @@ on:
         description: "Release date timestamp (leave empty for auto-generated)"
         type: string
         required: false
-      packages_path:
-        description: "Path to packages directory (leave empty for auto-generated)"
-        type: string
-        required: false
-      releases_path:
-        description: "Path to releases directory (leave empty for auto-generated)"
-        type: string
-        required: false
+
 
 jobs:
   setup-paths:
@@ -59,17 +45,8 @@ jobs:
             RELEASE_DATE=$(date -u '+%Y-%m-%d-%H%M%S')
           fi
 
-          if [ -n "${{ github.event.inputs.packages_path }}" ]; then
-            PACKAGES_PATH="${{ github.event.inputs.packages_path }}"
-          else
-            PACKAGES_PATH="${REPO_PATH}/packages/${DISTRO_CODENAME}"
-          fi
-
-          if [ -n "${{ github.event.inputs.releases_path }}" ]; then
-            RELEASES_PATH="${{ github.event.inputs.releases_path }}"
-          else
-            RELEASES_PATH="${REPO_PATH}/releases/${DISTRO_CODENAME}/${RELEASE_DATE}"
-          fi
+          PACKAGES_PATH="${REPO_PATH}/packages/${DISTRO_CODENAME}"
+          RELEASES_PATH="${REPO_PATH}/releases/${DISTRO_CODENAME}/${RELEASE_DATE}"
 
           echo "release_date=$RELEASE_DATE" >> $GITHUB_OUTPUT
           echo "packages_path=$PACKAGES_PATH" >> $GITHUB_OUTPUT
@@ -80,7 +57,7 @@ jobs:
     if: always() && !cancelled()
     runs-on: avocado-build
     env:
-      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path }}
+      PACKAGES_PATH: ${{ needs.setup-paths.outputs.packages_path }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -97,8 +74,8 @@ jobs:
     if: always() && !cancelled()
     runs-on: avocado-build
     env:
-      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path }}
-      RELEASES_PATH: ${{ inputs.releases_path || needs.setup-paths.outputs.releases_path }}
+      PACKAGES_PATH: ${{ needs.setup-paths.outputs.packages_path }}
+      RELEASES_PATH: ${{ needs.setup-paths.outputs.releases_path }}
       DISTRO_CODENAME: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
       AVOCADO_REPO_BASE: "https://repo.avocadolinux.org"
     steps:
@@ -123,8 +100,8 @@ jobs:
     if: always() && !cancelled()
     runs-on: avocado-build
     env:
-      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path }}
-      RELEASES_PATH: ${{ inputs.releases_path || needs.setup-paths.outputs.releases_path }}
+      PACKAGES_PATH: ${{ needs.setup-paths.outputs.packages_path }}
+      RELEASES_PATH: ${{ needs.setup-paths.outputs.releases_path }}
       DISTRO_CODENAME: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
       RELEASE_DATE: ${{ inputs.release_date || needs.setup-paths.outputs.release_date }}
       S3_BUCKET_PATH: ${{ secrets.AWS_S3_BUCKET }}
