@@ -191,8 +191,15 @@ jobs:
     env:
       STAGING_BASE_PATH: ${{ needs.determine_build_matrix.outputs.staging_base_path }}
       PACKAGES_PATH: ${{ needs.determine_build_matrix.outputs.packages_path }}
+      RELEASES_PATH: ${{ needs.determine_build_matrix.outputs.releases_path }}
       DISTRO_CODENAME: ${{ needs.determine_build_matrix.outputs.distro_codename }}
+      AVOCADO_REPO_BASE: "https://repo.avocadolinux.org"
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
       - name: Create packages directory
         run: mkdir -p ${{ env.PACKAGES_PATH }}
 
@@ -245,3 +252,11 @@ jobs:
           done
 
           echo "Package aggregation complete"
+
+      - name: Generate base repository metadata (excluding extensions)
+        run: |
+          echo "Generating base repository metadata (excluding extensions)"
+          echo "Reading packages from: ${{ env.PACKAGES_PATH }}"
+          echo "Writing metadata to: ${{ env.RELEASES_PATH }}"
+          echo "Metadata will reference packages at: ${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}"
+          ./repo/update-metadata-distro.sh "${{ env.PACKAGES_PATH }}" "${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}" "${{ env.RELEASES_PATH }}"

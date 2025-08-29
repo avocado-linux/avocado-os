@@ -2,10 +2,15 @@
 
 set -e # Exit immediately if a command exits with a non-zero status.
 
-# Function to find leaf directories containing RPMs
-find_rpm_dirs() {
+# Function to find leaf directories containing RPMs, excluding extension directories
+find_rpm_dirs_exclude_extensions() {
     local dir="$1"
-    find "$dir" -type d -not -path "*/repodata/*" | while read -r subdir; do
+    find "$dir" -type d -not -path "*/repodata/*" -not -path "*/target/*-ext" -not -path "*/target/*-ext/*" | while read -r subdir; do
+        # Skip extension directories
+        if [[ "$subdir" =~ /target/[^/]+-ext(/.*)?$ ]]; then
+            continue
+        fi
+        
         # Check if this directory contains RPMs
         if [ -n "$(find "$subdir" -maxdepth 1 -name "*.rpm" -print -quit)" ]; then
             # Check if this is a leaf directory (no subdirectories with RPMs)
@@ -26,6 +31,7 @@ if [ $# -lt 1 ] || [ $# -gt 3 ]; then
     echo "If baseurl is provided, the repository metadata will reference packages at that URL"
     echo "instead of the local paths. This is useful when packages and metadata are stored separately."
     echo "If outputdir is provided, metadata will be written there instead of alongside the packages."
+    echo "This script excludes extension directories (target/*-ext) from metadata generation."
     exit 1
 fi
 
@@ -45,8 +51,9 @@ fi
 if [ -n "$OUTPUTDIR" ]; then
     echo "Output directory for metadata: ${OUTPUTDIR}"
 fi
+echo "Excluding extension directories from metadata generation"
 
-# Find and process all leaf directories containing RPMs
+# Find and process all leaf directories containing RPMs (excluding extensions)
 while IFS= read -r rpm_dir; do
     echo "Processing repository: ${rpm_dir}"
 
@@ -82,6 +89,6 @@ while IFS= read -r rpm_dir; do
         echo "Creating new repository: packages in ${rpm_dir}, metadata in ${output_path}"
         createrepo_c "${cmd_args[@]}" "${rpm_dir}"
     fi
-done < <(find_rpm_dirs "${TARGET_DEPLOY_DIR}")
+done < <(find_rpm_dirs_exclude_extensions "${TARGET_DEPLOY_DIR}")
 
-echo "Repository metadata update complete!"
+echo "Base repository metadata update complete (extensions excluded)!"

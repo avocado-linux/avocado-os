@@ -55,13 +55,29 @@ jobs:
           DISTRO_CODENAME="${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
           REPO_PATH="/home/runner/_cache/repos"
 
-          # Handle release_date from inputs or generate
+          # Handle release_date from inputs or find latest existing
           if [ -n "${{ inputs.release_date }}" ]; then
             RELEASE_DATE="${{ inputs.release_date }}"
+            echo "Using provided release date: $RELEASE_DATE"
           elif [ -n "${{ github.event.inputs.release_date }}" ]; then
             RELEASE_DATE="${{ github.event.inputs.release_date }}"
+            echo "Using input release date: $RELEASE_DATE"
           else
-            RELEASE_DATE=$(date -u '+%Y-%m-%d-%H%M%S')
+            # Try to find the latest existing release
+            RELEASES_BASE="${REPO_PATH}/releases/${DISTRO_CODENAME}"
+            if [ -d "$RELEASES_BASE" ]; then
+              LATEST_DIR=$(find "$RELEASES_BASE" -maxdepth 1 -type d -not -path "$RELEASES_BASE" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
+              if [ -n "$LATEST_DIR" ] && [ -d "$LATEST_DIR" ]; then
+                RELEASE_DATE=$(basename "$LATEST_DIR")
+                echo "Found latest existing release: $RELEASE_DATE"
+              else
+                RELEASE_DATE=$(date -u '+%Y-%m-%d-%H%M%S')
+                echo "No existing releases found, generating new timestamp: $RELEASE_DATE"
+              fi
+            else
+              RELEASE_DATE=$(date -u '+%Y-%m-%d-%H%M%S')
+              echo "Releases directory doesn't exist, generating new timestamp: $RELEASE_DATE"
+            fi
           fi
 
           # Handle packages_path from inputs or generate
@@ -81,6 +97,11 @@ jobs:
           else
             RELEASES_PATH="${REPO_PATH}/releases/${DISTRO_CODENAME}/${RELEASE_DATE}"
           fi
+
+          echo "Final paths:"
+          echo "  Release date: $RELEASE_DATE"
+          echo "  Packages path: $PACKAGES_PATH"
+          echo "  Releases path: $RELEASES_PATH"
 
           echo "release_date=$RELEASE_DATE" >> $GITHUB_OUTPUT
           echo "packages_path=$PACKAGES_PATH" >> $GITHUB_OUTPUT
@@ -103,34 +124,8 @@ jobs:
           echo "Running cleanup script on ${{ env.PACKAGES_PATH }}"
           ./repo/purge-window.sh "${{ env.PACKAGES_PATH }}"
 
-  create_release_metadata:
-    needs: [setup-paths, cleanup_packages]
-    if: always() && !cancelled()
-    runs-on: avocado-build
-    env:
-      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path }}
-      RELEASES_PATH: ${{ inputs.releases_path || needs.setup-paths.outputs.releases_path }}
-      DISTRO_CODENAME: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
-      AVOCADO_REPO_BASE: "https://repo.avocadolinux.org"
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Create releases directory
-        run: mkdir -p ${{ env.RELEASES_PATH }}
-
-      - name: Generate repository metadata directly in releases directory
-        run: |
-          echo "Generating repository metadata directly in releases directory"
-          echo "Reading packages from: ${{ env.PACKAGES_PATH }}"
-          echo "Writing metadata to: ${{ env.RELEASES_PATH }}"
-          echo "Metadata will reference packages at: ${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}"
-          ./repo/update-metadata.sh "${{ env.PACKAGES_PATH }}" "${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}" "${{ env.RELEASES_PATH }}"
-
   sync_to_s3:
-    needs: [setup-paths, cleanup_packages, create_release_metadata]
+    needs: [setup-paths, cleanup_packages]
     if: always() && !cancelled()
     runs-on: avocado-build
     env:

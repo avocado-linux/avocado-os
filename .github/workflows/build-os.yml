@@ -46,6 +46,9 @@ jobs:
       distro_codename: ${{ github.event.inputs.distro_codename || 'latest/apollo/edge' }}
       build_all: ${{ github.event.inputs.build_all == 'true' || github.event_name == 'schedule' }}
       target_to_build: ${{ github.event.inputs.target_to_build || 'qemux86-64' }}
+      release_date: ${{ needs.build-distro.outputs.release_date }}
+      packages_path: ${{ needs.build-distro.outputs.packages_path }}
+      releases_path: ${{ needs.build-distro.outputs.releases_path }}
     secrets: inherit
 
   deploy-repo:

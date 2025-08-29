@@ -15,6 +15,18 @@ on:
         description: "Specific target to build for"
         type: string
         required: false
+      release_date:
+        description: "Release date timestamp"
+        type: string
+        required: false
+      packages_path:
+        description: "Path to packages directory"
+        type: string
+        required: false
+      releases_path:
+        description: "Path to releases directory"
+        type: string
+        required: false
   workflow_dispatch:
     inputs:
       distro_codename:
@@ -42,10 +54,70 @@ on:
           - raspberrypi4
           - raspberrypi5
 
-env:
-  RELEASE: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
-
 jobs:
+  setup-paths:
+    runs-on: avocado-sdk
+    if: github.event_name == 'workflow_dispatch'
+    outputs:
+      release_date: ${{ steps.set-paths.outputs.release_date }}
+      packages_path: ${{ steps.set-paths.outputs.packages_path }}
+      releases_path: ${{ steps.set-paths.outputs.releases_path }}
+    steps:
+      - name: Set paths for manual dispatch
+        id: set-paths
+        run: |
+          DISTRO_CODENAME="${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
+          REPO_PATH="/home/runner/_cache/repos"
+
+          # Try to find the latest existing release when no timestamp is provided
+          if [ -n "${{ inputs.release_date }}" ]; then
+            RELEASE_DATE="${{ inputs.release_date }}"
+            echo "Using provided release date: $RELEASE_DATE"
+          else
+            # Find the latest existing release
+            RELEASES_BASE="${REPO_PATH}/releases/${DISTRO_CODENAME}"
+            if [ -d "$RELEASES_BASE" ]; then
+              LATEST_DIR=$(find "$RELEASES_BASE" -maxdepth 1 -type d -not -path "$RELEASES_BASE" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
+              if [ -n "$LATEST_DIR" ] && [ -d "$LATEST_DIR" ]; then
+                RELEASE_DATE=$(basename "$LATEST_DIR")
+                echo "Found latest existing release: $RELEASE_DATE"
+              else
+                echo "Error: No existing releases found in $RELEASES_BASE"
+                echo "Please run build-distro first or provide release_date input"
+                exit 1
+              fi
+            else
+              echo "Error: Releases directory $RELEASES_BASE doesn't exist"
+              echo "Please run build-distro first or provide release_date input"
+              exit 1
+            fi
+          fi
+
+          # Set paths based on found or provided release date
+          if [ -n "${{ inputs.packages_path }}" ]; then
+            PACKAGES_PATH="${{ inputs.packages_path }}"
+          else
+            PACKAGES_PATH="${REPO_PATH}/packages/${DISTRO_CODENAME}"
+          fi
+
+          if [ -n "${{ inputs.releases_path }}" ]; then
+            RELEASES_PATH="${{ inputs.releases_path }}"
+          else
+            RELEASES_PATH="${REPO_PATH}/releases/${DISTRO_CODENAME}/${RELEASE_DATE}"
+          fi
+
+          echo "Final paths for standalone run:"
+          echo "  Release date: $RELEASE_DATE"
+          echo "  Packages path: $PACKAGES_PATH"
+          echo "  Releases path: $RELEASES_PATH"
+
+          echo "release_date=$RELEASE_DATE" >> $GITHUB_OUTPUT
+          echo "packages_path=$PACKAGES_PATH" >> $GITHUB_OUTPUT
+          echo "releases_path=$RELEASES_PATH" >> $GITHUB_OUTPUT
+        env:
+          REPO_PATH: "/home/runner/_cache/repos"
+          DISTRO_CODENAME: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
+
   generate-matrix:
     runs-on: avocado-sdk
     outputs:
@@ -160,6 +232,8 @@ jobs:
         echo "matrix={\"include\":$matrix_json}" >> $GITHUB_OUTPUT
 
   setup-package-repo:
+    needs: setup-paths
+    if: always() && !cancelled()
     runs-on: avocado-sdk
     outputs:
       network_name: ${{ steps.setup-service.outputs.network_name }}
@@ -199,24 +273,44 @@ jobs:
         REMOTE_PACKAGES_PATH="$REMOTE_CACHE_BASE/packages"
         REMOTE_RELEASES_PATH="$REMOTE_CACHE_BASE/releases"
 
-        # Find the most recent directory in releases/${{ env.RELEASE }} using local paths
-        LOCAL_LATEST_EDGE_PATH="$LOCAL_RELEASES_PATH/${{ env.RELEASE }}"
-        if [ -d "$LOCAL_LATEST_EDGE_PATH" ]; then
-          # Find the most recently modified directory
-          LATEST_DIR=$(find "$LOCAL_LATEST_EDGE_PATH" -maxdepth 1 -type d -not -path "$LOCAL_LATEST_EDGE_PATH" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
-          if [ -n "$LATEST_DIR" ] && [ -d "$LATEST_DIR" ]; then
-            # Convert local path to remote path for mounting
-            LATEST_SUBDIR=$(basename "$LATEST_DIR")
-            REMOTE_LATEST_MOUNT_PATH="$REMOTE_CACHE_BASE/releases/${{ env.RELEASE }}/$LATEST_SUBDIR"
-            echo "Found most recent directory: $LATEST_DIR (local)"
+        # Use provided releases path if available, otherwise find the most recent directory
+        # Priority: inputs.releases_path > setup-paths outputs > find latest
+        if [ -n "${{ inputs.releases_path }}" ]; then
+          # Convert provided path to remote mount path
+          LOCAL_RELEASES_DIR="${{ inputs.releases_path }}"
+        elif [ -n "${{ needs.setup-paths.outputs.releases_path }}" ]; then
+          # Use path from setup-paths job (for standalone runs)
+          LOCAL_RELEASES_DIR="${{ needs.setup-paths.outputs.releases_path }}"
+          if [ -d "$LOCAL_RELEASES_DIR" ]; then
+            # Extract the relative path from the base cache directory
+            RELATIVE_PATH=$(echo "$LOCAL_RELEASES_DIR" | sed "s|^$LOCAL_CACHE_BASE/||")
+            REMOTE_LATEST_MOUNT_PATH="$REMOTE_CACHE_BASE/$RELATIVE_PATH"
+            echo "Using provided releases path: $LOCAL_RELEASES_DIR (local)"
             echo "Will mount: $REMOTE_LATEST_MOUNT_PATH (remote)"
           else
-            echo "No subdirectories found in $LOCAL_LATEST_EDGE_PATH, using the edge directory itself"
-            REMOTE_LATEST_MOUNT_PATH="$REMOTE_CACHE_BASE/releases/${{ env.RELEASE }}"
+            echo "Warning: Provided releases path $LOCAL_RELEASES_DIR does not exist, falling back to search"
+            REMOTE_LATEST_MOUNT_PATH="$REMOTE_RELEASES_PATH"
           fi
         else
-          echo "Warning: $LOCAL_LATEST_EDGE_PATH does not exist, using releases path"
-          REMOTE_LATEST_MOUNT_PATH="$REMOTE_RELEASES_PATH"
+          # Find the most recent directory in releases/${{ inputs.distro_codename || github.event.inputs.distro_codename }} using local paths
+          LOCAL_LATEST_EDGE_PATH="$LOCAL_RELEASES_PATH/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
+          if [ -d "$LOCAL_LATEST_EDGE_PATH" ]; then
+            # Find the most recently modified directory
+            LATEST_DIR=$(find "$LOCAL_LATEST_EDGE_PATH" -maxdepth 1 -type d -not -path "$LOCAL_LATEST_EDGE_PATH" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
+            if [ -n "$LATEST_DIR" ] && [ -d "$LATEST_DIR" ]; then
+              # Convert local path to remote path for mounting
+              LATEST_SUBDIR=$(basename "$LATEST_DIR")
+              REMOTE_LATEST_MOUNT_PATH="$REMOTE_CACHE_BASE/releases/${{ inputs.distro_codename || github.event.inputs.distro_codename }}/$LATEST_SUBDIR"
+              echo "Found most recent directory: $LATEST_DIR (local)"
+              echo "Will mount: $REMOTE_LATEST_MOUNT_PATH (remote)"
+            else
+              echo "No subdirectories found in $LOCAL_LATEST_EDGE_PATH, using the edge directory itself"
+              REMOTE_LATEST_MOUNT_PATH="$REMOTE_CACHE_BASE/releases/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
+            fi
+          else
+            echo "Warning: $LOCAL_LATEST_EDGE_PATH does not exist, using releases path"
+            REMOTE_LATEST_MOUNT_PATH="$REMOTE_RELEASES_PATH"
+          fi
         fi
 
         echo "Using paths:"
@@ -234,7 +328,7 @@ jobs:
           -e GROUP_ID=1001 \
           -v "$REMOTE_PACKAGES_PATH:/avocado-repo/packages" \
           -v "$REMOTE_RELEASES_PATH:/avocado-repo/releases" \
-          -v "$REMOTE_LATEST_MOUNT_PATH:/avocado-repo/${{ env.RELEASE }}" \
+          -v "$REMOTE_LATEST_MOUNT_PATH:/avocado-repo/${{ inputs.distro_codename || github.event.inputs.distro_codename }}" \
           avocadolinux/package-repo:local
 
         echo "Started package repo service container: $CONTAINER_NAME"
@@ -253,7 +347,8 @@ jobs:
         echo "Package repo service setup completed successfully"
 
   build-extensions:
-    needs: [generate-matrix, setup-package-repo]
+    needs: [generate-matrix, setup-package-repo, setup-paths]
+    if: always() && !cancelled()
     runs-on: avocado-sdk
     strategy:
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
@@ -316,7 +411,7 @@ jobs:
         # The container is accessible by its name within the Docker network
         export AVOCADO_SDK_REPO_URL="http://${{ needs.setup-package-repo.outputs.container_name }}"
         export AVOCADO_CONTAINER_NETWORK="${{ needs.setup-package-repo.outputs.network_name }}"
-        export AVOCADO_SDK_REPO_RELEASE="${{ env.RELEASE }}"
+        export AVOCADO_SDK_REPO_RELEASE="${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
         echo "Using package repo URL: $AVOCADO_SDK_REPO_URL"
         echo "Using Docker network: $AVOCADO_CONTAINER_NETWORK"
 
@@ -327,8 +422,16 @@ jobs:
 
     - name: Copy package to cache directory
       run: |
-        # Create the cache directory structure
-        CACHE_DIR="/home/runner/_cache/repos/packages/${{ env.RELEASE }}/target/${{ matrix.target }}-ext"
+        # Create the cache directory structure using provided packages path or default
+        # Priority: inputs.packages_path > setup-paths outputs > default
+        if [ -n "${{ inputs.packages_path }}" ]; then
+          BASE_PACKAGES_PATH="${{ inputs.packages_path }}"
+        elif [ -n "${{ needs.setup-paths.outputs.packages_path }}" ]; then
+          BASE_PACKAGES_PATH="${{ needs.setup-paths.outputs.packages_path }}"
+        else
+          BASE_PACKAGES_PATH="/home/runner/_cache/repos/packages/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
+        fi
+        CACHE_DIR="$BASE_PACKAGES_PATH/target/${{ matrix.target }}-ext"
         mkdir -p "$CACHE_DIR"
 
         # Find and copy the built RPM package
@@ -412,6 +515,63 @@ jobs:
         fi
 
         echo "Cleanup completed for extension: ${{ matrix.extension }}"
+
+  update-extension-metadata:
+    needs: [build-extensions, setup-package-repo, setup-paths]
+    if: always() && !cancelled()
+    runs-on: avocado-build
+    env:
+      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path || format('/home/runner/_cache/repos/packages/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}
+      RELEASES_PATH: ${{ inputs.releases_path || needs.setup-paths.outputs.releases_path || format('/home/runner/_cache/repos/releases/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}
+      DISTRO_CODENAME: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
+      AVOCADO_REPO_BASE: "https://repo.avocadolinux.org"
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Validate paths and setup
+        run: |
+          echo "Using paths:"
+          echo "  Packages path: ${{ env.PACKAGES_PATH }}"
+          echo "  Releases path: ${{ env.RELEASES_PATH }}"
+          echo "  Distro codename: ${{ env.DISTRO_CODENAME }}"
+
+          # If we have a specific releases path from inputs or setup-paths, use it directly
+          if [ -n "${{ inputs.releases_path }}" ]; then
+            FINAL_RELEASES_PATH="${{ inputs.releases_path }}"
+            echo "Using provided releases path: $FINAL_RELEASES_PATH"
+          elif [ -n "${{ needs.setup-paths.outputs.releases_path }}" ]; then
+            FINAL_RELEASES_PATH="${{ needs.setup-paths.outputs.releases_path }}"
+            echo "Using setup-paths releases path: $FINAL_RELEASES_PATH"
+          else
+            # Fallback to finding the most recent directory (for standalone runs)
+            RELEASES_BASE="/home/runner/_cache/repos/releases/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
+            if [ -d "$RELEASES_BASE" ]; then
+              LATEST_DIR=$(find "$RELEASES_BASE" -maxdepth 1 -type d -not -path "$RELEASES_BASE" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
+              if [ -n "$LATEST_DIR" ] && [ -d "$LATEST_DIR" ]; then
+                FINAL_RELEASES_PATH="$LATEST_DIR"
+                echo "Found most recent releases directory: $FINAL_RELEASES_PATH"
+              else
+                echo "No subdirectories found in $RELEASES_BASE"
+                exit 1
+              fi
+            else
+              echo "Releases base directory $RELEASES_BASE does not exist"
+              exit 1
+            fi
+          fi
+
+          echo "FINAL_RELEASES_PATH=$FINAL_RELEASES_PATH" >> $GITHUB_ENV
+
+      - name: Generate extension repository metadata
+        run: |
+          echo "Generating extension repository metadata"
+          echo "Reading packages from: ${{ env.PACKAGES_PATH }}"
+          echo "Writing metadata to: $FINAL_RELEASES_PATH"
+          echo "Metadata will reference packages at: ${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}"
+          ./repo/update-metadata-extensions.sh "${{ env.PACKAGES_PATH }}" "${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}" "$FINAL_RELEASES_PATH"
 
   cleanup-package-repo:
     needs: [setup-package-repo, build-extensions]
