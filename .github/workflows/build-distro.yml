@@ -172,14 +172,14 @@ jobs:
           echo "SDKMACHINE: ${{ matrix.build_config.sdk_machine }}"
           echo "DISTRO_CODENAME: ${{ needs.determine_build_matrix.outputs.distro_codename }}"
 
-          source ./distro/scripts/init-build kas/machine/${{ matrix.machine }}.yml
+          source ./distro/scripts/init-build distro/kas/machine/${{ matrix.machine }}.yml
           source .envrc
           kas build "$KAS_YML" --target ${{ matrix.build_config.target }}
 
       - name: Stage target repos for ${{ matrix.machine }}
         run: |
           echo "Staging repos for ${{ matrix.machine }} to ${{ env.STAGING_PATH }}"
-          ls ./distro/build-${{ matrix.machine }}/build/tmp/deploy/rpm
+          ls ./build-${{ matrix.machine }}/build/tmp/deploy/rpm
           ./repo/stage-rpms.sh ./build-${{ matrix.machine }}/build/tmp/deploy/rpm ${{ env.STAGING_PATH }} ${{ needs.determine_build_matrix.outputs.distro_codename }}
 
   aggregate_packages:

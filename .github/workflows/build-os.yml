@@ -44,11 +44,13 @@ jobs:
     uses: ./.github/workflows/build-extensions.yml
     with:
       distro_codename: ${{ github.event.inputs.distro_codename || 'latest/apollo/edge' }}
+      build_all: ${{ github.event.inputs.build_all == 'true' || github.event_name == 'schedule' }}
+      target_to_build: ${{ github.event.inputs.target_to_build || 'qemux86-64' }}
     secrets: inherit
 
-  publish-repo:
+  deploy-repo:
     needs: [build-distro, build-extensions]
-    uses: ./.github/workflows/publish-repo.yml
+    uses: ./.github/workflows/deploy-repo.yml
     with:
       distro_codename: ${{ github.event.inputs.distro_codename || 'latest/apollo/edge' }}
       release_date: ${{ needs.build-distro.outputs.release_date }}

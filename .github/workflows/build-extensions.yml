@@ -7,12 +7,40 @@ on:
         description: "Distribution codename"
         type: string
         required: true
+      build_all:
+        description: "Build all targets"
+        type: boolean
+        default: true
+      target_to_build:
+        description: "Specific target to build for"
+        type: string
+        required: false
   workflow_dispatch:
     inputs:
       distro_codename:
         description: "Distribution codename"
         type: string
         default: "latest/apollo/edge"
+      build_all:
+        description: "Build all targets"
+        type: boolean
+        default: true
+      target_to_build:
+        description: "Select the machine to build"
+        type: choice
+        required: false
+        options:
+          - imx8mp-evk
+          - imx91-frdm
+          - imx93-frdm
+          - imx93-evk
+          - qemuarm64
+          - qemux86-64
+          - reterminal
+          - reterminal-dm
+          - jetson-orin-nano-devkit-nvme
+          - raspberrypi4
+          - raspberrypi5
 
 env:
   RELEASE: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
@@ -49,7 +77,26 @@ jobs:
       id: set-matrix
       run: |
         # Define all possible targets
-        ALL_TARGETS=("qemux86-64" "qemuarm64" "raspberrypi4" "raspberrypi5" "reterminal" "reterminal-dm")
+        ALL_TARGETS=("imx8mp-evk" "imx91-frdm" "imx93-frdm" "imx93-evk" "qemuarm64" "qemux86-64" "reterminal" "reterminal-dm" "jetson-orin-nano-devkit-nvme" "raspberrypi4" "raspberrypi5")
+
+        # Determine which targets to build for
+        BUILD_ALL="${{ inputs.build_all || github.event.inputs.build_all }}"
+        TARGET_TO_BUILD="${{ inputs.target_to_build || github.event.inputs.target_to_build }}"
+
+        echo "Build all: $BUILD_ALL"
+        echo "Target to build: $TARGET_TO_BUILD"
+
+        # Determine the target filter
+        if [ "$BUILD_ALL" = "true" ] || [ "$BUILD_ALL" = "True" ]; then
+          FILTERED_TARGETS=("${ALL_TARGETS[@]}")
+          echo "Building for all targets"
+        elif [ -n "$TARGET_TO_BUILD" ]; then
+          FILTERED_TARGETS=("$TARGET_TO_BUILD")
+          echo "Building for single target: $TARGET_TO_BUILD"
+        else
+          FILTERED_TARGETS=("${ALL_TARGETS[@]}")
+          echo "No specific target specified, building for all targets"
+        fi
 
         # Initialize matrix array
         matrix_includes=()
@@ -64,23 +111,36 @@ jobs:
             supported_targets=$(grep '^supported_targets' "$ext_dir/avocado.toml" | sed 's/supported_targets = //' | tr -d '"' | tr -d "'" | tr -d ' ')
             echo "  supported_targets: $supported_targets"
 
+            # Determine which targets this extension supports
             if [ "$supported_targets" = "*" ]; then
-              # Build for all targets
-              for target in "${ALL_TARGETS[@]}"; do
-                matrix_includes+=("{\"extension\": \"$extension\", \"target\": \"$target\"}")
-              done
+              # Extension supports all targets, use filtered targets
+              extension_targets=("${FILTERED_TARGETS[@]}")
             else
               # Parse the list of specific targets
               # Handle TOML array format: ["target1", "target2"]
               targets_list=$(echo "$supported_targets" | sed 's/\[//g' | sed 's/\]//g' | sed 's/"//g' | sed "s/'//g" | tr ',' '\n')
 
+              extension_targets=()
               for target in $targets_list; do
                 target=$(echo "$target" | xargs) # trim whitespace
                 if [ -n "$target" ]; then
-                  matrix_includes+=("{\"extension\": \"$extension\", \"target\": \"$target\"}")
+                  # Check if this target is in our filtered targets
+                  for filtered_target in "${FILTERED_TARGETS[@]}"; do
+                    if [ "$target" = "$filtered_target" ]; then
+                      extension_targets+=("$target")
+                      break
+                    fi
+                  done
                 fi
               done
             fi
+
+            # Add matrix entries for this extension's supported targets
+            for target in "${extension_targets[@]}"; do
+              matrix_includes+=("{\"extension\": \"$extension\", \"target\": \"$target\"}")
+            done
+
+            echo "  Extension $extension will build for targets: ${extension_targets[*]}"
           fi
         done
 

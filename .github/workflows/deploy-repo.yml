@@ -11,6 +11,14 @@ on:
         description: "Release date timestamp"
         type: string
         required: true
+      packages_path:
+        description: "Path to packages directory"
+        type: string
+        required: false
+      releases_path:
+        description: "Path to releases directory"
+        type: string
+        required: false
 
   workflow_dispatch:
     inputs:
@@ -22,11 +30,19 @@ on:
         description: "Release date timestamp (leave empty for auto-generated)"
         type: string
         required: false
+      packages_path:
+        description: "Path to packages directory (leave empty for auto-generated)"
+        type: string
+        required: false
+      releases_path:
+        description: "Path to releases directory (leave empty for auto-generated)"
+        type: string
+        required: false
 
 
 jobs:
   setup-paths:
-    runs-on: avocado-build
+    runs-on: avocado-sdk
     if: github.event_name == 'workflow_dispatch'
     outputs:
       release_date: ${{ steps.set-paths.outputs.release_date }}
@@ -36,17 +52,35 @@ jobs:
       - name: Set paths for manual dispatch
         id: set-paths
         run: |
-          DISTRO_CODENAME="${{ github.event.inputs.distro_codename }}"
+          DISTRO_CODENAME="${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
           REPO_PATH="/home/runner/_cache/repos"
 
-          if [ -n "${{ github.event.inputs.release_date }}" ]; then
+          # Handle release_date from inputs or generate
+          if [ -n "${{ inputs.release_date }}" ]; then
+            RELEASE_DATE="${{ inputs.release_date }}"
+          elif [ -n "${{ github.event.inputs.release_date }}" ]; then
             RELEASE_DATE="${{ github.event.inputs.release_date }}"
           else
             RELEASE_DATE=$(date -u '+%Y-%m-%d-%H%M%S')
           fi
 
-          PACKAGES_PATH="${REPO_PATH}/packages/${DISTRO_CODENAME}"
-          RELEASES_PATH="${REPO_PATH}/releases/${DISTRO_CODENAME}/${RELEASE_DATE}"
+          # Handle packages_path from inputs or generate
+          if [ -n "${{ inputs.packages_path }}" ]; then
+            PACKAGES_PATH="${{ inputs.packages_path }}"
+          elif [ -n "${{ github.event.inputs.packages_path }}" ]; then
+            PACKAGES_PATH="${{ github.event.inputs.packages_path }}"
+          else
+            PACKAGES_PATH="${REPO_PATH}/packages/${DISTRO_CODENAME}"
+          fi
+
+          # Handle releases_path from inputs or generate
+          if [ -n "${{ inputs.releases_path }}" ]; then
+            RELEASES_PATH="${{ inputs.releases_path }}"
+          elif [ -n "${{ github.event.inputs.releases_path }}" ]; then
+            RELEASES_PATH="${{ github.event.inputs.releases_path }}"
+          else
+            RELEASES_PATH="${REPO_PATH}/releases/${DISTRO_CODENAME}/${RELEASE_DATE}"
+          fi
 
           echo "release_date=$RELEASE_DATE" >> $GITHUB_OUTPUT
           echo "packages_path=$PACKAGES_PATH" >> $GITHUB_OUTPUT
@@ -55,9 +89,9 @@ jobs:
   cleanup_packages:
     needs: setup-paths
     if: always() && !cancelled()
-    runs-on: avocado-build
+    runs-on: avocado-sdk
     env:
-      PACKAGES_PATH: ${{ needs.setup-paths.outputs.packages_path }}
+      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -74,8 +108,8 @@ jobs:
     if: always() && !cancelled()
     runs-on: avocado-build
     env:
-      PACKAGES_PATH: ${{ needs.setup-paths.outputs.packages_path }}
-      RELEASES_PATH: ${{ needs.setup-paths.outputs.releases_path }}
+      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path }}
+      RELEASES_PATH: ${{ inputs.releases_path || needs.setup-paths.outputs.releases_path }}
       DISTRO_CODENAME: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
       AVOCADO_REPO_BASE: "https://repo.avocadolinux.org"
     steps:
@@ -100,36 +134,45 @@ jobs:
     if: always() && !cancelled()
     runs-on: avocado-build
     env:
-      PACKAGES_PATH: ${{ needs.setup-paths.outputs.packages_path }}
-      RELEASES_PATH: ${{ needs.setup-paths.outputs.releases_path }}
+      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path }}
+      RELEASES_PATH: ${{ inputs.releases_path || needs.setup-paths.outputs.releases_path }}
       DISTRO_CODENAME: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
       RELEASE_DATE: ${{ inputs.release_date || needs.setup-paths.outputs.release_date }}
       S3_BUCKET_PATH: ${{ secrets.AWS_S3_BUCKET }}
     steps:
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Install rclone
+        run: |
+          curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone
+        run: |
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf << EOF
+          [s3]
+          type = s3
+          provider = AWS
+          access_key_id = ${{ secrets.AWS_ACCESS_KEY_ID }}
+          secret_access_key = ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region = ${{ secrets.AWS_REGION }}
+          EOF
 
       - name: Sync packages directory to S3
         run: |
           echo "Syncing packages from ${{ env.PACKAGES_PATH }} to s3://${{ env.S3_BUCKET_PATH }}/packages/${{ env.DISTRO_CODENAME }}"
-          aws s3 sync "${{ env.PACKAGES_PATH }}" "s3://${{ env.S3_BUCKET_PATH }}/packages/${{ env.DISTRO_CODENAME }}"
+          rclone sync "${{ env.PACKAGES_PATH }}" "s3:${{ env.S3_BUCKET_PATH }}/packages/${{ env.DISTRO_CODENAME }}" --checksum
 
       - name: Sync release metadata to S3
         run: |
           echo "Syncing release metadata from ${{ env.RELEASES_PATH }} to s3://${{ env.S3_BUCKET_PATH }}/releases/${{ env.DISTRO_CODENAME }}/${{ env.RELEASE_DATE }}"
-          aws s3 sync "${{ env.RELEASES_PATH }}" "s3://${{ env.S3_BUCKET_PATH }}/releases/${{ env.DISTRO_CODENAME }}/${{ env.RELEASE_DATE }}"
+          rclone sync "${{ env.RELEASES_PATH }}" "s3:${{ env.S3_BUCKET_PATH }}/releases/${{ env.DISTRO_CODENAME }}/${{ env.RELEASE_DATE }}" --checksum
           echo "Release metadata S3 sync complete."
 
       - name: Sync metadata to S3
         run: |
           # First sync everything EXCEPT repomd.xml files. Then sync ONLY repomd.xml files. This
           # ensures that if a new repomd.xml is served, that the content it addresses exists.
-          aws s3 sync "${{ env.RELEASES_PATH }}" "s3://${{ env.S3_BUCKET_PATH }}/${{ env.DISTRO_CODENAME }}" --exclude "*/repomd.xml"
-          aws s3 sync "${{ env.RELEASES_PATH }}" "s3://${{ env.S3_BUCKET_PATH }}/${{ env.DISTRO_CODENAME }}" --exclude "*" --include "*/repomd.xml"
+          rclone sync "${{ env.RELEASES_PATH }}" "s3:${{ env.S3_BUCKET_PATH }}/${{ env.DISTRO_CODENAME }}" --checksum --exclude "*/repomd.xml"
+          rclone sync "${{ env.RELEASES_PATH }}" "s3:${{ env.S3_BUCKET_PATH }}/${{ env.DISTRO_CODENAME }}" --checksum --include "*/repomd.xml" --exclude "*"
 
       - name: Clean up staging and releases directories
         run: |
