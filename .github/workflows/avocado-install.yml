@@ -1,0 +1,310 @@
+name: Build Extensions Matrix with Avocado CLI
+
+on:
+  pull_request:
+    branches: ['*']
+  workflow_dispatch:
+
+env:
+  RELEASE: "latest/apollo/edge"
+
+jobs:
+  generate-matrix:
+    runs-on: avocado-sdk
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      avocado_version: ${{ steps.get-version.outputs.version }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Get latest avocado-cli release
+      id: get-version
+      run: |
+        # Install jq if not available
+        if ! command -v jq &> /dev/null; then
+          sudo apt-get update && sudo apt-get install -y jq
+        fi
+
+        LATEST_RELEASE=$(curl -s https://api.github.com/repos/avocado-linux/avocado-cli/releases/latest | jq -r '.tag_name')
+
+        if [ "$LATEST_RELEASE" = "null" ] || [ -z "$LATEST_RELEASE" ]; then
+          echo "Failed to get latest release version"
+          exit 1
+        fi
+
+        echo "version=$LATEST_RELEASE" >> $GITHUB_OUTPUT
+        echo "Latest avocado-cli version: $LATEST_RELEASE"
+
+    - name: Generate build matrix
+      id: set-matrix
+      run: |
+        # Define all possible targets
+        ALL_TARGETS=("qemux86-64" "qemuarm64" "raspberrypi4" "raspberrypi5" "reterminal" "reterminal-dm")
+
+        # Initialize matrix array
+        matrix_includes=()
+
+        # Process each extension directory
+        for ext_dir in extensions/*/; do
+          if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.toml" ]; then
+            extension=$(basename "$ext_dir")
+            echo "Processing extension: $extension"
+
+            # Read supported_targets from avocado.toml
+            supported_targets=$(grep '^supported_targets' "$ext_dir/avocado.toml" | sed 's/supported_targets = //' | tr -d '"' | tr -d "'" | tr -d ' ')
+            echo "  supported_targets: $supported_targets"
+
+            if [ "$supported_targets" = "*" ]; then
+              # Build for all targets
+              for target in "${ALL_TARGETS[@]}"; do
+                matrix_includes+=("{\"extension\": \"$extension\", \"target\": \"$target\"}")
+              done
+            else
+              # Parse the list of specific targets
+              # Handle TOML array format: ["target1", "target2"]
+              targets_list=$(echo "$supported_targets" | sed 's/\[//g' | sed 's/\]//g' | sed 's/"//g' | sed "s/'//g" | tr ',' '\n')
+
+              for target in $targets_list; do
+                target=$(echo "$target" | xargs) # trim whitespace
+                if [ -n "$target" ]; then
+                  matrix_includes+=("{\"extension\": \"$extension\", \"target\": \"$target\"}")
+                fi
+              done
+            fi
+          fi
+        done
+
+        # Create JSON matrix
+        matrix_json="["
+        for i in "${!matrix_includes[@]}"; do
+          if [ $i -gt 0 ]; then
+            matrix_json+=","
+          fi
+          matrix_json+="${matrix_includes[$i]}"
+        done
+        matrix_json+="]"
+
+        echo "Generated matrix:"
+        echo "$matrix_json" | jq '.'
+
+        echo "matrix={\"include\":$matrix_json}" >> $GITHUB_OUTPUT
+
+  setup-package-repo:
+    runs-on: avocado-sdk
+    outputs:
+      network_name: ${{ steps.setup-service.outputs.network_name }}
+      container_name: ${{ steps.setup-service.outputs.container_name }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Docker network and package repo service
+      id: setup-service
+      run: |
+        # Generate a random network name to avoid conflicts
+        NETWORK_NAME="avocado-os-build-$(openssl rand -hex 8)"
+        echo "network_name=$NETWORK_NAME" >> $GITHUB_OUTPUT
+
+        # Create Docker network
+        docker network create "$NETWORK_NAME"
+        echo "Created Docker network: $NETWORK_NAME"
+
+        # Build the package repo container if it doesn't exist
+        if ! docker image inspect avocadolinux/package-repo:local >/dev/null 2>&1; then
+          echo "Building package repo container..."
+          docker build -f repo/Containerfile-local -t avocadolinux/package-repo:local repo/
+        fi
+
+        # Start the package repo service
+        CONTAINER_NAME="avocado-repo-service-$(openssl rand -hex 4)"
+        echo "container_name=$CONTAINER_NAME" >> $GITHUB_OUTPUT
+
+        # Local paths for searching (where this script runs)
+        LOCAL_CACHE_BASE="/home/runner/_cache/repos"
+        LOCAL_PACKAGES_PATH="$LOCAL_CACHE_BASE/packages"
+        LOCAL_RELEASES_PATH="$LOCAL_CACHE_BASE/releases"
+
+        # Remote paths for volume mounting (where Docker container will run)
+        REMOTE_CACHE_BASE="/mnt/src/cache/repos"
+        REMOTE_PACKAGES_PATH="$REMOTE_CACHE_BASE/packages"
+        REMOTE_RELEASES_PATH="$REMOTE_CACHE_BASE/releases"
+
+        # Find the most recent directory in releases/${{ env.RELEASE }} using local paths
+        LOCAL_LATEST_EDGE_PATH="$LOCAL_RELEASES_PATH/${{ env.RELEASE }}"
+        if [ -d "$LOCAL_LATEST_EDGE_PATH" ]; then
+          # Find the most recently modified directory
+          LATEST_DIR=$(find "$LOCAL_LATEST_EDGE_PATH" -maxdepth 1 -type d -not -path "$LOCAL_LATEST_EDGE_PATH" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
+          if [ -n "$LATEST_DIR" ] && [ -d "$LATEST_DIR" ]; then
+            # Convert local path to remote path for mounting
+            LATEST_SUBDIR=$(basename "$LATEST_DIR")
+            REMOTE_LATEST_MOUNT_PATH="$REMOTE_CACHE_BASE/releases/${{ env.RELEASE }}/$LATEST_SUBDIR"
+            echo "Found most recent directory: $LATEST_DIR (local)"
+            echo "Will mount: $REMOTE_LATEST_MOUNT_PATH (remote)"
+          else
+            echo "No subdirectories found in $LOCAL_LATEST_EDGE_PATH, using the edge directory itself"
+            REMOTE_LATEST_MOUNT_PATH="$REMOTE_CACHE_BASE/releases/${{ env.RELEASE }}"
+          fi
+        else
+          echo "Warning: $LOCAL_LATEST_EDGE_PATH does not exist, using releases path"
+          REMOTE_LATEST_MOUNT_PATH="$REMOTE_RELEASES_PATH"
+        fi
+
+        echo "Using paths:"
+        echo "  Local search base: $LOCAL_CACHE_BASE"
+        echo "  Remote packages: $REMOTE_PACKAGES_PATH"
+        echo "  Remote releases: $REMOTE_RELEASES_PATH"
+        echo "  Remote latest: $REMOTE_LATEST_MOUNT_PATH"
+
+        # Start the container in the background
+        docker run -d \
+          --rm \
+          --name "$CONTAINER_NAME" \
+          --network "$NETWORK_NAME" \
+          -e USER_ID=1001 \
+          -e GROUP_ID=1001 \
+          -v "$REMOTE_PACKAGES_PATH:/avocado-repo/packages" \
+          -v "$REMOTE_RELEASES_PATH:/avocado-repo/releases" \
+          -v "$REMOTE_LATEST_MOUNT_PATH:/avocado-repo/${{ env.RELEASE }}" \
+          avocadolinux/package-repo:local
+
+        echo "Started package repo service container: $CONTAINER_NAME"
+
+        # Give nginx a moment to fully start up
+        echo "Waiting for nginx to fully start..."
+        sleep 5
+
+        # Verify container is still running
+        if ! docker ps --filter "name=$CONTAINER_NAME" --filter "status=running" --quiet | grep -q .; then
+          echo "Container failed to start or exited unexpectedly"
+          docker logs "$CONTAINER_NAME"
+          exit 1
+        fi
+
+        echo "Package repo service setup completed successfully"
+
+  build-extensions:
+    needs: [generate-matrix, setup-package-repo]
+    runs-on: avocado-sdk
+    strategy:
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Download and install avocado-cli
+      run: |
+        VERSION="${{ needs.generate-matrix.outputs.avocado_version }}"
+        echo "Installing avocado-cli version: $VERSION"
+
+        # Determine architecture
+        ARCH=$(uname -m)
+        if [ "$ARCH" = "x86_64" ]; then
+          BINARY_ARCH="x86_64-unknown-linux-gnu"
+        elif [ "$ARCH" = "aarch64" ]; then
+          BINARY_ARCH="aarch64-unknown-linux-musl"
+        else
+          echo "Unsupported architecture: $ARCH"
+          exit 1
+        fi
+
+        echo "Detected architecture: $ARCH, using binary: $BINARY_ARCH"
+
+        # Download the precompiled binary
+        BINARY_NAME="avocado-${VERSION}_${BINARY_ARCH}.tar.gz"
+        echo "Downloading: $BINARY_NAME"
+
+        if ! curl -L -o "$BINARY_NAME" "https://github.com/avocado-linux/avocado-cli/releases/download/${VERSION}/${BINARY_NAME}"; then
+          echo "Failed to download $BINARY_NAME"
+          exit 1
+        fi
+
+        # Extract and install
+        if ! tar -xzf "$BINARY_NAME"; then
+          echo "Failed to extract $BINARY_NAME"
+          exit 1
+        fi
+
+        if [ ! -f "avocado" ]; then
+          echo "avocado binary not found after extraction"
+          ls -la
+          exit 1
+        fi
+
+        sudo cp avocado /usr/local/bin/
+
+        # Verify installation
+        avocado --version
+
+    - name: Build extension for target
+      run: |
+        cd extensions/${{ matrix.extension }}
+        echo "Building extension: ${{ matrix.extension }} for target: ${{ matrix.target }}"
+
+        # Configure avocado to use the shared package repo service container
+        # The container is accessible by its name within the Docker network
+        export AVOCADO_SDK_REPO_URL="http://${{ needs.setup-package-repo.outputs.container_name }}"
+        export AVOCADO_CONTAINER_NETWORK="${{ needs.setup-package-repo.outputs.network_name }}"
+        export AVOCADO_SDK_REPO_RELEASE="${{ env.RELEASE }}"
+        echo "Using package repo URL: $AVOCADO_SDK_REPO_URL"
+        echo "Using Docker network: $AVOCADO_CONTAINER_NETWORK"
+
+        echo "Running avocado install -f..."
+        avocado ext install -e avocado-ext-"${{ matrix.extension }}" -f --target "${{ matrix.target }}" --container-arg "--network" --container-arg "$AVOCADO_CONTAINER_NETWORK"
+        avocado ext build -e avocado-ext-"${{ matrix.extension }}" --target "${{ matrix.target }}" --container-arg "--network" --container-arg "$AVOCADO_CONTAINER_NETWORK"
+        avocado ext package -e avocado-ext-"${{ matrix.extension }}" --target "${{ matrix.target }}" --out-dir "${{ matrix.extension }}-${{ matrix.target }}" --container-arg "--network" --container-arg "$AVOCADO_CONTAINER_NETWORK"
+        avocado clean
+
+    - name: Copy package to cache directory
+      run: |
+        # Create the cache directory structure
+        CACHE_DIR="/home/runner/_cache/repos/packages/${{ env.RELEASE }}/target/${{ matrix.target }}-ext"
+        mkdir -p "$CACHE_DIR"
+
+        # Find and copy the built RPM package
+        RPM_FILE=$(find . -name "avocado-ext-${{ matrix.extension }}-*.rpm" -type f | head -1)
+        if [ -z "$RPM_FILE" ]; then
+          echo "Error: No RPM file found matching pattern avocado-ext-${{ matrix.extension }}-*.rpm"
+          ls -la
+          exit 1
+        fi
+
+        echo "Found RPM file: $RPM_FILE"
+        echo "Copying package to $CACHE_DIR"
+        cp "$RPM_FILE" "$CACHE_DIR/"
+
+        echo "Package copied successfully to cache directory"
+        ls -la "$CACHE_DIR"
+
+  cleanup-package-repo:
+    needs: [setup-package-repo, build-extensions]
+    runs-on: avocado-sdk
+    if: always()
+    steps:
+    - name: Cleanup Docker service
+      run: |
+        # Stop the package repo container (--rm will automatically remove it)
+        CONTAINER_NAME="${{ needs.setup-package-repo.outputs.container_name }}"
+        if [ -n "$CONTAINER_NAME" ]; then
+          echo "Stopping container: $CONTAINER_NAME"
+          docker stop "$CONTAINER_NAME" || true
+          echo "Container stopped and automatically removed (--rm flag)"
+        fi
+
+        # Remove the Docker network
+        NETWORK_NAME="${{ needs.setup-package-repo.outputs.network_name }}"
+        if [ -n "$NETWORK_NAME" ]; then
+          echo "Removing network: $NETWORK_NAME"
+          docker network rm "$NETWORK_NAME" || true
+        fi
+
+        echo "Docker cleanup completed"
