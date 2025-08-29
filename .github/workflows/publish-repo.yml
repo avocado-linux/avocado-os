@@ -1,0 +1,169 @@
+name: Publish Repository
+
+on:
+  workflow_call:
+    inputs:
+      distro_codename:
+        description: "Distribution codename"
+        type: string
+        required: true
+      release_date:
+        description: "Release date timestamp"
+        type: string
+        required: true
+      packages_path:
+        description: "Path to packages directory"
+        type: string
+        required: true
+      releases_path:
+        description: "Path to releases directory"
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      distro_codename:
+        description: "Distribution codename"
+        type: string
+        default: "latest/apollo/edge"
+      release_date:
+        description: "Release date timestamp (leave empty for auto-generated)"
+        type: string
+        required: false
+      packages_path:
+        description: "Path to packages directory (leave empty for auto-generated)"
+        type: string
+        required: false
+      releases_path:
+        description: "Path to releases directory (leave empty for auto-generated)"
+        type: string
+        required: false
+
+jobs:
+  setup-paths:
+    runs-on: avocado-build
+    if: github.event_name == 'workflow_dispatch'
+    outputs:
+      release_date: ${{ steps.set-paths.outputs.release_date }}
+      packages_path: ${{ steps.set-paths.outputs.packages_path }}
+      releases_path: ${{ steps.set-paths.outputs.releases_path }}
+    steps:
+      - name: Set paths for manual dispatch
+        id: set-paths
+        run: |
+          DISTRO_CODENAME="${{ github.event.inputs.distro_codename }}"
+          REPO_PATH="/home/runner/_cache/repos"
+
+          if [ -n "${{ github.event.inputs.release_date }}" ]; then
+            RELEASE_DATE="${{ github.event.inputs.release_date }}"
+          else
+            RELEASE_DATE=$(date -u '+%Y-%m-%d-%H%M%S')
+          fi
+
+          if [ -n "${{ github.event.inputs.packages_path }}" ]; then
+            PACKAGES_PATH="${{ github.event.inputs.packages_path }}"
+          else
+            PACKAGES_PATH="${REPO_PATH}/packages/${DISTRO_CODENAME}"
+          fi
+
+          if [ -n "${{ github.event.inputs.releases_path }}" ]; then
+            RELEASES_PATH="${{ github.event.inputs.releases_path }}"
+          else
+            RELEASES_PATH="${REPO_PATH}/releases/${DISTRO_CODENAME}/${RELEASE_DATE}"
+          fi
+
+          echo "release_date=$RELEASE_DATE" >> $GITHUB_OUTPUT
+          echo "packages_path=$PACKAGES_PATH" >> $GITHUB_OUTPUT
+          echo "releases_path=$RELEASES_PATH" >> $GITHUB_OUTPUT
+
+  cleanup_packages:
+    needs: setup-paths
+    if: always() && !cancelled()
+    runs-on: avocado-build
+    env:
+      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Run cleanup script on packages directory
+        run: |
+          echo "Running cleanup script on ${{ env.PACKAGES_PATH }}"
+          ./repo/purge-window.sh "${{ env.PACKAGES_PATH }}"
+
+  create_release_metadata:
+    needs: [setup-paths, cleanup_packages]
+    if: always() && !cancelled()
+    runs-on: avocado-build
+    env:
+      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path }}
+      RELEASES_PATH: ${{ inputs.releases_path || needs.setup-paths.outputs.releases_path }}
+      DISTRO_CODENAME: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
+      AVOCADO_REPO_BASE: "https://repo.avocadolinux.org"
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Create releases directory
+        run: mkdir -p ${{ env.RELEASES_PATH }}
+
+      - name: Generate repository metadata directly in releases directory
+        run: |
+          echo "Generating repository metadata directly in releases directory"
+          echo "Reading packages from: ${{ env.PACKAGES_PATH }}"
+          echo "Writing metadata to: ${{ env.RELEASES_PATH }}"
+          echo "Metadata will reference packages at: ${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}"
+          ./repo/update-metadata.sh "${{ env.PACKAGES_PATH }}" "${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}" "${{ env.RELEASES_PATH }}"
+
+  sync_to_s3:
+    needs: [setup-paths, cleanup_packages, create_release_metadata]
+    if: always() && !cancelled()
+    runs-on: avocado-build
+    env:
+      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path }}
+      RELEASES_PATH: ${{ inputs.releases_path || needs.setup-paths.outputs.releases_path }}
+      DISTRO_CODENAME: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
+      RELEASE_DATE: ${{ inputs.release_date || needs.setup-paths.outputs.release_date }}
+      S3_BUCKET_PATH: ${{ secrets.AWS_S3_BUCKET }}
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Sync packages directory to S3
+        run: |
+          echo "Syncing packages from ${{ env.PACKAGES_PATH }} to s3://${{ env.S3_BUCKET_PATH }}/packages/${{ env.DISTRO_CODENAME }}"
+          aws s3 sync "${{ env.PACKAGES_PATH }}" "s3://${{ env.S3_BUCKET_PATH }}/packages/${{ env.DISTRO_CODENAME }}"
+
+      - name: Sync release metadata to S3
+        run: |
+          echo "Syncing release metadata from ${{ env.RELEASES_PATH }} to s3://${{ env.S3_BUCKET_PATH }}/releases/${{ env.DISTRO_CODENAME }}/${{ env.RELEASE_DATE }}"
+          aws s3 sync "${{ env.RELEASES_PATH }}" "s3://${{ env.S3_BUCKET_PATH }}/releases/${{ env.DISTRO_CODENAME }}/${{ env.RELEASE_DATE }}"
+          echo "Release metadata S3 sync complete."
+
+      - name: Sync metadata to S3
+        run: |
+          # First sync everything EXCEPT repomd.xml files. Then sync ONLY repomd.xml files. This
+          # ensures that if a new repomd.xml is served, that the content it addresses exists.
+          aws s3 sync "${{ env.RELEASES_PATH }}" "s3://${{ env.S3_BUCKET_PATH }}/${{ env.DISTRO_CODENAME }}" --exclude "*/repomd.xml"
+          aws s3 sync "${{ env.RELEASES_PATH }}" "s3://${{ env.S3_BUCKET_PATH }}/${{ env.DISTRO_CODENAME }}" --exclude "*" --include "*/repomd.xml"
+
+      - name: Clean up staging and releases directories
+        run: |
+          echo "Cleaning up staging and releases directories"
+
+          # Clean up staging directory (derived from releases path)
+          STAGING_BASE_PATH=$(dirname $(dirname "${{ env.RELEASES_PATH }}"))"/staging/${{ env.RELEASE_DATE }}"
+          echo "Cleaning up staging directory: $STAGING_BASE_PATH"
+          if [ -d "$STAGING_BASE_PATH" ]; then
+            rm -rf "$STAGING_BASE_PATH"
+            echo "Staging directory cleaned up successfully."
+          fi
+
+          echo "Cleanup completed"

@@ -1,12 +1,21 @@
-name: Build Extensions Matrix with Avocado CLI
+name: Build Extensions
 
 on:
-  pull_request:
-    branches: ['*']
+  workflow_call:
+    inputs:
+      distro_codename:
+        description: "Distribution codename"
+        type: string
+        required: true
   workflow_dispatch:
+    inputs:
+      distro_codename:
+        description: "Distribution codename"
+        type: string
+        default: "latest/apollo/edge"
 
 env:
-  RELEASE: "latest/apollo/edge"
+  RELEASE: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
 
 jobs:
   generate-matrix:
