@@ -33,7 +33,7 @@ Examples:
     $0 -t qemux86-64 --all                     # Build all extensions for qemux86-64
     $0 -t raspberrypi4 docker sshd             # Build specific extensions
     $0 --list                                   # List all extensions
-    $0 -t qemux86-64 -u http://repo:8080 dev   # Use custom repo URL
+    $0 -t qemux86-64 -u http://my-repo-container dev   # Use custom repo container
 
 This script:
 1. Checks that the repository server is running
@@ -67,12 +67,17 @@ check_repo_server() {
         exit 1
     fi
     
-    # Test if the repository is accessible
-    if ! curl -s --connect-timeout 5 "$REPO_URL" > /dev/null; then
-        echo "Error: Repository server at '$REPO_URL' is not accessible" >&2
-        echo "Check that the container is running and the URL is correct" >&2
+    # Test if the repository is accessible via localhost port mapping
+    # (The avocado CLI will use the container name, but we test via localhost)
+    LOCAL_REPO_URL="http://localhost:8080"
+    if ! curl -s --connect-timeout 5 "$LOCAL_REPO_URL" > /dev/null; then
+        echo "Error: Repository server is not accessible via $LOCAL_REPO_URL" >&2
+        echo "Check that the container is running and port 8080 is mapped" >&2
+        echo "The avocado CLI will connect to: $REPO_URL" >&2
         exit 1
     fi
+    
+    echo "✓ Repository server is accessible (avocado CLI will use: $REPO_URL)"
 }
 
 # Function to discover extensions and their supported targets
@@ -176,7 +181,7 @@ build_extension() {
     local output_dir="$extension-$target"
     
     echo "  Installing extension environment..."
-    avocado ext install -e "$package_name" -f --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"
+    avocado ext install -v -e "$package_name" -f --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"
     
     echo "  Building extension..."
     avocado ext build -e "$package_name" --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"
@@ -206,7 +211,10 @@ build_extension() {
 # Function to update extension metadata
 update_extension_metadata() {
     echo "Updating extension repository metadata..."
-    ./repo/update-metadata-extensions.sh "$REPO_DIR/packages/$DISTRO_CODENAME" "" "$REPO_DIR/releases/$DISTRO_CODENAME"
+    # Use container name as baseurl to match production structure
+    BASEURL="http://$CONTAINER_NAME/packages/$DISTRO_CODENAME"
+    echo "Extension metadata will reference packages at: $BASEURL"
+    ./repo/update-metadata-extensions.sh "$REPO_DIR/packages/$DISTRO_CODENAME" "$BASEURL" "$REPO_DIR/releases/$DISTRO_CODENAME"
     
     if [ $? -eq 0 ]; then
         echo "✓ Extension metadata updated successfully"
@@ -301,10 +309,14 @@ check_repo_server
 
 echo "Target: $TARGET"
 echo "Repository directory: $REPO_DIR"
-echo "Repository URL: $REPO_URL"
 echo "Distribution codename: $DISTRO_CODENAME"
 echo "Container name: $CONTAINER_NAME"
 echo "Network name: $NETWORK_NAME"
+echo ""
+echo "Docker networking configuration:"
+echo "  Repository URL (for avocado CLI): $REPO_URL"
+echo "  Avocado containers will connect via Docker network: $NETWORK_NAME"
+echo "  All avocado commands will use --container-arg --network --container-arg $NETWORK_NAME"
 echo ""
 
 # Determine which extensions to build

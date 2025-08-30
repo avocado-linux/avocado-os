@@ -97,6 +97,7 @@ sync_target_packages() {
         --distro "$DISTRO_CODENAME" \
         --release-id "$RELEASE_ID" \
         --build-dir "$build_dir" \
+        --container-name "$CONTAINER_NAME" \
         "$target"
     
     if [ $? -eq 0 ]; then
@@ -135,7 +136,9 @@ build_target_extensions() {
         --target "$target"
         --repo-dir "$REPO_DIR"
         --distro "$DISTRO_CODENAME"
-        --repo-url "http://localhost:$PORT"
+        --repo-url "http://$CONTAINER_NAME"
+        --container-name "$CONTAINER_NAME"
+        --network "$NETWORK_NAME"
     )
     
     if [ "$BUILD_ALL_EXTENSIONS" = true ]; then
@@ -177,6 +180,8 @@ REPO_DIR="$DEFAULT_REPO_DIR"
 DISTRO_CODENAME="$DEFAULT_DISTRO_CODENAME"
 RELEASE_ID="$DEFAULT_RELEASE_ID"
 PORT="$DEFAULT_PORT"
+CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
+NETWORK_NAME="$DEFAULT_NETWORK_NAME"
 BUILD_DIR_PATTERN=""
 TARGETS=()
 SYNC_ONLY=false
@@ -371,7 +376,10 @@ log "Packages: $REPO_DIR/packages/$DISTRO_CODENAME"
 log "Metadata: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_ID"
 
 if [ "$KEEP_REPO" = true ]; then
-    log "Repository server: http://localhost:$PORT/"
+    log "Repository server:"
+    log "  Host access: http://localhost:$PORT/"
+    log "  Container name: $CONTAINER_NAME (for avocado CLI)"
+    log "  Network: $NETWORK_NAME"
     log ""
     log "To stop the repository server:"
     log "  ./scripts/dev-start-repo.sh --stop"

@@ -22,6 +22,7 @@ Options:
     -d, --distro CODENAME   Distribution codename (default: $DEFAULT_DISTRO_CODENAME)
     -i, --release-id ID     Release identifier (default: auto-generated timestamp)
     -b, --build-dir DIR     Build directory (default: build-<target>)
+    -c, --container-name NAME   Repository container name (default: avocado-dev-repo)
     -h, --help              Show this help message
 
 Examples:
@@ -49,6 +50,7 @@ DISTRO_CODENAME="$DEFAULT_DISTRO_CODENAME"
 RELEASE_ID="$DEFAULT_RELEASE_ID"
 BUILD_DIR=""
 TARGET=""
+CONTAINER_NAME="avocado-dev-repo"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -66,6 +68,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -b|--build-dir)
             BUILD_DIR="$2"
+            shift 2
+            ;;
+        -c|--container-name)
+            CONTAINER_NAME="$2"
             shift 2
             ;;
         -h|--help)
@@ -111,7 +117,7 @@ fi
 
 # Set up paths
 SOURCE_DEPLOY_DIR="$BUILD_DIR/build/tmp/deploy/rpm"
-PACKAGES_PATH="$REPO_DIR/packages/$DISTRO_CODENAME"
+PACKAGES_PATH="$REPO_DIR/packages"
 RELEASES_PATH="$REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_ID"
 
 # Validate source directory exists
@@ -159,7 +165,10 @@ fi
 # Update repository metadata (distro packages only, excluding extensions)
 echo ""
 echo "Updating repository metadata..."
-./repo/update-metadata-distro.sh "$PACKAGES_PATH" "" "$RELEASES_PATH"
+# Use container name as baseurl to match production structure
+BASEURL="http://$CONTAINER_NAME/packages/$DISTRO_CODENAME"
+echo "Metadata will reference packages at: $BASEURL"
+./repo/update-metadata-distro.sh "$PACKAGES_PATH/$DISTRO_CODENAME" "$BASEURL" "$RELEASES_PATH"
 
 if [ $? -eq 0 ]; then
     echo "✓ Repository metadata updated successfully"
