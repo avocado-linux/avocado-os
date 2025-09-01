@@ -278,6 +278,11 @@ jobs:
         if [ -n "${{ inputs.releases_path }}" ]; then
           # Convert provided path to remote mount path
           LOCAL_RELEASES_DIR="${{ inputs.releases_path }}"
+          # Extract the relative path from the base cache directory and convert to remote path
+          RELATIVE_PATH=$(echo "$LOCAL_RELEASES_DIR" | sed "s|^$LOCAL_CACHE_BASE/||")
+          REMOTE_LATEST_MOUNT_PATH="$REMOTE_CACHE_BASE/$RELATIVE_PATH"
+          echo "Using provided releases path: $LOCAL_RELEASES_DIR (local)"
+          echo "Will mount: $REMOTE_LATEST_MOUNT_PATH (remote)"
         elif [ -n "${{ needs.setup-paths.outputs.releases_path }}" ]; then
           # Use path from setup-paths job (for standalone runs)
           LOCAL_RELEASES_DIR="${{ needs.setup-paths.outputs.releases_path }}"
