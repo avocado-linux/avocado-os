@@ -75,7 +75,7 @@ jobs:
         run: |
           # Generate timestamp for this build
           RELEASE_DATE=$(date -u '+%Y-%m-%d-%H%M%S')
-          REPO_PATH="/home/runner/_cache/repos"
+          REPO_PATH="/home/runner/_repo"
           DISTRO_CODENAME="${{ env.DISTRO_CODENAME }}"
 
           # New directory structure with proper scoping

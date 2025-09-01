@@ -53,7 +53,7 @@ jobs:
         id: set-paths
         run: |
           DISTRO_CODENAME="${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
-          REPO_PATH="/home/runner/_cache/repos"
+          REPO_PATH="/home/runner/_repo"
 
           # Handle release_date from inputs or find latest existing
           if [ -n "${{ inputs.release_date }}" ]; then

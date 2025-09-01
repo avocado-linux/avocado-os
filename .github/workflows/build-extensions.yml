@@ -67,7 +67,7 @@ jobs:
         id: set-paths
         run: |
           DISTRO_CODENAME="${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
-          REPO_PATH="/home/runner/_cache/repos"
+          REPO_PATH="/home/runner/_repo"
 
           # Try to find the latest existing release when no timestamp is provided
           if [ -n "${{ inputs.release_date }}" ]; then
@@ -115,7 +115,7 @@ jobs:
           echo "packages_path=$PACKAGES_PATH" >> $GITHUB_OUTPUT
           echo "releases_path=$RELEASES_PATH" >> $GITHUB_OUTPUT
         env:
-          REPO_PATH: "/home/runner/_cache/repos"
+          REPO_PATH: "/home/runner/_repo"
           DISTRO_CODENAME: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
 
   generate-matrix:
@@ -264,12 +264,12 @@ jobs:
         echo "container_name=$CONTAINER_NAME" >> $GITHUB_OUTPUT
 
         # Local paths for searching (where this script runs)
-        LOCAL_CACHE_BASE="/home/runner/_cache/repos"
+        LOCAL_CACHE_BASE="/home/runner/_repo"
         LOCAL_PACKAGES_PATH="$LOCAL_CACHE_BASE/packages"
         LOCAL_RELEASES_PATH="$LOCAL_CACHE_BASE/releases"
 
         # Remote paths for volume mounting (where Docker container will run)
-        REMOTE_CACHE_BASE="/mnt/src/cache/repos"
+        REMOTE_CACHE_BASE="/mnt/raid/repo"
         REMOTE_PACKAGES_PATH="$REMOTE_CACHE_BASE/packages"
         REMOTE_RELEASES_PATH="$REMOTE_CACHE_BASE/releases"
 
@@ -434,7 +434,7 @@ jobs:
         elif [ -n "${{ needs.setup-paths.outputs.packages_path }}" ]; then
           BASE_PACKAGES_PATH="${{ needs.setup-paths.outputs.packages_path }}"
         else
-          BASE_PACKAGES_PATH="/home/runner/_cache/repos/packages/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
+          BASE_PACKAGES_PATH="/home/runner/_repo/packages/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
         fi
         CACHE_DIR="$BASE_PACKAGES_PATH/target/${{ matrix.target }}-ext"
         mkdir -p "$CACHE_DIR"
@@ -526,8 +526,8 @@ jobs:
     if: always() && !cancelled()
     runs-on: avocado-build
     env:
-      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path || format('/home/runner/_cache/repos/packages/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}
-      RELEASES_PATH: ${{ inputs.releases_path || needs.setup-paths.outputs.releases_path || format('/home/runner/_cache/repos/releases/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}
+      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path || format('/home/runner/_repo/packages/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}
+      RELEASES_PATH: ${{ inputs.releases_path || needs.setup-paths.outputs.releases_path || format('/home/runner/_repo/releases/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}
       DISTRO_CODENAME: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
       AVOCADO_REPO_BASE: "https://repo.avocadolinux.org"
     steps:
@@ -552,7 +552,7 @@ jobs:
             echo "Using setup-paths releases path: $FINAL_RELEASES_PATH"
           else
             # Fallback to finding the most recent directory (for standalone runs)
-            RELEASES_BASE="/home/runner/_cache/repos/releases/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
+            RELEASES_BASE="/home/runner/_repo/releases/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
             if [ -d "$RELEASES_BASE" ]; then
               LATEST_DIR=$(find "$RELEASES_BASE" -maxdepth 1 -type d -not -path "$RELEASES_BASE" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
               if [ -n "$LATEST_DIR" ] && [ -d "$LATEST_DIR" ]; then
