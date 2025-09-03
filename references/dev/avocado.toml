@@ -9,23 +9,22 @@ src_dir = "../../"
 avocado-img-bootfiles = "*"
 avocado-img-rootfs = "*"
 avocado-img-initramfs = "*"
-# avocado-ext-dev = { ext = "avocado-ext-dev", config = "extensions/dev/avocado.toml" }
 avocado-ext-dev = { ext = "avocado-ext-dev", vsn = "*" }
 config = { ext = "config" }
 app = { ext = "app" }
 
 # BSPs
-# [runtime.dev.reterminal-dm.dependencies]
-# avocado-bsp-reterminal-dm = { ext = "avocado-bsp-reterminal-dm", config = "bsp/reterminal-dm/avocado.toml" }
+[runtime.dev.reterminal-dm.dependencies]
+avocado-bsp-reterminal-dm = { ext = "avocado-bsp-reterminal-dm", config = "bsp/reterminal-dm/avocado.toml" }
 
-# [runtime.dev.reterminal.dependencies]
-# avocado-bsp-reterminal = { ext = "avocado-bsp-reterminal", config = "bsp/reterminal/avocado.toml" }
+[runtime.dev.reterminal.dependencies]
+avocado-bsp-reterminal = { ext = "avocado-bsp-reterminal", config = "bsp/reterminal/avocado.toml" }
 
-# [runtime.dev.raspberrypi5.dependencies]
-# avocado-bsp-raspberrypi5 = { ext = "avocado-bsp-raspberrypi5", config = "bsp/raspberrypi5/avocado.toml" }
+[runtime.dev.raspberrypi5.dependencies]
+avocado-bsp-raspberrypi5 = { ext = "avocado-bsp-raspberrypi5", config = "bsp/raspberrypi5/avocado.toml" }
 
-# [runtime.dev.raspberrypi4.dependencies]
-# avocado-bsp-raspberrypi4 = { ext = "avocado-bsp-raspberrypi4", config = "bsp/raspberrypi4/avocado.toml" }
+[runtime.dev.raspberrypi4.dependencies]
+avocado-bsp-raspberrypi4 = { ext = "avocado-bsp-raspberrypi4", config = "bsp/raspberrypi4/avocado.toml" }
 
 
 ##
@@ -50,8 +49,8 @@ password = ""
 
 [sdk]
 image = "avocadolinux/sdk:apollo-edge"
-container_args = ["--network=avocado-dev-network"]
-repo_url = "http://avocado-dev-repo"
+# container_args = ["--network=avocado-dev-network"]
+# repo_url = "http://avocado-dev-repo"
 
 
 [sdk.qemux86-64]

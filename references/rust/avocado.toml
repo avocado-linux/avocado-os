@@ -57,8 +57,8 @@ nativesdk-libgcc-dev = "*"
 
 [sdk]
 image = "avocadolinux/sdk:apollo-edge"
-container_args = ["--network=avocado-dev-network"]
-repo_url = "http://avocado-dev-repo"
+# container_args = ["--network=avocado-dev-network"]
+# repo_url = "http://avocado-dev-repo"
 
 [sdk.qemux86-64]
 container_args = ["--network=host"]
