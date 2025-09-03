@@ -2,3 +2,9 @@
 	path = distro
 	url = git@github.com:avocado-linux/meta-avocado.git
 	branch = scarthgap
+[submodule "references/elixir/ref-elixir"]
+	path = references/elixir/ref-elixir
+	url = git@github.com:avocado-linux/ref-elixir
+[submodule "references/rust/ref-rust"]
+	path = references/rust/ref-rust
+	url = git@github.com:avocado-linux/ref-rust

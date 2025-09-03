@@ -7,6 +7,7 @@ DEFAULT_REPO_DIR="/tmp/avocado-dev-repo"
 DEFAULT_PORT="8080"
 DEFAULT_CONTAINER_NAME="avocado-dev-repo"
 DEFAULT_NETWORK_NAME="avocado-dev-network"
+DEFAULT_DISTRO_CODENAME="latest/apollo/edge"
 
 # Function to show usage
 usage() {

@@ -7,7 +7,9 @@ DEFAULT_REPO_DIR="/tmp/avocado-dev-repo"
 DEFAULT_DISTRO_CODENAME="latest/apollo/edge"
 DEFAULT_CONTAINER_NAME="avocado-dev-repo"
 DEFAULT_NETWORK_NAME="avocado-dev-network"
-DEFAULT_REPO_URL="http://localhost:8080"
+DEFAULT_REPO_URL="http://$DEFAULT_CONTAINER_NAME"
+DEFAULT_RELEASE_DIR=""  # Empty means auto-detect latest
+DEFAULT_SKIP_CLEANUP=false
 
 # Function to show usage
 usage() {
@@ -22,9 +24,11 @@ Required:
 Options:
     -r, --repo-dir DIR      Repository directory (default: $DEFAULT_REPO_DIR)
     -d, --distro CODENAME   Distribution codename (default: $DEFAULT_DISTRO_CODENAME)
-    -u, --repo-url URL      Repository URL (default: $DEFAULT_REPO_URL)
+    -u, --repo-url URL      Repository URL (default: http://<container-name>)
     -n, --container-name NAME   Repository container name (default: $DEFAULT_CONTAINER_NAME)
     --network NETWORK       Docker network name (default: $DEFAULT_NETWORK_NAME)
+    --release-dir DIR       Specific release directory name (default: auto-detect latest)
+    --skip-cleanup          Skip cleaning up extension build artifacts after building
     --all                   Build all extensions that support the target
     --list                  List available extensions and their supported targets
     -h, --help              Show this help message
@@ -32,20 +36,44 @@ Options:
 Examples:
     $0 -t qemux86-64 --all                     # Build all extensions for qemux86-64
     $0 -t raspberrypi4 docker sshd             # Build specific extensions
+    $0 -t raspberrypi4 bsp-raspberrypi4        # Build BSP extension for raspberrypi4
     $0 --list                                   # List all extensions
     $0 -t qemux86-64 -u http://my-repo-container dev   # Use custom repo container
+    $0 -t qemux86-64 --all --skip-cleanup      # Build all extensions but skip cleanup
 
 This script:
 1. Checks that the repository server is running
-2. Discovers available extensions and their supported targets
+2. Discovers available extensions (both regular and BSP) and their supported targets
 3. Builds the specified extensions for the target
 4. Copies built packages to the repository
 5. Updates extension repository metadata
+6. Cleans up extension build artifacts (unless --skip-cleanup is used)
 
 The built extension packages will be available in:
     <repo-dir>/packages/<distro-codename>/target/<target>-ext/
 
 EOF
+}
+
+# Function to find the latest release directory
+find_latest_release_dir() {
+    local releases_base_dir="$REPO_DIR/releases/$DISTRO_CODENAME"
+    
+    if [ ! -d "$releases_base_dir" ]; then
+        echo "Error: Releases directory not found: $releases_base_dir" >&2
+        return 1
+    fi
+    
+    # Find the latest timestamped directory (dev-YYYYMMDD-HHMMSS format)
+    local latest_dir=$(find "$releases_base_dir" -maxdepth 1 -type d -name "dev-*" | sort -V | tail -n 1)
+    
+    if [ -z "$latest_dir" ]; then
+        echo "Error: No release directories found in $releases_base_dir" >&2
+        echo "Expected directories with format: dev-YYYYMMDD-HHMMSS" >&2
+        return 1
+    fi
+    
+    echo "$(basename "$latest_dir")"
 }
 
 # Function to check if avocado CLI is available
@@ -84,6 +112,7 @@ check_repo_server() {
 discover_extensions() {
     local extensions_info=()
     
+    # Discover regular extensions
     for ext_dir in extensions/*/; do
         if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.toml" ]; then
             local extension=$(basename "$ext_dir")
@@ -101,6 +130,25 @@ discover_extensions() {
         fi
     done
     
+    # Discover BSP extensions
+    for bsp_dir in bsp/*/; do
+        if [ -d "$bsp_dir" ] && [ -f "$bsp_dir/avocado.toml" ]; then
+            local bsp_name=$(basename "$bsp_dir")
+            local extension="bsp-$bsp_name"
+            
+            # Read supported_targets from avocado.toml
+            local supported_targets=""
+            if grep -q '^supported_targets' "$bsp_dir/avocado.toml"; then
+                supported_targets=$(grep '^supported_targets' "$bsp_dir/avocado.toml" | sed 's/supported_targets = //' | tr -d '"' | tr -d "'" | tr -d ' ')
+            else
+                # Default to all targets if not specified
+                supported_targets="*"
+            fi
+            
+            extensions_info+=("$extension:$supported_targets")
+        fi
+    done
+    
     printf '%s\n' "${extensions_info[@]}"
 }
 
@@ -109,9 +157,36 @@ list_extensions() {
     echo "Available extensions and their supported targets:"
     echo ""
     
+    # Separate regular and BSP extensions for better display
+    local regular_extensions=()
+    local bsp_extensions=()
+    
     while IFS=':' read -r extension supported_targets; do
-        printf "  %-20s %s\n" "$extension" "$supported_targets"
+        if [[ "$extension" == bsp-* ]]; then
+            bsp_extensions+=("$extension:$supported_targets")
+        else
+            regular_extensions+=("$extension:$supported_targets")
+        fi
     done < <(discover_extensions)
+    
+    # Display regular extensions
+    if [ ${#regular_extensions[@]} -gt 0 ]; then
+        echo "Regular Extensions:"
+        for ext_info in "${regular_extensions[@]}"; do
+            IFS=':' read -r extension supported_targets <<< "$ext_info"
+            printf "  %-20s %s\n" "$extension" "$supported_targets"
+        done
+        echo ""
+    fi
+    
+    # Display BSP extensions
+    if [ ${#bsp_extensions[@]} -gt 0 ]; then
+        echo "BSP Extensions:"
+        for ext_info in "${bsp_extensions[@]}"; do
+            IFS=':' read -r extension supported_targets <<< "$ext_info"
+            printf "  %-20s %s\n" "$extension" "$supported_targets"
+        done
+    fi
 }
 
 # Function to check if extension supports target
@@ -151,6 +226,52 @@ get_extensions_for_target() {
     printf '%s\n' "${extensions[@]}"
 }
 
+# Function to clean up extension build artifacts
+cleanup_extension() {
+    local extension="$1"
+    local target="$2"
+    
+    echo "Cleaning up extension: $extension for target: $target"
+    
+    # Determine extension directory and package name based on type
+    local ext_dir=""
+    local package_name=""
+    
+    if [[ "$extension" == bsp-* ]]; then
+        # BSP extension
+        local bsp_name="${extension#bsp-}"
+        ext_dir="bsp/$bsp_name"
+        package_name="avocado-bsp-$bsp_name"
+    else
+        # Regular extension
+        ext_dir="extensions/$extension"
+        package_name="avocado-ext-$extension"
+    fi
+    
+    if [ ! -d "$ext_dir" ]; then
+        echo "  ⚠ Extension directory '$ext_dir' not found, skipping cleanup" >&2
+        return 0
+    fi
+    
+    # Change to extension directory
+    cd "$ext_dir"
+    
+    # Set up environment for avocado CLI (same as build)
+    export AVOCADO_SDK_REPO_URL="$REPO_URL"
+    export AVOCADO_CONTAINER_NETWORK="$NETWORK_NAME"
+    export AVOCADO_SDK_REPO_RELEASE="$DISTRO_CODENAME"
+    
+    echo "  Cleaning extension environment..."
+    if avocado clean --target "$target" 2>/dev/null; then
+        echo "  ✓ Extension $extension cleaned successfully"
+    else
+        echo "  ⚠ Extension $extension cleanup had issues"
+    fi
+    
+    # Return to original directory
+    cd - > /dev/null
+}
+
 # Function to build extension
 build_extension() {
     local extension="$1"
@@ -158,7 +279,21 @@ build_extension() {
     
     echo "Building extension: $extension for target: $target"
     
-    local ext_dir="extensions/$extension"
+    # Determine extension directory and package name based on type
+    local ext_dir=""
+    local package_name=""
+    
+    if [[ "$extension" == bsp-* ]]; then
+        # BSP extension
+        local bsp_name="${extension#bsp-}"
+        ext_dir="bsp/$bsp_name"
+        package_name="avocado-bsp-$bsp_name"
+    else
+        # Regular extension
+        ext_dir="extensions/$extension"
+        package_name="avocado-ext-$extension"
+    fi
+    
     if [ ! -d "$ext_dir" ]; then
         echo "Error: Extension directory '$ext_dir' not found" >&2
         return 1
@@ -177,11 +312,10 @@ build_extension() {
     export AVOCADO_CONTAINER_NETWORK="$NETWORK_NAME"
     export AVOCADO_SDK_REPO_RELEASE="$DISTRO_CODENAME"
     
-    local package_name="avocado-ext-$extension"
     local output_dir="$extension-$target"
     
     echo "  Installing extension environment..."
-    avocado ext install -v -e "$package_name" -f --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"
+    avocado ext install -e "$package_name" -f --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"
     
     echo "  Building extension..."
     avocado ext build -e "$package_name" --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"
@@ -189,15 +323,23 @@ build_extension() {
     echo "  Packaging extension..."
     avocado ext package -e "$package_name" --target "$target" --out-dir "$output_dir" --container-arg "--network" --container-arg "$NETWORK_NAME"
     
-    # Copy packages to repository
-    local target_ext_dir="$REPO_DIR/packages/$DISTRO_CODENAME/target/$target-ext"
-    echo "  Copying packages to repository: $target_ext_dir"
-    mkdir -p "$target_ext_dir"
+    # Copy packages to repository (both packages and releases directories)
+    local packages_target_ext_dir="$REPO_DIR/packages/$DISTRO_CODENAME/target/$target-ext"
+    local releases_target_ext_dir="$REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/target/$target-ext"
+    
+    echo "  Copying packages to repository:"
+    echo "    Packages: $packages_target_ext_dir"
+    echo "    Releases: $releases_target_ext_dir"
+    
+    mkdir -p "$packages_target_ext_dir"
+    mkdir -p "$releases_target_ext_dir"
     
     if [ -d "$output_dir" ]; then
-        find "$output_dir" -name "*.rpm" -exec cp {} "$target_ext_dir/" \;
+        # Copy to both packages and releases directories
+        find "$output_dir" -name "*.rpm" -exec cp {} "$packages_target_ext_dir/" \;
+        find "$output_dir" -name "*.rpm" -exec cp {} "$releases_target_ext_dir/" \;
         local rpm_count=$(find "$output_dir" -name "*.rpm" | wc -l)
-        echo "  ✓ Copied $rpm_count RPM packages"
+        echo "  ✓ Copied $rpm_count RPM packages to both locations"
     else
         echo "  ⚠ No output directory found: $output_dir"
     fi
@@ -214,7 +356,13 @@ update_extension_metadata() {
     # Use container name as baseurl to match production structure
     BASEURL="http://$CONTAINER_NAME/packages/$DISTRO_CODENAME"
     echo "Extension metadata will reference packages at: $BASEURL"
-    ./repo/update-metadata-extensions.sh "$REPO_DIR/packages/$DISTRO_CODENAME" "$BASEURL" "$REPO_DIR/releases/$DISTRO_CODENAME"
+    
+    # Update metadata for both packages and releases directories
+    local packages_dir="$REPO_DIR/packages/$DISTRO_CODENAME"
+    local releases_dir="$REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR"
+    
+    echo "Updating packages metadata..."
+    ./repo/update-metadata-extensions.sh "$packages_dir" "$BASEURL" "$releases_dir"
     
     if [ $? -eq 0 ]; then
         echo "✓ Extension metadata updated successfully"
@@ -230,6 +378,8 @@ DISTRO_CODENAME="$DEFAULT_DISTRO_CODENAME"
 REPO_URL="$DEFAULT_REPO_URL"
 CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
 NETWORK_NAME="$DEFAULT_NETWORK_NAME"
+RELEASE_DIR="$DEFAULT_RELEASE_DIR"
+SKIP_CLEANUP="$DEFAULT_SKIP_CLEANUP"
 TARGET=""
 EXTENSIONS=()
 BUILD_ALL=false
@@ -260,6 +410,14 @@ while [[ $# -gt 0 ]]; do
         --network)
             NETWORK_NAME="$2"
             shift 2
+            ;;
+        --release-dir)
+            RELEASE_DIR="$2"
+            shift 2
+            ;;
+        --skip-cleanup)
+            SKIP_CLEANUP=true
+            shift
             ;;
         --all)
             BUILD_ALL=true
@@ -307,11 +465,30 @@ fi
 check_avocado_cli
 check_repo_server
 
+# Determine release directory
+if [ -z "$RELEASE_DIR" ]; then
+    echo "Auto-detecting latest release directory..."
+    RELEASE_DIR=$(find_latest_release_dir)
+    if [ $? -ne 0 ]; then
+        exit 1
+    fi
+    echo "Using latest release directory: $RELEASE_DIR"
+else
+    echo "Using specified release directory: $RELEASE_DIR"
+    # Validate that the specified release directory exists
+    if [ ! -d "$REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR" ]; then
+        echo "Error: Specified release directory does not exist: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR" >&2
+        exit 1
+    fi
+fi
+
 echo "Target: $TARGET"
 echo "Repository directory: $REPO_DIR"
 echo "Distribution codename: $DISTRO_CODENAME"
+echo "Release directory: $RELEASE_DIR"
 echo "Container name: $CONTAINER_NAME"
 echo "Network name: $NETWORK_NAME"
+echo "Skip cleanup: $SKIP_CLEANUP"
 echo ""
 echo "Docker networking configuration:"
 echo "  Repository URL (for avocado CLI): $REPO_URL"
@@ -369,15 +546,28 @@ fi
 # Build extensions
 echo "Building ${#EXTENSIONS[@]} extension(s)..."
 failed_extensions=()
+built_extensions=()
 
 for extension in "${EXTENSIONS[@]}"; do
     echo ""
     echo "--- Building $extension ---"
-    if ! build_extension "$extension" "$TARGET"; then
+    if build_extension "$extension" "$TARGET"; then
+        built_extensions+=("$extension")
+        echo "✓ Successfully built extension: $extension"
+    else
         failed_extensions+=("$extension")
         echo "✗ Failed to build extension: $extension"
     fi
 done
+
+# Clean up built extensions unless skipped
+if [ "$SKIP_CLEANUP" = false ] && [ ${#built_extensions[@]} -gt 0 ]; then
+    echo ""
+    echo "--- Cleaning up extension build artifacts ---"
+    for extension in "${built_extensions[@]}"; do
+        cleanup_extension "$extension" "$TARGET"
+    done
+fi
 
 echo ""
 
@@ -397,7 +587,9 @@ else
 fi
 
 echo ""
-echo "Extension packages available at: $REPO_DIR/packages/$DISTRO_CODENAME/target/$TARGET-ext/"
+echo "Extension packages available at:"
+echo "  Packages: $REPO_DIR/packages/$DISTRO_CODENAME/target/$TARGET-ext/"
+echo "  Releases: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/target/$TARGET-ext/"
 echo "Repository URL: $REPO_URL/"
 
 if [ ${#failed_extensions[@]} -gt 0 ]; then
