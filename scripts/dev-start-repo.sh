@@ -8,6 +8,8 @@ DEFAULT_PORT="8080"
 DEFAULT_CONTAINER_NAME="avocado-dev-repo"
 DEFAULT_NETWORK_NAME="avocado-dev-network"
 DEFAULT_DISTRO_CODENAME="latest/apollo/edge"
+DEFAULT_USER_ID="$(id -u)"
+DEFAULT_GROUP_ID="$(id -g)"
 
 # Function to show usage
 usage() {
@@ -22,6 +24,8 @@ Options:
     -n, --name NAME         Container name (default: $DEFAULT_CONTAINER_NAME)
     --network NETWORK       Docker network name (default: $DEFAULT_NETWORK_NAME)
     -d, --distro CODENAME   Distribution codename (default: $DEFAULT_DISTRO_CODENAME)
+    --user-id UID           User ID for container (default: current user ID)
+    --group-id GID          Group ID for container (default: current group ID)
     --stop                  Stop the running repository server
     --restart               Restart the repository server
     --logs                  Show container logs
@@ -33,6 +37,7 @@ Examples:
     $0                                          # Start with defaults
     $0 -r /opt/avocado-repo -p 9000            # Custom repo dir and port
     $0 -d "latest/apollo/edge"                  # Custom distro codename
+    $0 --user-id 1000 --group-id 1000          # Custom user/group IDs
     $0 --stop                                   # Stop the server
     $0 --restart                               # Restart the server
     $0 --logs                                   # View logs
@@ -178,8 +183,8 @@ start_container() {
             --name "$CONTAINER_NAME" \
             --network "$NETWORK_NAME" \
             -p "$PORT:80" \
-            -e USER_ID="$(id -u)" \
-            -e GROUP_ID="$(id -g)" \
+            -e USER_ID="$USER_ID" \
+            -e GROUP_ID="$GROUP_ID" \
             -v "$PACKAGES_PATH:/avocado-repo/packages" \
             -v "$RELEASES_PATH:/avocado-repo/releases" \
             -v "$LATEST_MOUNT_PATH:/avocado-repo/$DISTRO_CODENAME" \
@@ -190,8 +195,8 @@ start_container() {
             --name "$CONTAINER_NAME" \
             --network "$NETWORK_NAME" \
             -p "$PORT:80" \
-            -e USER_ID="$(id -u)" \
-            -e GROUP_ID="$(id -g)" \
+            -e USER_ID="$USER_ID" \
+            -e GROUP_ID="$GROUP_ID" \
             -v "$PACKAGES_PATH:/avocado-repo/packages" \
             -v "$RELEASES_PATH:/avocado-repo/releases" \
             avocadolinux/package-repo:local
@@ -345,6 +350,8 @@ PORT="$DEFAULT_PORT"
 CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
 NETWORK_NAME="$DEFAULT_NETWORK_NAME"
 DISTRO_CODENAME="$DEFAULT_DISTRO_CODENAME"
+USER_ID="$DEFAULT_USER_ID"
+GROUP_ID="$DEFAULT_GROUP_ID"
 ACTION="start"
 
 while [[ $# -gt 0 ]]; do
@@ -367,6 +374,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         -d|--distro)
             DISTRO_CODENAME="$2"
+            shift 2
+            ;;
+        --user-id)
+            USER_ID="$2"
+            shift 2
+            ;;
+        --group-id)
+            GROUP_ID="$2"
             shift 2
             ;;
         --stop)

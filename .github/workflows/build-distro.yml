@@ -152,12 +152,48 @@ jobs:
 
       - name: Create staging directory for this build
         run: |
+          echo "=== Debug: Directory permissions and structure ==="
+          echo "Current user: $(whoami)"
+          echo "Current working directory: $(pwd)"
+          echo "Home directory: $HOME"
+
+          echo "=== Checking /home/runner directory ==="
+          ls -la /home/runner/ || echo "Cannot list /home/runner/"
+
+          echo "=== Checking if /home/runner/_repo exists ==="
+          if [ -d "/home/runner/_repo" ]; then
+            echo "/home/runner/_repo exists"
+            ls -la /home/runner/_repo/
+            echo "Permissions on /home/runner/_repo:"
+            stat /home/runner/_repo/
+          else
+            echo "/home/runner/_repo does not exist"
+            echo "Attempting to create /home/runner/_repo"
+            mkdir -p /home/runner/_repo || echo "Failed to create /home/runner/_repo"
+          fi
+
+          echo "=== Staging path calculation ==="
           if [ "${{ matrix.build_config.target }}" = "avocado-distro" ]; then
             STAGING_PATH="${{ env.STAGING_BASE_PATH }}/avocado-distro/${{ matrix.machine }}"
           else
             STAGING_PATH="${{ env.STAGING_BASE_PATH }}/avocado-sdk/${{ matrix.build_config.sdk_machine }}/${{ matrix.machine }}"
           fi
-          mkdir -p "$STAGING_PATH"
+
+          echo "STAGING_BASE_PATH: ${{ env.STAGING_BASE_PATH }}"
+          echo "STAGING_PATH: $STAGING_PATH"
+
+          echo "=== Attempting to create staging directory ==="
+          mkdir -p "$STAGING_PATH" || {
+            echo "Failed to create staging directory"
+            echo "Checking parent directories:"
+            echo "Checking $(dirname "$STAGING_PATH"):"
+            ls -la "$(dirname "$STAGING_PATH")" 2>/dev/null || echo "Parent directory does not exist"
+            echo "Checking $(dirname "$(dirname "$STAGING_PATH")"):"
+            ls -la "$(dirname "$(dirname "$STAGING_PATH")")" 2>/dev/null || echo "Grandparent directory does not exist"
+            exit 1
+          }
+
+          echo "Successfully created staging directory"
           echo "STAGING_PATH=$STAGING_PATH" >> $GITHUB_ENV
 
       - name: Build ${{ matrix.build_config.target }} for ${{ matrix.machine }}
