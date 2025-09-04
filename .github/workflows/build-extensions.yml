@@ -173,7 +173,7 @@ jobs:
         # Initialize matrix array
         matrix_includes=()
 
-        # Process each extension directory
+        # Process each regular extension directory
         for ext_dir in extensions/*/; do
           if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.toml" ]; then
             extension=$(basename "$ext_dir")
@@ -209,10 +209,54 @@ jobs:
 
             # Add matrix entries for this extension's supported targets
             for target in "${extension_targets[@]}"; do
-              matrix_includes+=("{\"extension\": \"$extension\", \"target\": \"$target\"}")
+              matrix_includes+=("{\"extension\": \"$extension\", \"target\": \"$target\", \"type\": \"regular\"}")
             done
 
             echo "  Extension $extension will build for targets: ${extension_targets[*]}"
+          fi
+        done
+
+        # Process each BSP extension directory
+        for bsp_dir in bsp/*/; do
+          if [ -d "$bsp_dir" ] && [ -f "$bsp_dir/avocado.toml" ]; then
+            bsp_name=$(basename "$bsp_dir")
+            extension="bsp-$bsp_name"
+            echo "Processing BSP extension: $extension"
+
+            # Read supported_targets from avocado.toml
+            supported_targets=$(grep '^supported_targets' "$bsp_dir/avocado.toml" | sed 's/supported_targets = //' | tr -d '"' | tr -d "'" | tr -d ' ')
+            echo "  supported_targets: $supported_targets"
+
+            # Determine which targets this extension supports
+            if [ "$supported_targets" = "*" ]; then
+              # Extension supports all targets, use filtered targets
+              extension_targets=("${FILTERED_TARGETS[@]}")
+            else
+              # Parse the list of specific targets
+              # Handle TOML array format: ["target1", "target2"]
+              targets_list=$(echo "$supported_targets" | sed 's/\[//g' | sed 's/\]//g' | sed 's/"//g' | sed "s/'//g" | tr ',' '\n')
+
+              extension_targets=()
+              for target in $targets_list; do
+                target=$(echo "$target" | xargs) # trim whitespace
+                if [ -n "$target" ]; then
+                  # Check if this target is in our filtered targets
+                  for filtered_target in "${FILTERED_TARGETS[@]}"; do
+                    if [ "$target" = "$filtered_target" ]; then
+                      extension_targets+=("$target")
+                      break
+                    fi
+                  done
+                fi
+              done
+            fi
+
+            # Add matrix entries for this BSP extension's supported targets
+            for target in "${extension_targets[@]}"; do
+              matrix_includes+=("{\"extension\": \"$extension\", \"target\": \"$target\", \"type\": \"bsp\"}")
+            done
+
+            echo "  BSP Extension $extension will build for targets: ${extension_targets[*]}"
           fi
         done
 
@@ -410,8 +454,23 @@ jobs:
 
     - name: Build extension for target
       run: |
-        cd extensions/${{ matrix.extension }}
-        echo "Building extension: ${{ matrix.extension }} for target: ${{ matrix.target }}"
+        # Determine extension directory and package name based on type
+        if [ "${{ matrix.type }}" = "bsp" ]; then
+          # BSP extension
+          BSP_NAME="${{ matrix.extension }}"
+          BSP_NAME="${BSP_NAME#bsp-}"  # Remove bsp- prefix
+          EXT_DIR="bsp/$BSP_NAME"
+          PACKAGE_NAME="avocado-bsp-$BSP_NAME"
+        else
+          # Regular extension
+          EXT_DIR="extensions/${{ matrix.extension }}"
+          PACKAGE_NAME="avocado-ext-${{ matrix.extension }}"
+        fi
+
+        cd "$EXT_DIR"
+        echo "Building extension: ${{ matrix.extension }} (type: ${{ matrix.type }}) for target: ${{ matrix.target }}"
+        echo "Extension directory: $EXT_DIR"
+        echo "Package name: $PACKAGE_NAME"
 
         # Configure avocado to use the shared package repo service container
         # The container is accessible by its name within the Docker network
@@ -423,14 +482,14 @@ jobs:
         echo "Using SDK repo release: $AVOCADO_SDK_REPO_RELEASE"
 
         echo "Building extension package ..."
-        echo "Running: avocado ext install -e avocado-ext-${{ matrix.extension }} -f --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
-        avocado ext install -e avocado-ext-"${{ matrix.extension }}" -f --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
+        echo "Running: avocado ext install -e $PACKAGE_NAME -f --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
+        avocado ext install -e "$PACKAGE_NAME" -f --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
 
-        echo "Running: avocado ext build -e avocado-ext-${{ matrix.extension }} --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
-        avocado ext build -e avocado-ext-"${{ matrix.extension }}" --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
+        echo "Running: avocado ext build -e $PACKAGE_NAME --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
+        avocado ext build -e "$PACKAGE_NAME" --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
 
-        echo "Running: avocado ext package -e avocado-ext-${{ matrix.extension }} --target ${{ matrix.target }} --out-dir ${{ matrix.extension }}-${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
-        avocado ext package -e avocado-ext-"${{ matrix.extension }}" --target "${{ matrix.target }}" --out-dir "${{ matrix.extension }}-${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
+        echo "Running: avocado ext package -e $PACKAGE_NAME --target ${{ matrix.target }} --out-dir ${{ matrix.extension }}-${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
+        avocado ext package -e "$PACKAGE_NAME" --target "${{ matrix.target }}" --out-dir "${{ matrix.extension }}-${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
 
     - name: Copy package to cache directory
       run: |
@@ -447,9 +506,18 @@ jobs:
         mkdir -p "$CACHE_DIR"
 
         # Find and copy the built RPM package
-        RPM_FILE=$(find . -name "avocado-ext-${{ matrix.extension }}-*.rpm" -type f | head -1)
+        # Determine the expected RPM pattern based on extension type
+        if [ "${{ matrix.type }}" = "bsp" ]; then
+          BSP_NAME="${{ matrix.extension }}"
+          BSP_NAME="${BSP_NAME#bsp-}"  # Remove bsp- prefix
+          RPM_PATTERN="avocado-bsp-$BSP_NAME-*.rpm"
+        else
+          RPM_PATTERN="avocado-ext-${{ matrix.extension }}-*.rpm"
+        fi
+
+        RPM_FILE=$(find . -name "$RPM_PATTERN" -type f | head -1)
         if [ -z "$RPM_FILE" ]; then
-          echo "Error: No RPM file found matching pattern avocado-ext-${{ matrix.extension }}-*.rpm"
+          echo "Error: No RPM file found matching pattern $RPM_PATTERN"
           ls -la
           exit 1
         fi
@@ -464,8 +532,17 @@ jobs:
     - name: Cleanup avocado state
       if: always()
       run: |
-        cd extensions/${{ matrix.extension }}
-        echo "Cleaning up avocado state for extension: ${{ matrix.extension }}"
+        # Determine extension directory based on type
+        if [ "${{ matrix.type }}" = "bsp" ]; then
+          BSP_NAME="${{ matrix.extension }}"
+          BSP_NAME="${BSP_NAME#bsp-}"  # Remove bsp- prefix
+          EXT_DIR="bsp/$BSP_NAME"
+        else
+          EXT_DIR="extensions/${{ matrix.extension }}"
+        fi
+
+        cd "$EXT_DIR"
+        echo "Cleaning up avocado state for extension: ${{ matrix.extension }} (type: ${{ matrix.type }})"
 
         # Try normal cleanup first
         if ! avocado clean; then
