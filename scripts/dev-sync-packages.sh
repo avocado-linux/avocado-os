@@ -165,10 +165,8 @@ fi
 # Update repository metadata (distro packages only, excluding extensions)
 echo ""
 echo "Updating repository metadata..."
-# Use container name as baseurl to match production structure
-BASEURL="http://$CONTAINER_NAME/packages/$DISTRO_CODENAME"
-echo "Metadata will reference packages at: $BASEURL"
-./repo/update-metadata-distro.sh "$PACKAGES_PATH/$DISTRO_CODENAME" "$BASEURL" "$RELEASES_PATH"
+echo "Metadata will use relative paths to packages"
+./repo/update-metadata-distro.sh "$PACKAGES_PATH/$DISTRO_CODENAME" "" "$RELEASES_PATH"
 
 if [ $? -eq 0 ]; then
     echo "✓ Repository metadata updated successfully"

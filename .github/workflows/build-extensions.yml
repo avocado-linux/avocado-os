@@ -324,53 +324,14 @@ jobs:
         echo "  Remote releases: $REMOTE_RELEASES_PATH"
         echo "  Remote latest: $REMOTE_LATEST_MOUNT_PATH"
 
-        # Debug: Check what directories exist before mounting
-        echo "=== DEBUG: Checking mount paths before container start ==="
-        echo "Remote packages path: $REMOTE_PACKAGES_PATH"
-        if [ -d "$REMOTE_PACKAGES_PATH" ]; then
-          echo "✓ Packages directory exists"
-          echo "Contents of packages directory:"
-          find "$REMOTE_PACKAGES_PATH" -type f -name "*.rpm" | head -10 || echo "No RPM files found"
-        else
-          echo "✗ Packages directory does not exist: $REMOTE_PACKAGES_PATH"
-        fi
-
-        echo "Remote releases path: $REMOTE_RELEASES_PATH"
-        if [ -d "$REMOTE_RELEASES_PATH" ]; then
-          echo "✓ Releases directory exists"
-          echo "Contents of releases directory:"
-          ls -la "$REMOTE_RELEASES_PATH" || echo "Failed to list releases directory"
-        else
-          echo "✗ Releases directory does not exist: $REMOTE_RELEASES_PATH"
-        fi
-
-        echo "Remote latest mount path: $REMOTE_LATEST_MOUNT_PATH"
-        if [ -d "$REMOTE_LATEST_MOUNT_PATH" ]; then
-          echo "✓ Latest mount directory exists"
-          echo "Contents of latest mount directory:"
-          ls -la "$REMOTE_LATEST_MOUNT_PATH" || echo "Failed to list latest mount directory"
-          echo "Looking for repodata:"
-          find "$REMOTE_LATEST_MOUNT_PATH" -name "repodata" -type d | head -5 || echo "No repodata directories found"
-        else
-          echo "✗ Latest mount directory does not exist: $REMOTE_LATEST_MOUNT_PATH"
-        fi
-
         # Start the container in the background
-        echo "=== Starting container with mounts ==="
-        echo "Container command:"
-        echo "docker run -d --rm --name $CONTAINER_NAME --network $NETWORK_NAME"
-        echo "  -e USER_ID=1001 -e GROUP_ID=1001"
-        echo "  -v $REMOTE_PACKAGES_PATH:/avocado-repo/packages"
-        echo "  -v $REMOTE_RELEASES_PATH:/avocado-repo/releases"
-        echo "  -v $REMOTE_LATEST_MOUNT_PATH:/avocado-repo/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
-        echo "  avocadolinux/package-repo:local"
 
-        docker run -d \
-          --rm \
+        docker run -d --rm \
           --name "$CONTAINER_NAME" \
           --network "$NETWORK_NAME" \
+          -p 8080:80 \
           -e USER_ID=1001 \
-          -e GROUP_ID=1001 \
+          -e GROUP_ID=974 \
           -v "$REMOTE_PACKAGES_PATH:/avocado-repo/packages" \
           -v "$REMOTE_RELEASES_PATH:/avocado-repo/releases" \
           -v "$REMOTE_LATEST_MOUNT_PATH:/avocado-repo/${{ inputs.distro_codename || github.event.inputs.distro_codename }}" \
@@ -379,7 +340,6 @@ jobs:
         echo "Started package repo service container: $CONTAINER_NAME"
 
         # Give nginx a moment to fully start up
-        echo "Waiting for nginx to fully start..."
         sleep 5
 
         # Verify container is still running
@@ -389,17 +349,6 @@ jobs:
           docker logs "$CONTAINER_NAME"
           exit 1
         fi
-
-        # Debug: Check what's actually mounted inside the container
-        echo "=== DEBUG: Checking mounted content inside container ==="
-        echo "Container filesystem structure:"
-        docker exec "$CONTAINER_NAME" find /avocado-repo -type d | head -20 || echo "Failed to list container directories"
-
-        echo "Checking for repodata inside container:"
-        docker exec "$CONTAINER_NAME" find /avocado-repo -name "repodata" -type d | head -10 || echo "No repodata found in container"
-
-        echo "Checking for RPM files inside container:"
-        docker exec "$CONTAINER_NAME" find /avocado-repo -name "*.rpm" -type f | head -10 || echo "No RPM files found in container"
 
         echo "Package repo service setup completed successfully"
 
@@ -473,96 +422,15 @@ jobs:
         echo "Using Docker network: $AVOCADO_CONTAINER_NETWORK"
         echo "Using SDK repo release: $AVOCADO_SDK_REPO_RELEASE"
 
-        # Debug: Test repo server connectivity
-        echo "=== DEBUG: Testing repo server connectivity ==="
-        CONTAINER_NAME="${{ needs.setup-package-repo.outputs.container_name }}"
-        echo "Container name: $CONTAINER_NAME"
-
-        # Check if container is running
-        echo "Checking if container is running..."
-        if docker ps --filter "name=$CONTAINER_NAME" --filter "status=running" --quiet | grep -q .; then
-          echo "✓ Container $CONTAINER_NAME is running"
-        else
-          echo "✗ Container $CONTAINER_NAME is not running!"
-          echo "All running containers:"
-          docker ps
-          echo "Container logs:"
-          docker logs "$CONTAINER_NAME" || echo "Failed to get container logs"
-        fi
-
-        # Test basic HTTP connectivity to the repo server
-        echo "Testing HTTP connectivity to repo server..."
-        if docker run --rm --network "$AVOCADO_CONTAINER_NETWORK" curlimages/curl:latest curl -f -s -I "$AVOCADO_SDK_REPO_URL" >/dev/null 2>&1; then
-          echo "✓ Repo server is responding to HTTP requests"
-        else
-          echo "✗ Repo server is not responding to HTTP requests"
-          echo "Attempting to get response details:"
-          docker run --rm --network "$AVOCADO_CONTAINER_NETWORK" curlimages/curl:latest curl -v "$AVOCADO_SDK_REPO_URL" || echo "Failed to connect"
-        fi
-
-        # Check what's available at the repo root
-        echo "Checking repo root directory listing..."
-        docker run --rm --network "$AVOCADO_CONTAINER_NETWORK" curlimages/curl:latest curl -s "$AVOCADO_SDK_REPO_URL/" || echo "Failed to get root listing"
-
-        # Check if the specific release directory exists
-        echo "Checking release directory: $AVOCADO_SDK_REPO_RELEASE"
-        docker run --rm --network "$AVOCADO_CONTAINER_NETWORK" curlimages/curl:latest curl -s "$AVOCADO_SDK_REPO_URL/$AVOCADO_SDK_REPO_RELEASE/" || echo "Failed to get release directory listing"
-
-        # Check for repodata
-        echo "Checking for repodata in release directory..."
-        docker run --rm --network "$AVOCADO_CONTAINER_NETWORK" curlimages/curl:latest curl -s "$AVOCADO_SDK_REPO_URL/$AVOCADO_SDK_REPO_RELEASE/repodata/" || echo "No repodata directory found"
-
-        # Check container logs for any errors
-        echo "=== Container logs (last 50 lines) ==="
-        docker logs --tail 50 "$CONTAINER_NAME" || echo "Failed to get container logs"
-
-        echo "=== DEBUG: Package availability check ==="
-        # Try to see what packages are available
-        echo "Attempting to list available packages..."
-        docker run --rm --network "$AVOCADO_CONTAINER_NETWORK" curlimages/curl:latest curl -s "$AVOCADO_SDK_REPO_URL/$AVOCADO_SDK_REPO_RELEASE/repodata/repomd.xml" | head -20 || echo "Failed to get repomd.xml"
-
-        # Debug: Check environment variables that avocado will use
-        echo "=== DEBUG: Environment variables ==="
-        echo "AVOCADO_SDK_REPO_URL=$AVOCADO_SDK_REPO_URL"
-        echo "AVOCADO_CONTAINER_NETWORK=$AVOCADO_CONTAINER_NETWORK"
-        echo "AVOCADO_SDK_REPO_RELEASE=$AVOCADO_SDK_REPO_RELEASE"
-
-        # Check if avocado can see the environment variables
-        echo "Environment as seen by avocado:"
-        env | grep AVOCADO || echo "No AVOCADO environment variables found"
-
-        # Test DNF/YUM repo configuration that avocado might be using
-        echo "=== DEBUG: Testing YUM/DNF repo access ==="
-        echo "Attempting to test repo access with dnf..."
-        docker run --rm --network "$AVOCADO_CONTAINER_NETWORK" \
-          -e AVOCADO_SDK_REPO_URL="$AVOCADO_SDK_REPO_URL" \
-          -e AVOCADO_SDK_REPO_RELEASE="$AVOCADO_SDK_REPO_RELEASE" \
-          fedora:latest bash -c "
-            echo 'Setting up test repo...'
-            echo '[avocado-test]' > /etc/yum.repos.d/avocado-test.repo
-            echo 'name=Avocado Test Repo' >> /etc/yum.repos.d/avocado-test.repo
-            echo 'baseurl=$AVOCADO_SDK_REPO_URL/$AVOCADO_SDK_REPO_RELEASE' >> /etc/yum.repos.d/avocado-test.repo
-            echo 'enabled=1' >> /etc/yum.repos.d/avocado-test.repo
-            echo 'gpgcheck=0' >> /etc/yum.repos.d/avocado-test.repo
-            echo 'Repo configuration:'
-            cat /etc/yum.repos.d/avocado-test.repo
-            echo 'Testing repo access...'
-            dnf repolist --verbose avocado-test || echo 'Failed to access repo'
-            echo 'Searching for avocado-sdk packages...'
-            dnf search avocado-sdk --disablerepo='*' --enablerepo=avocado-test || echo 'No avocado-sdk packages found'
-          " || echo "Failed to test repo with dnf"
-
-        echo "=== END DEBUG OUTPUT ==="
-
         echo "Building extension package ..."
-        echo "Running: avocado ext install -e avocado-ext-${{ matrix.extension }} -f --target ${{ matrix.target }} --container-arg --network --container-arg $AVOCADO_CONTAINER_NETWORK"
-        avocado ext install -e avocado-ext-"${{ matrix.extension }}" -f --target "${{ matrix.target }}" --container-arg "--network" --container-arg "$AVOCADO_CONTAINER_NETWORK" -v
+        echo "Running: avocado ext install -e avocado-ext-${{ matrix.extension }} -f --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
+        avocado ext install -e avocado-ext-"${{ matrix.extension }}" -f --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
 
-        echo "Running: avocado ext build -e avocado-ext-${{ matrix.extension }} --target ${{ matrix.target }} --container-arg --network --container-arg $AVOCADO_CONTAINER_NETWORK"
-        avocado ext build -e avocado-ext-"${{ matrix.extension }}" --target "${{ matrix.target }}" --container-arg "--network" --container-arg "$AVOCADO_CONTAINER_NETWORK" -v
+        echo "Running: avocado ext build -e avocado-ext-${{ matrix.extension }} --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
+        avocado ext build -e avocado-ext-"${{ matrix.extension }}" --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
 
-        echo "Running: avocado ext package -e avocado-ext-${{ matrix.extension }} --target ${{ matrix.target }} --out-dir ${{ matrix.extension }}-${{ matrix.target }} --container-arg --network --container-arg $AVOCADO_CONTAINER_NETWORK"
-        avocado ext package -e avocado-ext-"${{ matrix.extension }}" --target "${{ matrix.target }}" --out-dir "${{ matrix.extension }}-${{ matrix.target }}" --container-arg "--network" --container-arg "$AVOCADO_CONTAINER_NETWORK" -v
+        echo "Running: avocado ext package -e avocado-ext-${{ matrix.extension }} --target ${{ matrix.target }} --out-dir ${{ matrix.extension }}-${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
+        avocado ext package -e avocado-ext-"${{ matrix.extension }}" --target "${{ matrix.target }}" --out-dir "${{ matrix.extension }}-${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
 
     - name: Copy package to cache directory
       run: |
@@ -714,8 +582,8 @@ jobs:
           echo "Generating extension repository metadata"
           echo "Reading packages from: ${{ env.PACKAGES_PATH }}"
           echo "Writing metadata to: $FINAL_RELEASES_PATH"
-          echo "Metadata will reference packages at: ${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}"
-          ./repo/update-metadata-extensions.sh "${{ env.PACKAGES_PATH }}" "${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}" "$FINAL_RELEASES_PATH"
+          echo "Metadata will use relative paths to packages"
+          ./repo/update-metadata-extensions.sh "${{ env.PACKAGES_PATH }}" "" "$FINAL_RELEASES_PATH"
 
   cleanup-package-repo:
     needs: [setup-package-repo, build-extensions]
@@ -724,12 +592,12 @@ jobs:
     steps:
     - name: Cleanup Docker service
       run: |
-        # Stop the package repo container (--rm will automatically remove it)
+        # Stop the package repo container (--rm flag will auto-remove it)
         CONTAINER_NAME="${{ needs.setup-package-repo.outputs.container_name }}"
         if [ -n "$CONTAINER_NAME" ]; then
           echo "Stopping container: $CONTAINER_NAME"
           docker stop "$CONTAINER_NAME" || true
-          echo "Container stopped and automatically removed (--rm flag)"
+          echo "Container stopped (auto-removed due to --rm flag)"
         fi
 
         # Remove the Docker network

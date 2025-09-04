@@ -294,5 +294,5 @@ jobs:
           echo "Generating base repository metadata (excluding extensions)"
           echo "Reading packages from: ${{ env.PACKAGES_PATH }}"
           echo "Writing metadata to: ${{ env.RELEASES_PATH }}"
-          echo "Metadata will reference packages at: ${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}"
-          ./repo/update-metadata-distro.sh "${{ env.PACKAGES_PATH }}" "${{ env.AVOCADO_REPO_BASE }}/packages/${{ env.DISTRO_CODENAME }}" "${{ env.RELEASES_PATH }}"
+          echo "Metadata will use relative paths to packages"
+          ./repo/update-metadata-distro.sh "${{ env.PACKAGES_PATH }}" "" "${{ env.RELEASES_PATH }}"

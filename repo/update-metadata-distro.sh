@@ -70,25 +70,32 @@ while IFS= read -r rpm_dir; do
     # Build createrepo_c command with optional baseurl and outputdir
     cmd_args=()
 
-    if [ -n "$BASEURL" ]; then
-        # Calculate relative path from TARGET_DEPLOY_DIR to rpm_dir
-        rel_path="${rpm_dir#${TARGET_DEPLOY_DIR}/}"
-        # Construct full baseurl for this specific repo directory
-        full_baseurl="${BASEURL}/${rel_path}"
-        cmd_args+=(--baseurl "${full_baseurl}")
-    fi
+    # if [ -n "$BASEURL" ]; then
+    #     # Calculate relative path from TARGET_DEPLOY_DIR to rpm_dir
+    #     rel_path="${rpm_dir#${TARGET_DEPLOY_DIR}/}"
+    #     # Construct full baseurl for this specific repo directory
+    #     full_baseurl="${BASEURL}/${rel_path}"
+    #     cmd_args+=(--baseurl "${full_baseurl}")
+    # fi
 
-    if [ -n "$OUTPUTDIR" ]; then
-        cmd_args+=(--outputdir "${output_path}")
-    fi
-
-    if [ -d "${output_path}/repodata" ]; then
+    # Calculate relative path from output_path to rpm_dir for location prefix
+    basedir_path=$(realpath --relative-to="${output_path}" "${rpm_dir}")
+    echo "DEBUG: rpm_dir=${rpm_dir}"
+    echo "DEBUG: output_path=${output_path}"
+    echo "DEBUG: basedir_path=${basedir_path}"
+    
+    # Change to output directory and run createrepo_c with relative paths
+    pushd "${output_path}" > /dev/null
+    
+    if [ -d "repodata" ]; then
         echo "Updating existing repository: packages in ${rpm_dir}, metadata in ${output_path}"
-        createrepo_c --update "${cmd_args[@]}" "${rpm_dir}"
+        createrepo_c --update --outputdir . --location-prefix "${basedir_path}/" "${basedir_path}"
     else
         echo "Creating new repository: packages in ${rpm_dir}, metadata in ${output_path}"
-        createrepo_c "${cmd_args[@]}" "${rpm_dir}"
+        createrepo_c --outputdir . --location-prefix "${basedir_path}/" "${basedir_path}"
     fi
+    
+    popd > /dev/null
 done < <(find_rpm_dirs_exclude_extensions "${TARGET_DEPLOY_DIR}")
 
 echo "Base repository metadata update complete (extensions excluded)!"

@@ -353,16 +353,14 @@ build_extension() {
 # Function to update extension metadata
 update_extension_metadata() {
     echo "Updating extension repository metadata..."
-    # Use container name as baseurl to match production structure
-    BASEURL="http://$CONTAINER_NAME/packages/$DISTRO_CODENAME"
-    echo "Extension metadata will reference packages at: $BASEURL"
+    echo "Extension metadata will use relative paths to packages"
     
     # Update metadata for both packages and releases directories
     local packages_dir="$REPO_DIR/packages/$DISTRO_CODENAME"
     local releases_dir="$REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR"
     
     echo "Updating packages metadata..."
-    ./repo/update-metadata-extensions.sh "$packages_dir" "$BASEURL" "$releases_dir"
+    ./repo/update-metadata-extensions.sh "$packages_dir" "" "$releases_dir"
     
     if [ $? -eq 0 ]; then
         echo "✓ Extension metadata updated successfully"
