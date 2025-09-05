@@ -326,20 +326,44 @@ build_extension() {
     # Copy packages to repository (both packages and releases directories)
     local packages_target_ext_dir="$REPO_DIR/packages/$DISTRO_CODENAME/target/$target-ext"
     local releases_target_ext_dir="$REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/target/$target-ext"
+    local packages_sdk_dir="$REPO_DIR/packages/$DISTRO_CODENAME/sdk/$target"
+    local releases_sdk_dir="$REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/sdk/$target"
     
     echo "  Copying packages to repository:"
-    echo "    Packages: $packages_target_ext_dir"
-    echo "    Releases: $releases_target_ext_dir"
+    echo "    Extension packages: $packages_target_ext_dir"
+    echo "    Extension releases: $releases_target_ext_dir"
+    echo "    SDK packages: $packages_sdk_dir"
+    echo "    SDK releases: $releases_sdk_dir"
     
     mkdir -p "$packages_target_ext_dir"
     mkdir -p "$releases_target_ext_dir"
+    mkdir -p "$packages_sdk_dir"
+    mkdir -p "$releases_sdk_dir"
     
     if [ -d "$output_dir" ]; then
-        # Copy to both packages and releases directories
-        find "$output_dir" -name "*.rpm" -exec cp {} "$packages_target_ext_dir/" \;
-        find "$output_dir" -name "*.rpm" -exec cp {} "$releases_target_ext_dir/" \;
-        local rpm_count=$(find "$output_dir" -name "*.rpm" | wc -l)
-        echo "  ✓ Copied $rpm_count RPM packages to both locations"
+        local regular_rpm_count=0
+        local sdk_rpm_count=0
+        
+        # Process each RPM package individually to handle all_avocadosdk packages specially
+        while IFS= read -r -d '' rpm_file; do
+            local rpm_basename=$(basename "$rpm_file")
+            
+            if [[ "$rpm_basename" == *"all_avocadosdk"* ]]; then
+                # Copy all_avocadosdk packages to SDK directories
+                cp "$rpm_file" "$packages_sdk_dir/"
+                cp "$rpm_file" "$releases_sdk_dir/"
+                ((sdk_rpm_count++))
+                echo "    SDK: $rpm_basename"
+            else
+                # Copy regular packages to extension directories
+                cp "$rpm_file" "$packages_target_ext_dir/"
+                cp "$rpm_file" "$releases_target_ext_dir/"
+                ((regular_rpm_count++))
+                echo "    EXT: $rpm_basename"
+            fi
+        done < <(find "$output_dir" -name "*.rpm" -print0)
+        
+        echo "  ✓ Copied $regular_rpm_count extension packages and $sdk_rpm_count SDK packages"
     else
         echo "  ⚠ No output directory found: $output_dir"
     fi
@@ -359,13 +383,23 @@ update_extension_metadata() {
     local packages_dir="$REPO_DIR/packages/$DISTRO_CODENAME"
     local releases_dir="$REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR"
     
-    echo "Updating packages metadata..."
+    echo "Updating extension packages metadata..."
     ./repo/update-metadata-extensions.sh "$packages_dir" "" "$releases_dir"
     
     if [ $? -eq 0 ]; then
         echo "✓ Extension metadata updated successfully"
     else
         echo "✗ Extension metadata update failed" >&2
+        return 1
+    fi
+    
+    echo "Updating SDK packages metadata..."
+    ./repo/update-metadata-sdk.sh "$packages_dir" "" "$releases_dir"
+    
+    if [ $? -eq 0 ]; then
+        echo "✓ SDK metadata updated successfully"
+    else
+        echo "✗ SDK metadata update failed" >&2
         return 1
     fi
 }
@@ -586,8 +620,10 @@ fi
 
 echo ""
 echo "Extension packages available at:"
-echo "  Packages: $REPO_DIR/packages/$DISTRO_CODENAME/target/$TARGET-ext/"
-echo "  Releases: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/target/$TARGET-ext/"
+echo "  Extension packages: $REPO_DIR/packages/$DISTRO_CODENAME/target/$TARGET-ext/"
+echo "  Extension releases: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/target/$TARGET-ext/"
+echo "  SDK packages: $REPO_DIR/packages/$DISTRO_CODENAME/sdk/$TARGET/"
+echo "  SDK releases: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/sdk/$TARGET/"
 echo "Repository URL: $REPO_URL/"
 
 if [ ${#failed_extensions[@]} -gt 0 ]; then

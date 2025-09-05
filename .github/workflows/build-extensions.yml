@@ -502,10 +502,18 @@ jobs:
         else
           BASE_PACKAGES_PATH="/home/runner/_repo/packages/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
         fi
-        CACHE_DIR="$BASE_PACKAGES_PATH/target/${{ matrix.target }}-ext"
-        mkdir -p "$CACHE_DIR"
 
-        # Find and copy the built RPM package
+        # Set up both extension and SDK cache directories
+        EXT_CACHE_DIR="$BASE_PACKAGES_PATH/target/${{ matrix.target }}-ext"
+        SDK_CACHE_DIR="$BASE_PACKAGES_PATH/sdk/${{ matrix.target }}"
+        mkdir -p "$EXT_CACHE_DIR"
+        mkdir -p "$SDK_CACHE_DIR"
+
+        echo "Cache directories:"
+        echo "  Extension packages: $EXT_CACHE_DIR"
+        echo "  SDK packages: $SDK_CACHE_DIR"
+
+        # Find and copy all built RPM packages
         # Determine the expected RPM pattern based on extension type
         if [ "${{ matrix.type }}" = "bsp" ]; then
           BSP_NAME="${{ matrix.extension }}"
@@ -515,19 +523,52 @@ jobs:
           RPM_PATTERN="avocado-ext-${{ matrix.extension }}-*.rpm"
         fi
 
-        RPM_FILE=$(find . -name "$RPM_PATTERN" -type f | head -1)
-        if [ -z "$RPM_FILE" ]; then
-          echo "Error: No RPM file found matching pattern $RPM_PATTERN"
+        # Find all RPM files matching the pattern
+        RPM_FILES=$(find . -name "$RPM_PATTERN" -type f)
+        if [ -z "$RPM_FILES" ]; then
+          echo "Error: No RPM files found matching pattern $RPM_PATTERN"
           ls -la
           exit 1
         fi
 
-        echo "Found RPM file: $RPM_FILE"
-        echo "Copying package to $CACHE_DIR"
-        cp "$RPM_FILE" "$CACHE_DIR/"
+        echo "Found RPM files:"
+        echo "$RPM_FILES"
 
-        echo "Package copied successfully to cache directory"
-        ls -la "$CACHE_DIR"
+        # Process each RPM file and route to appropriate directory
+        regular_rpm_count=0
+        sdk_rpm_count=0
+
+        while IFS= read -r rpm_file; do
+          if [ -n "$rpm_file" ]; then
+            rpm_basename=$(basename "$rpm_file")
+
+            if [[ "$rpm_basename" == *"all_avocadosdk"* ]]; then
+              # Copy all_avocadosdk packages to SDK directory
+              echo "  SDK: $rpm_basename -> $SDK_CACHE_DIR"
+              cp "$rpm_file" "$SDK_CACHE_DIR/"
+              ((sdk_rpm_count++))
+            else
+              # Copy regular packages to extension directory
+              echo "  EXT: $rpm_basename -> $EXT_CACHE_DIR"
+              cp "$rpm_file" "$EXT_CACHE_DIR/"
+              ((regular_rpm_count++))
+            fi
+          fi
+        done <<< "$RPM_FILES"
+
+        echo "Package copying completed:"
+        echo "  $regular_rpm_count extension packages copied to $EXT_CACHE_DIR"
+        echo "  $sdk_rpm_count SDK packages copied to $SDK_CACHE_DIR"
+
+        if [ $regular_rpm_count -gt 0 ]; then
+          echo "Extension directory contents:"
+          ls -la "$EXT_CACHE_DIR"
+        fi
+
+        if [ $sdk_rpm_count -gt 0 ]; then
+          echo "SDK directory contents:"
+          ls -la "$SDK_CACHE_DIR"
+        fi
 
     - name: Cleanup avocado state
       if: always()
@@ -660,7 +701,12 @@ jobs:
           echo "Reading packages from: ${{ env.PACKAGES_PATH }}"
           echo "Writing metadata to: $FINAL_RELEASES_PATH"
           echo "Metadata will use relative paths to packages"
+
+          echo "Updating extension packages metadata..."
           ./repo/update-metadata-extensions.sh "${{ env.PACKAGES_PATH }}" "" "$FINAL_RELEASES_PATH"
+
+          echo "Updating SDK packages metadata..."
+          ./repo/update-metadata-sdk.sh "${{ env.PACKAGES_PATH }}" "" "$FINAL_RELEASES_PATH"
 
   cleanup-package-repo:
     needs: [setup-package-repo, build-extensions]
