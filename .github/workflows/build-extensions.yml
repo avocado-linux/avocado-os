@@ -327,9 +327,9 @@ jobs:
           REMOTE_LATEST_MOUNT_PATH="$REMOTE_CACHE_BASE/$RELATIVE_PATH"
           echo "Using provided releases path: $LOCAL_RELEASES_DIR (local)"
           echo "Will mount: $REMOTE_LATEST_MOUNT_PATH (remote)"
-        elif [ -n "${{ needs.setup-paths.outputs.releases_path }}" ]; then
+        elif [ -n "${{ needs.setup-paths.result == 'success' && needs.setup-paths.outputs.releases_path || '' }}" ]; then
           # Use path from setup-paths job (for standalone runs)
-          LOCAL_RELEASES_DIR="${{ needs.setup-paths.outputs.releases_path }}"
+          LOCAL_RELEASES_DIR="${{ needs.setup-paths.result == 'success' && needs.setup-paths.outputs.releases_path || '' }}"
           if [ -d "$LOCAL_RELEASES_DIR" ]; then
             # Extract the relative path from the base cache directory
             RELATIVE_PATH=$(echo "$LOCAL_RELEASES_DIR" | sed "s|^$LOCAL_CACHE_BASE/||")
@@ -388,9 +388,9 @@ jobs:
 
         # Verify container is still running
         if ! docker ps --filter "name=$CONTAINER_NAME" --filter "status=running" --quiet | grep -q .; then
-          echo "Container failed to start or exited unexpectedly"
+          echo "ERROR: Package repo container failed to start or exited unexpectedly"
           echo "Container logs:"
-          docker logs "$CONTAINER_NAME"
+          docker logs "$CONTAINER_NAME" || echo "Failed to get container logs"
           exit 1
         fi
 
@@ -398,7 +398,7 @@ jobs:
 
   build-extensions:
     needs: [generate-matrix, setup-package-repo, setup-paths]
-    if: always() && !cancelled()
+    if: always() && !cancelled() && needs.setup-package-repo.result == 'success'
     runs-on: avocado-sdk
     strategy:
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
@@ -497,8 +497,8 @@ jobs:
         # Priority: inputs.packages_path > setup-paths outputs > default
         if [ -n "${{ inputs.packages_path }}" ]; then
           BASE_PACKAGES_PATH="${{ inputs.packages_path }}"
-        elif [ -n "${{ needs.setup-paths.outputs.packages_path }}" ]; then
-          BASE_PACKAGES_PATH="${{ needs.setup-paths.outputs.packages_path }}"
+        elif [ -n "${{ needs.setup-paths.result == 'success' && needs.setup-paths.outputs.packages_path || '' }}" ]; then
+          BASE_PACKAGES_PATH="${{ needs.setup-paths.result == 'success' && needs.setup-paths.outputs.packages_path || '' }}"
         else
           BASE_PACKAGES_PATH="/home/runner/_repo/packages/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
         fi
@@ -506,8 +506,13 @@ jobs:
         # Set up both extension and SDK cache directories
         EXT_CACHE_DIR="$BASE_PACKAGES_PATH/target/${{ matrix.target }}-ext"
         SDK_CACHE_DIR="$BASE_PACKAGES_PATH/sdk/${{ matrix.target }}"
-        mkdir -p "$EXT_CACHE_DIR"
-        mkdir -p "$SDK_CACHE_DIR"
+
+        if ! mkdir -p "$EXT_CACHE_DIR" "$SDK_CACHE_DIR"; then
+          echo "ERROR: Failed to create cache directories"
+          echo "  Extension cache dir: $EXT_CACHE_DIR"
+          echo "  SDK cache dir: $SDK_CACHE_DIR"
+          exit 1
+        fi
 
         echo "Cache directories:"
         echo "  Extension packages: $EXT_CACHE_DIR"
@@ -525,9 +530,13 @@ jobs:
 
         # Find all RPM files matching the pattern
         RPM_FILES=$(find . -name "$RPM_PATTERN" -type f)
+
         if [ -z "$RPM_FILES" ]; then
           echo "Error: No RPM files found matching pattern $RPM_PATTERN"
+          echo "Current directory contents:"
           ls -la
+          echo "All .rpm files in current directory:"
+          find . -name "*.rpm" -type f || echo "No .rpm files found at all"
           exit 1
         fi
 
@@ -545,13 +554,19 @@ jobs:
             if [[ "$rpm_basename" == *"all_avocadosdk"* ]]; then
               # Copy all_avocadosdk packages to SDK directory
               echo "  SDK: $rpm_basename -> $SDK_CACHE_DIR"
-              cp "$rpm_file" "$SDK_CACHE_DIR/"
-              ((sdk_rpm_count++))
+              if ! cp "$rpm_file" "$SDK_CACHE_DIR/"; then
+                echo "ERROR: Failed to copy SDK RPM file: $rpm_file"
+                exit 1
+              fi
+              sdk_rpm_count=$((sdk_rpm_count + 1))
             else
               # Copy regular packages to extension directory
               echo "  EXT: $rpm_basename -> $EXT_CACHE_DIR"
-              cp "$rpm_file" "$EXT_CACHE_DIR/"
-              ((regular_rpm_count++))
+              if ! cp "$rpm_file" "$EXT_CACHE_DIR/"; then
+                echo "ERROR: Failed to copy extension RPM file: $rpm_file"
+                exit 1
+              fi
+              regular_rpm_count=$((regular_rpm_count + 1))
             fi
           fi
         done <<< "$RPM_FILES"
@@ -559,16 +574,6 @@ jobs:
         echo "Package copying completed:"
         echo "  $regular_rpm_count extension packages copied to $EXT_CACHE_DIR"
         echo "  $sdk_rpm_count SDK packages copied to $SDK_CACHE_DIR"
-
-        if [ $regular_rpm_count -gt 0 ]; then
-          echo "Extension directory contents:"
-          ls -la "$EXT_CACHE_DIR"
-        fi
-
-        if [ $sdk_rpm_count -gt 0 ]; then
-          echo "SDK directory contents:"
-          ls -la "$SDK_CACHE_DIR"
-        fi
 
     - name: Cleanup avocado state
       if: always()
@@ -646,13 +651,37 @@ jobs:
 
         echo "Cleanup completed for extension: ${{ matrix.extension }}"
 
+  cleanup-package-repo:
+    needs: [setup-package-repo, build-extensions]
+    runs-on: avocado-sdk
+    if: always()
+    steps:
+    - name: Cleanup Docker service
+      run: |
+        # Stop the package repo container (--rm flag will auto-remove it)
+        CONTAINER_NAME="${{ needs.setup-package-repo.outputs.container_name }}"
+        if [ -n "$CONTAINER_NAME" ]; then
+          echo "Stopping container: $CONTAINER_NAME"
+          docker stop "$CONTAINER_NAME" || true
+          echo "Container stopped (auto-removed due to --rm flag)"
+        fi
+
+        # Remove the Docker network
+        NETWORK_NAME="${{ needs.setup-package-repo.outputs.network_name }}"
+        if [ -n "$NETWORK_NAME" ]; then
+          echo "Removing network: $NETWORK_NAME"
+          docker network rm "$NETWORK_NAME" || true
+        fi
+
+        echo "Docker cleanup completed"
+
   update-extension-metadata:
-    needs: [build-extensions, setup-package-repo, setup-paths]
-    if: always() && !cancelled()
+    needs: [build-extensions, setup-package-repo, setup-paths, cleanup-package-repo]
+    if: always() && !cancelled() && needs.setup-package-repo.result == 'success'
     runs-on: avocado-build
     env:
-      PACKAGES_PATH: ${{ inputs.packages_path || needs.setup-paths.outputs.packages_path || format('/home/runner/_repo/packages/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}
-      RELEASES_PATH: ${{ inputs.releases_path || needs.setup-paths.outputs.releases_path || format('/home/runner/_repo/releases/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}
+      PACKAGES_PATH: ${{ inputs.packages_path || (needs.setup-paths.result == 'success' && needs.setup-paths.outputs.packages_path) || format('/home/runner/_repo/packages/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}
+      RELEASES_PATH: ${{ inputs.releases_path || (needs.setup-paths.result == 'success' && needs.setup-paths.outputs.releases_path) || format('/home/runner/_repo/releases/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}
       DISTRO_CODENAME: ${{ inputs.distro_codename || github.event.inputs.distro_codename }}
       AVOCADO_REPO_BASE: "https://repo.avocadolinux.org"
     steps:
@@ -672,8 +701,8 @@ jobs:
           if [ -n "${{ inputs.releases_path }}" ]; then
             FINAL_RELEASES_PATH="${{ inputs.releases_path }}"
             echo "Using provided releases path: $FINAL_RELEASES_PATH"
-          elif [ -n "${{ needs.setup-paths.outputs.releases_path }}" ]; then
-            FINAL_RELEASES_PATH="${{ needs.setup-paths.outputs.releases_path }}"
+          elif [ -n "${{ needs.setup-paths.result == 'success' && needs.setup-paths.outputs.releases_path || '' }}" ]; then
+            FINAL_RELEASES_PATH="${{ needs.setup-paths.result == 'success' && needs.setup-paths.outputs.releases_path || '' }}"
             echo "Using setup-paths releases path: $FINAL_RELEASES_PATH"
           else
             # Fallback to finding the most recent directory (for standalone runs)
@@ -707,27 +736,3 @@ jobs:
 
           echo "Updating SDK packages metadata..."
           ./repo/update-metadata-sdk.sh "${{ env.PACKAGES_PATH }}" "" "$FINAL_RELEASES_PATH"
-
-  cleanup-package-repo:
-    needs: [setup-package-repo, build-extensions]
-    runs-on: avocado-sdk
-    if: always()
-    steps:
-    - name: Cleanup Docker service
-      run: |
-        # Stop the package repo container (--rm flag will auto-remove it)
-        CONTAINER_NAME="${{ needs.setup-package-repo.outputs.container_name }}"
-        if [ -n "$CONTAINER_NAME" ]; then
-          echo "Stopping container: $CONTAINER_NAME"
-          docker stop "$CONTAINER_NAME" || true
-          echo "Container stopped (auto-removed due to --rm flag)"
-        fi
-
-        # Remove the Docker network
-        NETWORK_NAME="${{ needs.setup-package-repo.outputs.network_name }}"
-        if [ -n "$NETWORK_NAME" ]; then
-          echo "Removing network: $NETWORK_NAME"
-          docker network rm "$NETWORK_NAME" || true
-        fi
-
-        echo "Docker cleanup completed"
