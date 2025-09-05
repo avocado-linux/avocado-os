@@ -154,20 +154,20 @@ jobs:
       - name: Sync packages directory to S3
         run: |
           echo "Syncing packages from ${{ env.PACKAGES_PATH }} to s3://${{ env.S3_BUCKET_PATH }}/packages/${{ env.DISTRO_CODENAME }}"
-          rclone sync "${{ env.PACKAGES_PATH }}" "s3:${{ env.S3_BUCKET_PATH }}/packages/${{ env.DISTRO_CODENAME }}" --checksum --progress
+          rclone sync "${{ env.PACKAGES_PATH }}" "s3:${{ env.S3_BUCKET_PATH }}/packages/${{ env.DISTRO_CODENAME }}" --checksum --stats --transfers 32
 
       - name: Sync release metadata to S3
         run: |
           echo "Syncing release metadata from ${{ env.RELEASES_PATH }} to s3://${{ env.S3_BUCKET_PATH }}/releases/${{ env.DISTRO_CODENAME }}/${{ env.RELEASE_DATE }}"
-          rclone sync "${{ env.RELEASES_PATH }}" "s3:${{ env.S3_BUCKET_PATH }}/releases/${{ env.DISTRO_CODENAME }}/${{ env.RELEASE_DATE }}" --checksum --progress
+          rclone sync "${{ env.RELEASES_PATH }}" "s3:${{ env.S3_BUCKET_PATH }}/releases/${{ env.DISTRO_CODENAME }}/${{ env.RELEASE_DATE }}" --checksum --stats --transfers 32
           echo "Release metadata S3 sync complete."
 
       - name: Sync metadata to S3
         run: |
           # First sync everything EXCEPT repomd.xml files. Then sync ONLY repomd.xml files. This
           # ensures that if a new repomd.xml is served, that the content it addresses exists.
-          rclone sync "${{ env.RELEASES_PATH }}" "s3:${{ env.S3_BUCKET_PATH }}/${{ env.DISTRO_CODENAME }}" --checksum --exclude "*/repomd.xml" --progress
-          rclone sync "${{ env.RELEASES_PATH }}" "s3:${{ env.S3_BUCKET_PATH }}/${{ env.DISTRO_CODENAME }}" --checksum --include "*/repomd.xml" --exclude "*" --progress
+          rclone sync "${{ env.RELEASES_PATH }}" "s3:${{ env.S3_BUCKET_PATH }}/${{ env.DISTRO_CODENAME }}" --checksum --exclude "*/repomd.xml" --stats --transfers 32
+          rclone sync "${{ env.RELEASES_PATH }}" "s3:${{ env.S3_BUCKET_PATH }}/${{ env.DISTRO_CODENAME }}" --checksum --include "*/repomd.xml" --exclude "*" --stats --transfers 32
 
       - name: Clean up staging and releases directories
         run: |
