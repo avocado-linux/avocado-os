@@ -1,0 +1,14 @@
+[Unit]
+Description=Ref Elixir Phoenix Application
+After=network.target
+Wants=network.target
+
+[Service]
+WorkingDirectory=/usr/lib/ref-elixir
+ExecStart=/usr/lib/ref-elixir/bin/ref_elixir start
+Environment=PHX_SERVER=true
+Environment=PHX_HOST=0.0.0.0
+Restart=always
+RestartSec=5
+SyslogIdentifier=ref-elixir
+

@@ -9,6 +9,8 @@ avocado-img-bootfiles = "*"
 avocado-img-rootfs = "*"
 avocado-img-initramfs = "*"
 avocado-ext-dev = { ext = "avocado-ext-dev", vsn = "*" }
+avocado-ext-sshd-dev = { ext = "avocado-ext-sshd-dev", vsn = "*" }
+avocado-ext-webkit = { ext = "avocado-ext-webkit", vsn = "*" }
 config-ext = { ext = "config" }
 example-elixir-ext = { ext = "example-elixir" }
 
@@ -38,18 +40,38 @@ password = ""
 
 [ext.example-elixir]
 types = ["sysext", "confext"]
+overlay = "overlay"
+enable_services = ["ref-elixir.service"]
+on_merge = [
+  "systemctl restart --no-block ref-elixir.service",
+  "systemctl restart --no-block cog.service"
+]
 
 [ext.example-elixir.dependencies]
 example-elixir-app = { compile = "example-elixir-app", install = "elixir-install.sh" }
 
 [ext.example-elixir.sdk.dependencies]
+nativesdk-ca-certificates = "*"
+nativesdk-git = "*"
 nativesdk-elixir = "*"
 nativesdk-elixir-mix = "*"
 nativesdk-elixir-eex = "*"
 nativesdk-elixir-ex-unit = "*"
+nativesdk-rebar3 = "*"
 nativesdk-erlang = "*"
+nativesdk-erlang-dev = "*"
 nativesdk-erlang-crypto = "*"
+nativesdk-erlang-parsetools = "*"
+nativesdk-erlang-asn1 = "*"
+nativesdk-erlang-public-key = "*"
+nativesdk-erlang-public-key-dev = "*"
+nativesdk-erlang-xmerl = "*"
+nativesdk-erlang-xmerl-dev = "*"
+nativesdk-erlang-ssl = "*"
+nativesdk-erlang-runtime-tools = "*"
+nativesdk-erlang-inets = "*"
 nativesdk-erlang-stdlib = "*"
+nativesdk-nodejs = "*"
 
 ##
 ## SDK
@@ -71,6 +93,7 @@ compile = "elixir-compile.sh"
 
 [sdk.compile.example-elixir-app.dependencies]
 erlang-erts = "*"
+
 
 ##
 ## Provisioning
