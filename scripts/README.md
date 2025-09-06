@@ -107,6 +107,81 @@ Builds extensions for specific targets using the local repository.
 ./scripts/dev-build-extensions.sh -t qemux86-64 -u http://localhost:9000 --all
 ```
 
+### `check-staging-checksums.py` - Staging Directory Analysis
+
+Analyzes staging directories for duplicate packages and checksum mismatches. This Python-based script helps identify inconsistencies in package builds across different machines and architectures.
+
+```bash
+# Analyze default staging directory
+./scripts/check-staging-checksums.py
+
+# Analyze custom staging directory
+./scripts/check-staging-checksums.py /path/to/staging
+
+# Verbose output with JSON format
+./scripts/check-staging-checksums.py -v --format json /path/to/staging
+
+# CSV output for further analysis
+./scripts/check-staging-checksums.py --format csv /path/to/staging > anomalies.csv
+
+# Quiet mode (only errors)
+./scripts/check-staging-checksums.py -q /path/to/staging
+
+# Use 8 parallel workers for faster checksum calculation
+./scripts/check-staging-checksums.py -j 8 /path/to/staging
+
+# Single-threaded mode (useful for debugging)
+./scripts/check-staging-checksums.py -j 1 /path/to/staging
+
+# Disable progress display (useful for scripting)
+./scripts/check-staging-checksums.py --no-progress /path/to/staging
+
+# Combine options for automated processing
+./scripts/check-staging-checksums.py -j 16 --no-progress --format json /path/to/staging
+
+# CI environment with custom progress interval (every 10 seconds)
+./scripts/check-staging-checksums.py --progress-interval 10.0 /path/to/staging
+
+# High-performance CI mode
+./scripts/check-staging-checksums.py -j 32 --progress-interval 2.0 --no-color /path/to/staging
+```
+
+The script expects a staging directory structure like:
+```
+staging/
+├── 2025-01-15-123456/
+│   ├── avocado-distro/
+│   │   └── machine1/latest/apollo/edge/target/arch/
+│   └── avocado-sdk/
+│       ├── x86_64/machine1/latest/apollo/edge/target/arch/
+│       └── aarch64/machine1/latest/apollo/edge/target/arch/
+└── 2025-01-15-234567/
+    └── ...
+```
+
+The script will:
+- Find all `.rpm` packages across timestamped staging builds
+- Calculate checksums in parallel using all available CPU cores (configurable)
+- Group packages by their canonical location in the tree structure
+- Compare checksums of packages with the same name and location
+- Report any mismatches with detailed checksum information
+
+**Performance Features:**
+- Automatic detection of CPU cores for optimal parallel processing
+- Configurable parallel job count for different system capabilities
+- Efficient batch processing of checksum calculations
+- Minimal memory footprint even with large package sets
+
+**User Experience Features:**
+- Real-time progress bars with percentage completion using tqdm (or fallback implementation)
+- Phase-based progress tracking (discovery, checksums, grouping, analysis)
+- Colored output with Unicode progress bars
+- Automatic progress disabling for non-interactive environments
+- Configurable progress display for scripting scenarios
+- Python-based implementation for better performance and reliability
+- Graceful interrupt handling with Ctrl-C (single press for graceful shutdown, double press for immediate exit)
+- Proper cleanup of temporary files and database connections on interruption
+
 ## Workflow Examples
 
 ### Basic Development Workflow

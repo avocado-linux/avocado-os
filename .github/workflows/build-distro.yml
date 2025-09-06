@@ -218,11 +218,41 @@ jobs:
           ls ./build-${{ matrix.machine }}/build/tmp/deploy/rpm
           ./repo/stage-rpms.sh ./build-${{ matrix.machine }}/build/tmp/deploy/rpm ${{ env.STAGING_PATH }} ${{ needs.determine_build_matrix.outputs.distro_codename }}
 
-  aggregate_packages:
+  validate_staging_checksums:
     needs:
       - determine_build_matrix
       - build
     if: needs.build.result == 'success'
+    runs-on: avocado-build
+    env:
+      STAGING_BASE_PATH: ${{ needs.determine_build_matrix.outputs.staging_base_path }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Validate staging directory checksums
+        run: |
+          echo "=== Validating RPM checksums in staging directory ==="
+          echo "Staging path: ${{ env.STAGING_BASE_PATH }}"
+
+          # Run the checksum validation script
+          if ./scripts/check-staging-checksums.sh --quiet "${{ env.STAGING_BASE_PATH }}"; then
+            echo "✅ Checksum validation passed - all duplicate packages have matching checksums"
+          else
+            echo "❌ Checksum validation failed - found packages with mismatched checksums"
+            echo "Re-running with verbose output for debugging:"
+            ./scripts/check-staging-checksums.sh --verbose "${{ env.STAGING_BASE_PATH }}"
+            exit 1
+          fi
+
+  aggregate_packages:
+    needs:
+      - determine_build_matrix
+      - build
+      - validate_staging_checksums
+    if: needs.validate_staging_checksums.result == 'success'
     runs-on: avocado-build
     env:
       STAGING_BASE_PATH: ${{ needs.determine_build_matrix.outputs.staging_base_path }}
