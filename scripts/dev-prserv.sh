@@ -22,6 +22,8 @@ DEFAULT_NETWORK="avocado-prserv-dev"
 DEFAULT_DB_DIR="$PROJECT_ROOT/.prserv-data"
 DEFAULT_CONTAINER_NAME="avocado-prserv-server"
 DEFAULT_PORT="8585"
+DEFAULT_USER_ID="$(id -u)"
+DEFAULT_GROUP_ID="$(id -g)"
 YOCTO_BUILD_IMAGE="avocadolinux/yocto-build:ubuntu-24.04"
 
 # Parse arguments
@@ -30,6 +32,8 @@ NETWORK="$DEFAULT_NETWORK"
 DB_DIR="$DEFAULT_DB_DIR"
 CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
 PORT="$DEFAULT_PORT"
+USER_ID="$DEFAULT_USER_ID"
+GROUP_ID="$DEFAULT_GROUP_ID"
 
 shift || true
 while [[ $# -gt 0 ]]; do
@@ -49,6 +53,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --container-name)
             CONTAINER_NAME="$2"
+            shift 2
+            ;;
+        --uid)
+            USER_ID="$2"
+            shift 2
+            ;;
+        --gid)
+            GROUP_ID="$2"
             shift 2
             ;;
         *)
@@ -77,6 +89,8 @@ Options:
     --db-dir DIR        Database directory (default: $DEFAULT_DB_DIR)
     --port PORT         PV server port (default: $DEFAULT_PORT)
     --container-name    Container name (default: $DEFAULT_CONTAINER_NAME)
+    --uid UID           User ID for container (default: $DEFAULT_USER_ID)
+    --gid GID           Group ID for container (default: $DEFAULT_GROUP_ID)
 
 Examples:
     # Start PV server for development
@@ -117,6 +131,8 @@ start_prserv() {
     echo "  Container: $CONTAINER_NAME"
     echo "  Database: $DB_DIR"
     echo "  Port: $PORT"
+    echo "  User ID: $USER_ID"
+    echo "  Group ID: $GROUP_ID"
     echo "  Image: $YOCTO_BUILD_IMAGE"
 
     # Ensure network exists
@@ -143,6 +159,7 @@ start_prserv() {
         --name "$CONTAINER_NAME" \
         --network "$NETWORK" \
         -p "${PORT}:${PORT}" \
+        -e USER_ID="$USER_ID" -e GROUP_ID="$GROUP_ID" \
         -v "$PROJECT_ROOT:/avocado-build" \
         -v "$DB_DIR:/prserv-data" \
         -w /avocado-build \
@@ -160,7 +177,7 @@ start_prserv() {
             echo 'KAS_YML: '\$KAS_YML
             echo 'Starting bitbake PV server...'
             # Start PV server as daemon and then tail the log to keep container running
-            kas shell \"\$KAS_YML\" -c \"bitbake-prserv --host=0.0.0.0 --port=$PORT --file=/prserv-data/cache.db --log=/prserv-data/prserv.log --start\"
+            kas shell \"\$KAS_YML\" -c \"bitbake-prserv --host=0.0.0.0 --port=$PORT --file=/prserv-data/cache.db --log=/prserv-data/prserv.log --loglevel=DEBUG --start\"
             
             echo 'PV server started, tailing log to keep container alive...'
             tail -f /prserv-data/prserv.log
@@ -168,7 +185,7 @@ start_prserv() {
 
     # Wait for server to start
     echo "Waiting for PV server to start..."
-    sleep 10
+    sleep 15
 
     # Verify server is running
     if docker ps --filter "name=$CONTAINER_NAME" --filter "status=running" --quiet | grep -q .; then
@@ -235,6 +252,8 @@ status_prserv() {
     echo "  Container: $CONTAINER_NAME"
     echo "  Database: $DB_DIR"
     echo "  Port: $PORT"
+    echo "  User ID: $USER_ID"
+    echo "  Group ID: $GROUP_ID"
 
     # Check network
     if docker network ls --format "{{.Name}}" | grep -q "^${NETWORK}$"; then
