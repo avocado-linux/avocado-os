@@ -8,7 +8,7 @@ vendor = "Avocado Linux <info@avocadolinux.org>"
 summary = "Avocado development tools"
 description = "Avocado development tools"
 license = "Apache-2.0"
-url = "https://github.com/avocadolinux/avocado-ext"
+url = "https://github.com/avocadolinux/avocado-os"
 types = ["sysext", "confext"]
 on_merge = ["btrfs filesystem resize max /var"]
 

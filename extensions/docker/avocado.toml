@@ -11,7 +11,7 @@ vendor = "Avocado Linux <info@avocadolinux.org>"
 summary = "Avocado Docker container engine"
 description = "Avocado Docker container engine"
 license = "Apache-2.0"
-url = "https://github.com/avocadolinux/avocado-ext"
+url = "https://github.com/avocadolinux/avocado-os"
 types = ["sysext", "confext"]
 enable_services = ["docker.service"]
 
