@@ -9,7 +9,7 @@ src_dir = "../../"
 avocado-img-bootfiles = "*"
 avocado-img-rootfs = "*"
 avocado-img-initramfs = "*"
-avocado-ext-dev = { ext = "avocado-ext-dev", vsn = "*" }
+avocado-ext-dev = { ext = "avocado-ext-dev", config = "extensions/dev/avocado.toml" }
 config = { ext = "config" }
 app = { ext = "app" }
 
@@ -48,10 +48,13 @@ password = ""
 ##
 
 [sdk]
-image = "avocadolinux/sdk:apollo-edge"
-# container_args = ["--network=avocado-dev-network"]
-# repo_url = "http://avocado-dev-repo"
+image = "avocadolinux/sdk:dev"
+container_args = ["--network=avocado-dev-network"]
+repo_url = "http://avocado-dev-repo"
+repo_release = "latest/apollo/edge"
 
+[sdk.dependencies]
+avocado-sdk-toolchain = "*"
 
 [sdk.qemux86-64]
 container_args = ["--network=host"]

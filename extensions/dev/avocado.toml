@@ -25,3 +25,6 @@ nativesdk-rsync = "*"
 
 [sdk]
 image = "avocadolinux/sdk:apollo-edge"
+
+[sdk.dependencies]
+avocado-sdk-toolchain = "*"
