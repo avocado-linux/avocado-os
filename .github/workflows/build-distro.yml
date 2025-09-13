@@ -208,7 +208,7 @@ jobs:
           PRSERV_HOST: "${{ secrets.PRSERV_HOST }}:${{ secrets.PRSERV_PORT }}"
           # Hash Equivalence Server configuration - connects all workers to a shared hash server
           # Set BB_HASHSERVE_HOST as repository secret
-          BB_HASHSERVE: "${{ secrets.BB_HASHSERVE_HOST }}:8686"
+          BB_HASHSERVE: "${{ secrets.BB_HASHSERVE_HOST }}:${{ secrets.BB_HASHSERVE_PORT }}"
         run: |
           echo "TARGET: ${{ matrix.build_config.target }}"
           echo "SDKMACHINE: ${{ matrix.build_config.sdk_machine }}"
