@@ -482,6 +482,9 @@ jobs:
         echo "Using SDK repo release: $AVOCADO_SDK_REPO_RELEASE"
 
         echo "Building extension package ..."
+        echo "Running: avocado sdk install -f --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
+        avocado sdk install -f --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
+
         echo "Running: avocado ext install -e $PACKAGE_NAME -f --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
         avocado ext install -e "$PACKAGE_NAME" -f --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
 

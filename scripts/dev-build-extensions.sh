@@ -314,6 +314,9 @@ build_extension() {
     
     local output_dir="$extension-$target"
     
+    echo "  Installing SDK..."
+    avocado sdk install -f --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"
+    
     echo "  Installing extension environment..."
     avocado ext install -e "$package_name" -f --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"
     
