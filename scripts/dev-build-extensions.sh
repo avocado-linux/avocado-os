@@ -47,7 +47,8 @@ This script:
 3. Builds the specified extensions for the target
 4. Copies built packages to the repository
 5. Updates extension repository metadata
-6. Cleans up extension build artifacts (unless --skip-cleanup is used)
+6. Generates targets.json from target fragments
+7. Cleans up extension build artifacts (unless --skip-cleanup is used)
 
 The built extension packages will be available in:
     <repo-dir>/packages/<distro-codename>/target/<target>-ext/
@@ -405,6 +406,65 @@ update_extension_metadata() {
         echo "✗ SDK metadata update failed" >&2
         return 1
     fi
+    
+    # Generate targets.json file from fragments
+    echo "Generating targets.json file..."
+    
+    # Find the staging directory that matches our release
+    local staging_base_dir="$REPO_DIR/staging"
+    local fragments_dir=""
+    local targets_json_file="$releases_dir/targets.json"
+    local persistent_targets_file="$staging_base_dir/$DISTRO_CODENAME/targets.json"
+    
+    if [ -d "$staging_base_dir" ]; then
+        # Look for staging directory matching our release ID
+        local staging_dir="$staging_base_dir/$RELEASE_DIR"
+        
+        if [ -d "$staging_dir/fragments" ]; then
+            fragments_dir="$staging_dir/fragments"
+            echo "Using fragments from staging directory: $staging_dir"
+        else
+            # Fallback: find the most recent staging directory with fragments
+            local latest_staging_dir=$(find "$staging_base_dir" -maxdepth 1 -type d -not -path "$staging_base_dir" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
+            
+            if [ -n "$latest_staging_dir" ] && [ -d "$latest_staging_dir/fragments" ]; then
+                fragments_dir="$latest_staging_dir/fragments"
+                echo "Using fragments from latest staging directory: $latest_staging_dir"
+            fi
+        fi
+    fi
+    
+    if [ -n "$fragments_dir" ] && [ -d "$fragments_dir" ]; then
+        # Count fragments to provide better feedback
+        local fragment_count=$(find "$fragments_dir" -name "*-fragment.json" -type f | wc -l)
+        echo "Found $fragment_count target fragment(s) in $fragments_dir"
+        
+        # Check for existing persistent targets.json in staging directory
+        if [ -f "$persistent_targets_file" ] && [ -s "$persistent_targets_file" ]; then
+            echo "Found existing persistent targets.json: $persistent_targets_file"
+            echo "Will merge with existing targets to preserve all available targets"
+            ./repo/aggregate-targets.sh "$fragments_dir" "$targets_json_file" "$persistent_targets_file"
+        else
+            echo "No existing persistent targets.json found, creating new file"
+            ./repo/aggregate-targets.sh "$fragments_dir" "$targets_json_file"
+        fi
+        
+        if [ $? -eq 0 ]; then
+            echo "✓ targets.json generated successfully from $fragment_count target(s)"
+            
+            # Update the persistent targets.json in staging directory for future builds
+            echo "Updating persistent targets.json in staging directory"
+            mkdir -p "$(dirname "$persistent_targets_file")"
+            cp "$targets_json_file" "$persistent_targets_file"
+        else
+            echo "✗ targets.json generation failed" >&2
+            return 1
+        fi
+    else
+        echo "⚠ No fragments directory found in staging, skipping targets.json generation"
+        echo "  Expected location: $staging_base_dir/$RELEASE_DIR/fragments/"
+        echo "  This is normal if no distro packages have been synced yet"
+    fi
 }
 
 # Parse command line arguments
@@ -627,6 +687,7 @@ echo "  Extension packages: $REPO_DIR/packages/$DISTRO_CODENAME/target/$TARGET-e
 echo "  Extension releases: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/target/$TARGET-ext/"
 echo "  SDK packages: $REPO_DIR/packages/$DISTRO_CODENAME/sdk/$TARGET/"
 echo "  SDK releases: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/sdk/$TARGET/"
+echo "  targets.json: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/targets.json"
 echo "Repository URL: $REPO_URL/"
 
 if [ ${#failed_extensions[@]} -gt 0 ]; then

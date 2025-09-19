@@ -34,7 +34,8 @@ This script:
 1. Finds the build directory for the target (build-<target>)
 2. Reads the avocado-repo.map file from build-<target>/build/tmp/deploy/rpm
 3. Syncs packages to the specified repository directory
-4. Updates repository metadata for distro packages (excludes extensions)
+4. Generates target fragment for targets.json
+5. Updates repository metadata for distro packages (excludes extensions)
 
 The repository structure will be:
     <repo-dir>/
@@ -162,6 +163,22 @@ else
     exit 1
 fi
 
+# Generate target fragment for targets.json
+echo ""
+echo "Generating target fragment for targets.json..."
+STAGING_DIR="$REPO_DIR/staging/$RELEASE_ID"
+FRAGMENTS_DIR="$STAGING_DIR/fragments"
+mkdir -p "$FRAGMENTS_DIR"
+
+./repo/generate-target-fragment.sh "$SOURCE_DEPLOY_DIR" "$TARGET" "$FRAGMENTS_DIR" "$DISTRO_CODENAME"
+
+if [ $? -eq 0 ]; then
+    echo "✓ Target fragment generated successfully"
+else
+    echo "✗ Target fragment generation failed" >&2
+    exit 1
+fi
+
 # Update repository metadata (distro packages only, excluding extensions)
 echo ""
 echo "Updating repository metadata..."
@@ -179,8 +196,11 @@ echo ""
 echo "=== Sync Complete ==="
 echo "Packages synced to: $PACKAGES_PATH"
 echo "Metadata generated at: $RELEASES_PATH"
+echo "Staging directory: $STAGING_DIR"
+echo "Target fragment generated at: $FRAGMENTS_DIR/$TARGET-fragment.json"
 echo ""
 echo "Next steps:"
 echo "1. Start package repository server: ./scripts/dev-start-repo.sh -r '$REPO_DIR'"
 echo "2. Build extensions: ./scripts/dev-build-extensions.sh -r '$REPO_DIR' -t '$TARGET'"
+echo "   (This will aggregate fragments into targets.json)"
 echo ""

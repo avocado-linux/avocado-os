@@ -43,13 +43,17 @@ Examples:
 
 This script performs the following steps for each target:
 1. Sync packages from build-<target> to the repository
-2. Start the package repository server (if not already running)
-3. Build extensions for the target
-4. Update extension repository metadata
-5. Optionally stop the repository server
+2. Generate target fragments in staging directory
+3. Start the package repository server (if not already running)
+4. Build extensions for the target
+5. Update extension repository metadata and generate targets.json
+6. Clean up staging directory (if extensions were built)
+7. Optionally stop the repository server
 
 The repository will aggregate packages from all targets, allowing you to
 build multiple targets and have them all available in a single repository.
+Target fragments are collected in staging/<release-id>/fragments/ and
+aggregated into targets.json during extension builds.
 
 EOF
 }
@@ -327,10 +331,13 @@ if [ "$SYNC_ONLY" = true ]; then
     log "=== Sync Complete (sync-only mode) ==="
     log "Packages synced to: $REPO_DIR/packages/$DISTRO_CODENAME"
     log "Metadata generated at: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_ID"
+    log "Staging directory: $REPO_DIR/staging/$RELEASE_ID"
+    log "Target fragments generated at: $REPO_DIR/staging/$RELEASE_ID/fragments/"
     log ""
     log "Next steps:"
     log "1. Start repository server: ./scripts/dev-start-repo.sh -r '$REPO_DIR' -p $PORT"
     log "2. Build extensions: ./scripts/dev-build-extensions.sh -t <target> -r '$REPO_DIR'"
+    log "   (This will aggregate fragments into targets.json)"
     exit 0
 fi
 
@@ -376,6 +383,7 @@ log "=== Build Complete ==="
 log "Repository directory: $REPO_DIR"
 log "Packages: $REPO_DIR/packages/$DISTRO_CODENAME"
 log "Metadata: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_ID"
+log "targets.json: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_ID/targets.json"
 
 if [ "$KEEP_REPO" = true ]; then
     log "Repository server:"
@@ -397,6 +405,19 @@ if [ ${#sync_failed_targets[@]} -gt 0 ] || [ ${#extension_failed_targets[@]} -gt
         log "  Extension build failed: ${extension_failed_targets[*]}"
     fi
     exit 1
+fi
+
+# Clean up staging directory after successful build (only if extensions were built)
+if [ "$NO_EXTENSIONS" = false ]; then
+    log "Cleaning up staging directory..."
+    STAGING_DIR="$REPO_DIR/staging/$RELEASE_ID"
+    if [ -d "$STAGING_DIR" ]; then
+        rm -rf "$STAGING_DIR"
+        log "✓ Staging directory cleaned up: $STAGING_DIR"
+        log "Note: Persistent targets.json preserved at $REPO_DIR/staging/$DISTRO_CODENAME/targets.json"
+    else
+        log "⚠ No staging directory found to clean up"
+    fi
 fi
 
 log "✓ All operations completed successfully"

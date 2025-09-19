@@ -224,6 +224,24 @@ jobs:
           ls ./build-${{ matrix.machine }}/build/tmp/deploy/rpm
           ./repo/stage-rpms.sh ./build-${{ matrix.machine }}/build/tmp/deploy/rpm ${{ env.STAGING_PATH }} ${{ needs.determine_build_matrix.outputs.distro_codename }}
 
+      - name: Generate target fragment for ${{ matrix.machine }}
+        if: matrix.build_config.target == 'avocado-distro'
+        run: |
+          echo "Generating target fragment for ${{ matrix.machine }}"
+
+          # Create fragments directory in staging base path
+          FRAGMENTS_DIR="${{ env.STAGING_BASE_PATH }}/fragments"
+          mkdir -p "$FRAGMENTS_DIR"
+
+          # Generate the target fragment using the repo map
+          ./repo/generate-target-fragment.sh \
+            ./build-${{ matrix.machine }}/build/tmp/deploy/rpm \
+            ${{ matrix.machine }} \
+            "$FRAGMENTS_DIR" \
+            ${{ needs.determine_build_matrix.outputs.distro_codename }}
+
+          echo "Target fragment generated for ${{ matrix.machine }}"
+
   validate_staging_checksums:
     needs:
       - determine_build_matrix
@@ -332,3 +350,29 @@ jobs:
           echo "Writing metadata to: ${{ env.RELEASES_PATH }}"
           echo "Metadata will use relative paths to packages"
           ./repo/update-metadata-distro.sh "${{ env.PACKAGES_PATH }}" "" "${{ env.RELEASES_PATH }}"
+
+      - name: Generate targets.json file
+        run: |
+          echo "Generating targets.json file"
+          echo "Aggregating target fragments from: ${{ env.STAGING_BASE_PATH }}/fragments"
+          echo "Output file: ${{ env.RELEASES_PATH }}/targets.json"
+
+          # Check for existing targets.json in the staging directory (persistent across builds)
+          STAGING_PERSISTENT_DIR="$(dirname ${{ env.STAGING_BASE_PATH }})/${{ env.DISTRO_CODENAME }}"
+          EXISTING_TARGETS_FILE="$STAGING_PERSISTENT_DIR/targets.json"
+
+          if [ -f "$EXISTING_TARGETS_FILE" ] && [ -s "$EXISTING_TARGETS_FILE" ]; then
+            echo "Found existing targets.json: $EXISTING_TARGETS_FILE"
+            echo "Will merge with existing targets to preserve all available targets"
+            ./repo/aggregate-targets.sh "${{ env.STAGING_BASE_PATH }}/fragments" "${{ env.RELEASES_PATH }}/targets.json" "$EXISTING_TARGETS_FILE"
+          else
+            echo "No existing targets.json found, creating new file"
+            ./repo/aggregate-targets.sh "${{ env.STAGING_BASE_PATH }}/fragments" "${{ env.RELEASES_PATH }}/targets.json"
+          fi
+
+          # Update the persistent targets.json in staging directory for future builds
+          echo "Updating persistent targets.json in staging directory"
+          mkdir -p "$STAGING_PERSISTENT_DIR"
+          cp "${{ env.RELEASES_PATH }}/targets.json" "$EXISTING_TARGETS_FILE"
+
+          echo "targets.json generation complete"
