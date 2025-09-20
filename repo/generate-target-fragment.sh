@@ -58,6 +58,16 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
     fi
 done < "${MAP_FILE}"
 
+# Add the SDK repository for this target if not already present (relative path)
+sdk_repo="sdk/${TARGET_NAME}"
+sdk_repo_quoted="\"${sdk_repo}\""
+if [[ ! " ${repos[*]} " =~ " ${sdk_repo_quoted} " ]]; then
+    repos+=("${sdk_repo_quoted}")
+    echo "Added SDK repository: ${sdk_repo}"
+else
+    echo "SDK repository already present: ${sdk_repo}"
+fi
+
 # Always add the target-specific extension repository (relative path)
 target_ext_repo="target/${TARGET_NAME}-ext"
 repos+=("\"${target_ext_repo}\"")
