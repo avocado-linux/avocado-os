@@ -1,0 +1,77 @@
+supported_targets = ["icam-540"]
+default_target = "icam-540"
+src_dir = "../../"
+
+##
+## Runtimes
+##
+
+[runtime.dev.dependencies]
+avocado-img-bootfiles = "*"
+avocado-img-rootfs = "*"
+avocado-img-initramfs = "*"
+avocado-ext-dev = { ext = "avocado-ext-dev", config = "extensions/dev/avocado.toml" }
+config = { ext = "config" }
+app = { ext = "app" }
+
+[runtime.dev.icam-540.dependencies]
+avocado-img-tegraflash = "*"
+avocado-bsp-icam-540 = { ext = "avocado-bsp-icam-540", config = "bsp/icam-540/avocado.toml" }
+
+##
+## Extensions
+##
+
+[ext.app]
+types = ["sysext", "confext"]
+
+[ext.app.dependencies]
+i2c-tools = "*"
+pylon = "*"
+pylon-dev = "*"
+v4l-utils = "*"
+opencv = "*"
+"gstreamer1.0" = "*"
+"gstreamer1.0-plugins-base-videoconvertscale" = "*"
+"gstreamer1.0-plugins-good-jpeg" = "*"
+"gstreamer1.0-plugins-good-rtp" = "*"
+"gstreamer1.0-plugins-good-udp" = "*"
+"gstreamer1.0-plugins-good-multipart" = "*"
+"gstreamer1.0-plugins-base-tcp" = "*"
+"gstreamer1.0-plugins-bad-mpegtsmux" = "*"
+"gstreamer1.0-plugins-nvvidconv" = "*"
+"gstreamer1.0-plugins-nvjpeg" = "*"
+gst-plugin-pylon = "*"
+usbutils = "*"
+udev-hwdb = "*"
+
+[ext.config]
+types = ["confext"]
+
+[ext.config.users.root]
+password = ""
+
+##
+## SDK
+##
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"
+container_args = ["--network=host"]
+repo_url = "http://192.168.1.10:8080"
+
+[sdk.dependencies]
+avocado-sdk-toolchain = "*"
+
+[sdk.icam-540.dependencies]
+nativesdk-util-linux-mount = "*"
+
+[sdk.icam-540]
+container_args = ["--network=host", "-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
+
+##
+## Provisioning
+##
+
+[provision.tegraflash]
+container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
