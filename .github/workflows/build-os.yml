@@ -32,6 +32,7 @@ on:
 
 jobs:
   build-distro:
+    if: ${{ github.event_name != 'schedule' || vars.BUILD_NIGHTLY == '1' }}
     uses: ./.github/workflows/build-distro.yml
     with:
       build_all: ${{ github.event.inputs.build_all == 'true' || github.event_name == 'schedule' }}
