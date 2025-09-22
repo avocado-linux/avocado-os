@@ -39,6 +39,7 @@ on:
         type: choice
         required: true
         options:
+          - fr202
           - icam-540
           - imx8mp-evk
           - imx91-frdm
@@ -102,7 +103,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const allMachinesList = [
-              "icam-540", "imx8mp-evk", "imx91-frdm", "imx93-frdm", "qemuarm64", "qemux86-64",
+              "fr202", "icam-540", "imx8mp-evk", "imx91-frdm", "imx93-frdm", "qemuarm64", "qemux86-64",
               "reterminal", "reterminal-dm", "imx93-evk", "jetson-orin-nano-devkit-nvme",
               "raspberrypi4", "raspberrypi5"
             ];
