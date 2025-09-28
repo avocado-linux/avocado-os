@@ -48,7 +48,7 @@ if [ -f "$EXISTING_TARGETS_FILE" ] && [ -s "$EXISTING_TARGETS_FILE" ]; then
             if [ -n "$target_entry" ]; then
                 existing_targets+=("$target_entry")
             fi
-        done < <(jq -r 'to_entries[] | "\(.key):\(.value | @json)"' "$EXISTING_TARGETS_FILE" 2>/dev/null || true)
+        done < <(jq -r 'to_entries[] | "\"\(.key)\":\(.value | @json)"' "$EXISTING_TARGETS_FILE" 2>/dev/null || true)
     else
         echo "Warning: jq not available, using basic JSON parsing"
         # Basic parsing - extract content between outer braces
