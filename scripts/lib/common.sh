@@ -10,6 +10,8 @@ export AVOCADO_DEFAULT_REPO_BASE="https://repo.avocadolinux.org"
 
 # All supported machine targets
 export AVOCADO_ALL_MACHINES=(
+    "fr202"
+    "icam-540"
     "imx8mp-evk"
     "imx91-frdm"
     "imx93-frdm"
@@ -18,7 +20,8 @@ export AVOCADO_ALL_MACHINES=(
     "qemux86-64"
     "reterminal"
     "reterminal-dm"
-    "jetson-orin-nano-devkit-nvme"
+    "jetson-orin-nano-devkit"
+    "jetson-agx-orin-devkit"
     "raspberrypi4"
     "raspberrypi5"
 )
