@@ -24,7 +24,8 @@ on:
           - qemux86-64
           - reterminal
           - reterminal-dm
-          - jetson-orin-nano-devkit-nvme
+          - jetson-orin-nano-devkit
+          - jetson-agx-orin-devkit
           - raspberrypi4
           - raspberrypi5
       distro_codename:

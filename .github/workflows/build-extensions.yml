@@ -50,7 +50,8 @@ on:
           - qemux86-64
           - reterminal
           - reterminal-dm
-          - jetson-orin-nano-devkit-nvme
+          - jetson-orin-nano-devkit
+          - jetson-agx-orin-devkit
           - raspberrypi4
           - raspberrypi5
 
@@ -149,7 +150,7 @@ jobs:
       id: set-matrix
       run: |
         # Define all possible targets
-        ALL_TARGETS=("imx8mp-evk" "imx91-frdm" "imx93-frdm" "imx93-evk" "qemuarm64" "qemux86-64" "reterminal" "reterminal-dm" "jetson-orin-nano-devkit-nvme" "raspberrypi4" "raspberrypi5")
+        ALL_TARGETS=("imx8mp-evk" "imx91-frdm" "imx93-frdm" "imx93-evk" "qemuarm64" "qemux86-64" "reterminal" "reterminal-dm" "jetson-orin-nano-devkit" "jetson-agx-orin-devkit" "raspberrypi4" "raspberrypi5")
 
         # Determine which targets to build for
         BUILD_ALL="${{ inputs.build_all || github.event.inputs.build_all }}"
