@@ -314,7 +314,9 @@ build_extension() {
     export AVOCADO_SDK_REPO_RELEASE="$DISTRO_CODENAME"
     
     local output_dir="$extension-$target"
-    
+    echo "  Clean environment..."
+    avocado clean
+
     echo "  Installing SDK..."
     avocado sdk install -f --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"
     
