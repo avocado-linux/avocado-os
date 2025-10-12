@@ -15,7 +15,6 @@ on_merge = ["udevadm trigger --action=add"]
 [ext.avocado-bsp-raspberrypi4.dependencies]
 kernel-module-v3d = "*"
 kernel-module-gpu-sched = "*"
-kernel-module-drm-shmem-helper = "*"
 kernel-module-brcmfmac = "*"
 kernel-module-brcmutil = "*"
 kernel-module-hci-uart = "*"
@@ -31,7 +30,7 @@ kernel-module-bcm2835-v4l2 = "*"
 kernel-module-rfkill = "*"
 kernel-module-bcm2835-mmal-vchiq = "*"
 kernel-module-raspberrypi-hwmon = "*"
-kernel-module-i2c-brcmstb = "*"
+
 kernel-module-vc-sm-cma = "*"
 kernel-module-raspberrypi-gpiomem = "*"
 kernel-module-snd-bcm2835 = "*"
@@ -49,6 +48,11 @@ kernel-module-uio = "*"
 kernel-module-fuse = "*"
 kernel-module-sch-fq-codel = "*"
 kernel-module-ipv6 = "*"
+
+# Upcoming release kernel:
+# kernel-module-drm-shmem-helper = "*"
+# kernel-module-i2c-brcmstb = "*"
+# kernel-module-rpi-hevc-dec = "*"
 
 fwup = "*"
 

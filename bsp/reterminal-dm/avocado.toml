@@ -48,7 +48,6 @@ kernel-module-i2c-mux = "*"
 kernel-module-snd-soc-tlv320aic3x-i2c = "*"
 kernel-module-bcm2835-unicam-legacy = "*"
 kernel-module-snd-soc-tlv320aic3x = "*"
-kernel-module-i2c-brcmstb = "*"
 kernel-module-rfkill = "*"
 kernel-module-libaes = "*"
 kernel-module-v4l2-dv-timings = "*"
@@ -87,6 +86,9 @@ kernel-module-ipv6 = "*"
 kernel-module-ltr30x = "*"
 
 fwup = "*"
+
+# Upcoming release kernel:
+# kernel-module-i2c-brcmstb = "*"
 
 [sdk]
 image = "avocadolinux/sdk:apollo-edge"

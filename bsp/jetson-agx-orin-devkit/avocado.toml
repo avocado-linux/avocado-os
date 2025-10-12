@@ -81,7 +81,6 @@ kernel-module-pcie-tegra194 = "*"
 kernel-module-nvme = "*"
 kernel-module-nvme-core = "*"
 kernel-module-ipv6 = "*"
-kernel-module-r8168 = "*"
 linux-firmware-rtl8168 = "*"
 
 [sdk]

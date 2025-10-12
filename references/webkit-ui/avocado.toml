@@ -33,6 +33,12 @@ avocado-bsp-raspberrypi5 = { ext = "avocado-bsp-raspberrypi5", vsn = "*" }
 [runtime.webkit-ui.raspberrypi4.dependencies]
 avocado-bsp-raspberrypi4 = { ext = "avocado-bsp-raspberrypi4", vsn = "*" }
 
+[runtime.dev.jetson-orin-nano-devkit.dependencies]
+avocado-img-tegraflash = "*"
+
+[runtime.dev.jetson-agx-orin-devkit.dependencies]
+avocado-img-tegraflash = "*"
+
 ##
 ## Extensions
 ##
@@ -71,4 +77,7 @@ avocado-sdk-toolchain = "*"
 container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
 
 [provision.sd]
+container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
+
+[provision.tegraflash]
 container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
