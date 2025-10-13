@@ -17,7 +17,6 @@ types = ["sysext", "confext"]
 [ext.avocado-ext-podman.dependencies]
 podman = "*"
 kernel-module-br-netfilter = "*"
-kernel-module-veth = "*"
 kernel-module-bridge = "*"
 
 [sdk]

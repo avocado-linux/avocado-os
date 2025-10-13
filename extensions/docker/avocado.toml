@@ -18,7 +18,6 @@ enable_services = ["docker.service"]
 [ext.avocado-ext-docker.dependencies]
 docker = "*"
 kernel-module-br-netfilter = "*"
-kernel-module-veth = "*"
 kernel-module-bridge = "*"
 
 [sdk]
