@@ -42,6 +42,8 @@ on:
         type: choice
         required: false
         options:
+          - fr202
+          - icam-540
           - imx8mp-evk
           - imx91-frdm
           - imx93-frdm
@@ -149,8 +151,8 @@ jobs:
     - name: Generate build matrix
       id: set-matrix
       run: |
-        # Define all possible targets
-        ALL_TARGETS=("imx8mp-evk" "imx91-frdm" "imx93-frdm" "imx93-evk" "qemuarm64" "qemux86-64" "reterminal" "reterminal-dm" "jetson-orin-nano-devkit" "jetson-agx-orin-devkit" "raspberrypi4" "raspberrypi5")
+        # Load all possible targets from centralized targets list
+        ALL_TARGETS=($(jq -r '.[]' .github/data/targets.json))
 
         # Determine which targets to build for
         BUILD_ALL="${{ inputs.build_all || github.event.inputs.build_all }}"

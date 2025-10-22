@@ -1,0 +1,17 @@
+[
+  "fr202",
+  "icam-540",
+  "imx8mp-evk",
+  "imx91-frdm",
+  "imx93-frdm",
+  "imx93-evk",
+  "qemuarm64",
+  "qemux86-64",
+  "reterminal",
+  "reterminal-dm",
+  "jetson-orin-nano-devkit",
+  "jetson-agx-orin-devkit",
+  "raspberrypi4",
+  "raspberrypi5"
+]
+

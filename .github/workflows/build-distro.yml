@@ -103,11 +103,8 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const allMachinesList = [
-              "fr202", "icam-540", "imx8mp-evk", "imx91-frdm", "imx93-frdm", "qemuarm64", "qemux86-64",
-              "reterminal", "reterminal-dm", "imx93-evk", "jetson-orin-nano-devkit", "jetson-agx-orin-devkit",
-              "raspberrypi4", "raspberrypi5"
-            ];
+            const fs = require('fs');
+            const allMachinesList = JSON.parse(fs.readFileSync('.github/data/targets.json', 'utf8'));
 
             let selectedMachines = [];
 
