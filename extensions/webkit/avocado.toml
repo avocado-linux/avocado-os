@@ -1,4 +1,4 @@
-supported_targets = ["raspberrypi4", "raspberrypi5", "reterminal", "reterminal-dm"]
+supported_targets = ["raspberrypi4", "raspberrypi5", "reterminal", "reterminal-dm", "icam-540", "jetson-orin-nano-devkit", "jetson-agx-orin-devkit"]
 src_dir = "../../"
 
 [ext.avocado-ext-webkit]
@@ -27,6 +27,7 @@ wpebackend-fdo = "*"
 ca-certificates = "*"
 p11-kit = "*"
 ethtool = "*"
+glib-networking = "*"
 
 [sdk]
 image = "avocadolinux/sdk:apollo-edge"

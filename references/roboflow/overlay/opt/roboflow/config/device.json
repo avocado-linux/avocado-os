@@ -1,0 +1,7 @@
+{
+  "api_base_url": "$ROBOFLOW_API_BASE_URL",
+  "roboflow_api_key": "$ROBOFLOW_API_KEY",
+  "device_id": "$ROBOFLOW_DEVICE_ID",
+  "workspace": "$ROBOFLOW_WORKSPACE",
+  "repo_base_url": "$ROBOFLOW_REPO_BASE_URL"
+}
