@@ -1,0 +1,105 @@
+supported_targets = ["icam-540"]
+default_target = "icam-540"
+src_dir = "../../"
+
+##
+## Runtimes
+##
+
+[runtime.dev.dependencies]
+avocado-img-rootfs = "*"
+avocado-img-initramfs = "*"
+avocado-img-bootfiles = "*"
+avocado-ext-dev = { ext = "avocado-ext-dev", config = "extensions/dev/avocado.toml" }
+avocado-ext-sshd-dev = { ext = "avocado-ext-sshd-dev", config = "extensions/sshd-dev/avocado.toml" }
+config = { ext = "config" }
+roboflow = { ext = "roboflow" }
+nvidia-docker = { ext = "nvidia-docker" }
+
+[runtime.dev.icam-540.dependencies]
+avocado-img-tegraflash = "*"
+avocado-bsp-icam-540 = { ext = "avocado-bsp-icam-540", config = "bsp/icam-540/avocado.toml" }
+
+##
+## Extensions
+##
+
+[ext.roboflow]
+types = ["sysext", "confext"]
+overlay = "references/roboflow/overlay"
+enable_services = ["roboflow.service"]
+on_merge = [
+  "systemctl restart --no-block roboflow.service"
+]
+
+[ext.roboflow.dependencies]
+rfdm = { compile = "rfdm", install = "references/roboflow/rfdm-install.sh" }
+pylon = "*"
+pylon-dev = "*"
+python3-pypylon = "*"
+v4l-utils = "*"
+usbutils = "*"
+coreutils = "*"
+glibc-utils = "*"
+logrotate = "*"
+p11-kit = "*"
+openssl-bin = "*"
+tegra-tools = "*"
+
+[ext.nvidia-docker]
+types = ["sysext", "confext"]
+enable_services = ["docker.service"]
+on_merge = [
+  "systemctl restart --no-block docker.service"
+]
+
+[ext.nvidia-docker.dependencies]
+nvidia-docker = "*"
+iptables-modules = "*"
+
+kernel-module-ip-tables = "*"
+kernel-module-iptable-filter = "*"
+kernel-module-ip6table-filter = "*"
+kernel-module-iptable-mangle = "*"
+kernel-module-ip6table-mangle = "*"
+kernel-module-iptable-nat = "*"
+kernel-module-ip6table-nat = "*"
+kernel-module-iptable-raw = "*"
+kernel-module-xt-masquerade = "*"
+kernel-module-xt-addrtype = "*"
+kernel-module-xt-conntrack = "*"
+kernel-module-nf-conntrack-netlink = "*"
+kernel-module-nf-nat = "*"
+ca-certificates = "*"
+
+[ext.config]
+types = ["confext"]
+
+[ext.config.users.root]
+password = ""
+
+##
+## SDK
+##
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"
+
+[sdk.dependencies]
+avocado-sdk-toolchain = "*"
+
+[sdk.icam-540.dependencies]
+nativesdk-util-linux-mount = "*"
+
+[sdk.icam-540]
+container_args = ["--network=host", "-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
+
+[sdk.compile.rfdm]
+compile = "references/roboflow/rfdm-fetch.sh"
+
+##
+## Provisioning
+##
+
+[provision.tegraflash]
+container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]

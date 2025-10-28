@@ -14,7 +14,6 @@ on_merge = ["btrfs filesystem resize max /var"]
 
 [ext.avocado-ext-dev.dependencies]
 avocado-hitl = "*"
-avocado-ext-sshd-dev = { ext = "avocado-ext-sshd-dev", config = "extensions/sshd-dev/avocado.toml" }
 rsync = "*"
 
 [ext.avocado-ext-dev.sdk.dependencies]
