@@ -20,7 +20,8 @@ on_merge = [
 ]
 
 [ext.avocado-bsp-reterminal-dm.dependencies]
-# kernel-module-cdc-acm = "*"
+kernel-module-nfnetlink = "*"
+kernel-module-cdc-acm = "*"
 kernel-module-joydev = "*"
 kernel-module-imx219 = "*"
 kernel-module-mcp251xfd = "*"
@@ -83,12 +84,11 @@ kernel-module-backlight = "*"
 kernel-module-i2c-dev = "*"
 kernel-module-sch-fq-codel = "*"
 kernel-module-ipv6 = "*"
+kernel-module-r8169 = "*"
+kernel-module-realtek = "*"
 kernel-module-ltr30x = "*"
 
 fwup = "*"
-
-# Upcoming release kernel:
-# kernel-module-i2c-brcmstb = "*"
 
 [sdk]
 image = "avocadolinux/sdk:apollo-edge"
