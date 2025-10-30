@@ -1,0 +1,21 @@
+supported_targets = ["jetson-orin-nano-devkit"]
+
+[ext.avocado-ext-swupdate]
+version = "1.0.0"
+release = "r0"
+vendor = "Avocado Linux <info@avocadolinux.org>"
+summary = "Swupdate client"
+description = "Swupdate client"
+license = "Apache-2.0"
+url = "https://github.com/avocadolinux/avocado-os"
+
+types = ["sysext", "confext"]
+
+[ext.avocado-ext-swupdate.dependencies]
+swupdate = "*"
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"
+
+[sdk.dependencies]
+avocado-sdk-toolchain = "*"
