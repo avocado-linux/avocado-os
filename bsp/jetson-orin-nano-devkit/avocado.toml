@@ -78,14 +78,77 @@ kernel-module-pcie-tegra194 = "*"
 kernel-module-nvme = "*"
 kernel-module-nvme-core = "*"
 linux-firmware-rtl8168 = "*"
+
+# Networking/iptables modules
+kernel-module-xt-conntrack = "*"
+kernel-module-xt-masquerade = "*"
+kernel-module-nf-conntrack-netlink = "*"
+kernel-module-iptable-nat = "*"
+kernel-module-nf-nat = "*"
+kernel-module-xt-addrtype = "*"
+kernel-module-iptable-filter = "*"
+kernel-module-ip-tables = "*"
+kernel-module-x-tables = "*"
+kernel-module-bnep = "*"
+kernel-module-sch-fq-codel = "*"
+
+# WiFi/Bluetooth modules (Realtek RTW88)
+kernel-module-rtw88-8822ce = "*"
+kernel-module-rtw88-8822c = "*"
+kernel-module-rtw88-pci = "*"
+kernel-module-rtw88-core = "*"
+kernel-module-mac80211 = "*"
+kernel-module-rtk-btusb = "*"
+kernel-module-libarc4 = "*"
+kernel-module-cfg80211 = "*"
+
+# Ethernet modules
 kernel-module-r8169 = "*"
 kernel-module-realtek = "*"
 
-# Upcoming release kernel:
-# kernel-module-drm-kms-helper = "*"
-# kernel-module-drm = "*"
-# kernel-module-nfnetlink = "*"
-# kernel-module-ipv6 = "*"
+# CAN bus modules
+kernel-module-mttcan = "*"
+kernel-module-nvpps = "*"
+kernel-module-can-dev = "*"
+
+# Camera/video modules
+kernel-module-nvhost-nvcsi-t194 = "*"
+kernel-module-nvhost-vi5 = "*"
+kernel-module-nvhost-isp5 = "*"
+kernel-module-snd-soc-tegra-machine-driver = "*"
+kernel-module-tegra-camera = "*"
+kernel-module-v4l2-dv-timings = "*"
+kernel-module-v4l2-fwnode = "*"
+kernel-module-v4l2-async = "*"
+kernel-module-videobuf2-dma-contig = "*"
+kernel-module-videobuf2-memops = "*"
+kernel-module-nvhost-nvcsi = "*"
+kernel-module-tegra-camera-platform = "*"
+kernel-module-capture-ivc = "*"
+kernel-module-tegra-camera-rtcpu = "*"
+kernel-module-ivc-bus = "*"
+kernel-module-hsp-mailbox-client = "*"
+kernel-module-ivc-ext = "*"
+kernel-module-videobuf2-v4l2 = "*"
+kernel-module-videodev = "*"
+kernel-module-videobuf2-common = "*"
+kernel-module-mc = "*"
+kernel-module-nvhost-capture = "*"
+
+# Display modules
+kernel-module-drm-dp-aux-bus = "*"
+kernel-module-drm-display-helper = "*"
+
+# NVIDIA proprietary modules
+kernel-module-nvidia-drm = "*"
+kernel-module-nvidia-modeset = "*"
+kernel-module-nvidia = "*"
+kernel-module-tegra-dce = "*"
+kernel-module-tsecriscv = "*"
+kernel-module-host1x-nvhost = "*"
+
+# Misc modules
+kernel-module-fuse = "*"
 
 [sdk]
 image = "avocadolinux/sdk:apollo-edge"
