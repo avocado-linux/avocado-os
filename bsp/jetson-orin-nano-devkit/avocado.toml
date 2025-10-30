@@ -78,12 +78,13 @@ kernel-module-pcie-tegra194 = "*"
 kernel-module-nvme = "*"
 kernel-module-nvme-core = "*"
 linux-firmware-rtl8168 = "*"
+kernel-module-r8169 = "*"
+kernel-module-realtek = "*"
 
 # Upcoming release kernel:
 # kernel-module-drm-kms-helper = "*"
 # kernel-module-drm = "*"
 # kernel-module-nfnetlink = "*"
-# kernel-module-r8168 = "*"
 # kernel-module-ipv6 = "*"
 
 [sdk]
