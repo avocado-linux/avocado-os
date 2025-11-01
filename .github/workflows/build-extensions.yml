@@ -410,6 +410,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          path: avocado-os
+
+      - run: |
+          mkdir -p /mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}
+          mv avocado-os /mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}
 
       - name: Download and install avocado-cli
         run: |
@@ -456,6 +462,7 @@ jobs:
           avocado --version
 
       - name: Build extension for target
+        working-directory: /mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}/avocado-os
         run: |
           # Determine extension directory and package name based on type
           if [ "${{ matrix.type }}" = "bsp" ]; then
@@ -498,6 +505,7 @@ jobs:
           avocado ext package -e "$PACKAGE_NAME" --target "${{ matrix.target }}" --out-dir "${{ matrix.extension }}-${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
 
       - name: Copy package to cache directory
+        working-directory: /mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}/avocado-os
         run: |
           # Create the cache directory structure using provided packages path or default
           # Priority: inputs.packages_path > setup-paths outputs > default
@@ -582,6 +590,7 @@ jobs:
           echo "  $sdk_rpm_count SDK packages copied to $SDK_CACHE_DIR"
 
       - name: Cleanup avocado state
+        working-directory: /mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}/avocado-os
         if: always()
         run: |
           # Determine extension directory based on type
@@ -657,6 +666,19 @@ jobs:
 
           echo "Cleanup completed for extension: ${{ matrix.extension }}"
 
+      - name: Cleanup temporary build directory
+        if: always()
+        run: |
+          echo "Cleaning up temporary build directory..."
+          TEMP_DIR="/mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}"
+          if [ -d "$TEMP_DIR" ]; then
+            echo "Removing directory: $TEMP_DIR"
+            rm -rf "$TEMP_DIR"
+            echo "Temporary build directory cleaned up successfully."
+          else
+            echo "Temporary directory $TEMP_DIR does not exist, skipping cleanup."
+          fi
+
   cleanup-package-repo:
     needs: [setup-package-repo, build-extensions]
     runs-on: avocado-sdk
@@ -685,7 +707,7 @@ jobs:
     needs:
       [build-extensions, setup-package-repo, setup-paths, cleanup-package-repo]
     if: always() && !cancelled() && needs.setup-package-repo.result == 'success'
-    runs-on: avocado-build
+    runs-on: avocado-sdk
     env:
       PACKAGES_PATH: ${{ inputs.packages_path || (needs.setup-paths.result == 'success' && needs.setup-paths.outputs.packages_path) || format('/home/runner/_repo/packages/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}
       RELEASES_PATH: ${{ inputs.releases_path || (needs.setup-paths.result == 'success' && needs.setup-paths.outputs.releases_path) || format('/home/runner/_repo/releases/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}
