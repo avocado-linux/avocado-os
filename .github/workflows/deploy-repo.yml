@@ -39,7 +39,6 @@ on:
         type: string
         required: false
 
-
 jobs:
   setup-paths:
     runs-on: avocado-sdk
