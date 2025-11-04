@@ -1,5 +1,7 @@
 supported_targets = "*"
 
+src_dir = "../../"
+
 [ext.avocado-ext-peridio]
 version = "1.0.0"
 release = "r0"
@@ -10,7 +12,7 @@ license = "Apache-2.0"
 url = "https://github.com/avocadolinux/avocado-os"
 types = ["sysext", "confext"]
 enable_services = ["peridiod.service"]
-overlay = "overlay"
+overlay = "extensions/peridio/overlay"
 
 [ext.avocado-ext-peridio.dependencies]
 peridiod = "*"
