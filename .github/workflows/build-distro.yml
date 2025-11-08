@@ -96,7 +96,10 @@ jobs:
           echo "Staging base path: $STAGING_BASE_PATH"
           echo "Packages path: $PACKAGES_PATH"
           echo "Releases path: $RELEASES_PATH"
-
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Determine build parameters
         id: set-matrix
         uses: actions/github-script@v7
