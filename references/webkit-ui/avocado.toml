@@ -2,7 +2,10 @@ supported_targets = [
   "raspberrypi5",
   "raspberrypi4",
   "reterminal",
-  "reterminal-dm"
+  "reterminal-dm",
+  "icam-540",
+  "jetson-orin-nano-devkit",
+  "jetson-agx-orin-devkit"
 ]
 
 src_dir = "../../"
@@ -16,8 +19,8 @@ avocado-img-bootfiles = "*"
 avocado-img-rootfs = "*"
 avocado-img-initramfs = "*"
 avocado-ext-dev = { ext = "avocado-ext-dev", vsn = "*" }
+avocado-ext-sshd-dev = { ext = "avocado-ext-sshd-dev", vsn = "*" }
 avocado-ext-webkit = { ext = "avocado-ext-webkit", vsn = "*" }
-avocado-ext-docker = { ext = "avocado-ext-docker", vsn = "*" }
 config = { ext = "config" }
 app = { ext = "app" }
 
@@ -33,11 +36,13 @@ avocado-bsp-raspberrypi5 = { ext = "avocado-bsp-raspberrypi5", vsn = "*" }
 [runtime.webkit-ui.raspberrypi4.dependencies]
 avocado-bsp-raspberrypi4 = { ext = "avocado-bsp-raspberrypi4", vsn = "*" }
 
-[runtime.dev.jetson-orin-nano-devkit.dependencies]
+[runtime.webkit-ui.jetson-orin-nano-devkit.dependencies]
 avocado-img-tegraflash = "*"
+avocado-bsp-jetson-orin-nano-devkit = { ext = "avocado-bsp-jetson-orin-nano-devkit", vsn = "*" }
 
-[runtime.dev.jetson-agx-orin-devkit.dependencies]
+[runtime.webkit-ui.jetson-agx-orin-devkit.dependencies]
 avocado-img-tegraflash = "*"
+avocado-bsp-jetson-agx-orin-devkit = { ext = "avocado-bsp-jetson-agx-orin-devkit", vsn = "*" }
 
 ##
 ## Extensions
@@ -48,8 +53,8 @@ types = ["sysext", "confext"]
 
 [ext.app.dependencies]
 libdrm-tests = "*"
-curl = "*"
-iperf3 = "*"
+kernel-modules = "*"
+nvidia-kernel-oot = "*"
 
 
 [ext.config]

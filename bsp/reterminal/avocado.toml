@@ -63,8 +63,5 @@ kernel-module-ltr30x = "*"
 
 fwup = "*"
 
-# Upcoming release kernel:
-# kernel-module-i2c-brcmstb = "*"
-
 [sdk]
 image = "avocadolinux/sdk:apollo-edge"

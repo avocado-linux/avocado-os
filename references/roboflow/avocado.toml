@@ -10,15 +10,15 @@ src_dir = "../../"
 avocado-img-rootfs = "*"
 avocado-img-initramfs = "*"
 avocado-img-bootfiles = "*"
-avocado-ext-dev = { ext = "avocado-ext-dev", config = "extensions/dev/avocado.toml" }
-avocado-ext-sshd-dev = { ext = "avocado-ext-sshd-dev", config = "extensions/sshd-dev/avocado.toml" }
+avocado-ext-dev = { ext = "avocado-ext-dev", vsn = "*" }
+avocado-ext-sshd-dev = { ext = "avocado-ext-sshd-dev", vsn = "*" }
 config = { ext = "config" }
 roboflow = { ext = "roboflow" }
 nvidia-docker = { ext = "nvidia-docker" }
 
 [runtime.dev.icam-540.dependencies]
 avocado-img-tegraflash = "*"
-avocado-bsp-icam-540 = { ext = "avocado-bsp-icam-540", config = "bsp/icam-540/avocado.toml" }
+avocado-bsp-icam-540 = { ext = "avocado-bsp-icam-540", vsn = "*" }
 
 ##
 ## Extensions

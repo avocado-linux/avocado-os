@@ -10,13 +10,13 @@ src_dir = "../../"
 avocado-img-bootfiles = "*"
 avocado-img-rootfs = "*"
 avocado-img-initramfs = "*"
-avocado-ext-dev = { ext = "avocado-ext-dev", config = "extensions/dev/avocado.toml" }
+avocado-ext-dev = { ext = "avocado-ext-dev", vsn = "*" }
 config = { ext = "config" }
 app = { ext = "app" }
 
 [runtime.dev.icam-540.dependencies]
 avocado-img-tegraflash = "*"
-avocado-bsp-icam-540 = { ext = "avocado-bsp-icam-540", config = "bsp/icam-540/avocado.toml" }
+avocado-bsp-icam-540 = { ext = "avocado-bsp-icam-540", vsn = "*" }
 
 ##
 ## Extensions
@@ -57,8 +57,6 @@ password = ""
 
 [sdk]
 image = "avocadolinux/sdk:apollo-edge"
-container_args = ["--network=host"]
-repo_url = "http://192.168.1.10:8080"
 
 [sdk.dependencies]
 avocado-sdk-toolchain = "*"

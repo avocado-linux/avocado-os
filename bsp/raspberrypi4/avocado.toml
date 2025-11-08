@@ -48,11 +48,6 @@ kernel-module-fuse = "*"
 kernel-module-sch-fq-codel = "*"
 kernel-module-ipv6 = "*"
 
-# Upcoming release kernel:
-# kernel-module-drm-shmem-helper = "*"
-# kernel-module-i2c-brcmstb = "*"
-# kernel-module-rpi-hevc-dec = "*"
-
 fwup = "*"
 
 [sdk]
