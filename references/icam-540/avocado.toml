@@ -1,6 +1,5 @@
 supported_targets = ["icam-540"]
 default_target = "icam-540"
-src_dir = "../../"
 
 ##
 ## Runtimes

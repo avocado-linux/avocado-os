@@ -8,8 +8,6 @@ supported_targets = [
   "jetson-agx-orin-devkit"
 ]
 
-src_dir = "../../"
-
 ##
 ## Runtimes
 ##

@@ -1,5 +1,4 @@
 supported_targets = "*"
-src_dir = "../../"
 
 ##
 ## Runtimes
