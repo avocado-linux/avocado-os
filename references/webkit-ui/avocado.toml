@@ -51,9 +51,6 @@ types = ["sysext", "confext"]
 
 [ext.app.dependencies]
 libdrm-tests = "*"
-kernel-modules = "*"
-nvidia-kernel-oot = "*"
-
 
 [ext.config]
 types = ["confext"]
