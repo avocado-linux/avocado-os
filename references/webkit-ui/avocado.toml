@@ -68,6 +68,7 @@ container_args = ["--network=host"]
 
 [sdk.dependencies]
 avocado-sdk-toolchain = "*"
+nativesdk-avocado-hitl = "*"
 
 ##
 ## Provisioning
