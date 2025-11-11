@@ -65,6 +65,9 @@ image = "avocadolinux/sdk:apollo-edge"
 [sdk.dependencies]
 avocado-sdk-toolchain = "*"
 nativesdk-avocado-hitl = "*"
+nativesdk-openssh-ssh = "*"
+nativesdk-openssh-scp = "*"
+nativesdk-rsync = "*"
 
 [sdk.qemux86-64]
 container_args = ["--network=host"]
