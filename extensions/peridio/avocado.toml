@@ -13,6 +13,7 @@ url = "https://github.com/avocadolinux/avocado-os"
 types = ["sysext", "confext"]
 enable_services = ["peridiod.service"]
 overlay = "extensions/peridio/overlay"
+on_merge = ["systemctl restart --no-block peridiod.service"]
 
 [ext.avocado-ext-peridio.dependencies]
 peridiod = "*"
