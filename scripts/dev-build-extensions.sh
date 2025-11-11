@@ -616,7 +616,7 @@ echo ""
 if [ "$BUILD_ALL" = false ]; then
     echo "Validating extensions support target: $TARGET"
     for extension in "${EXTENSIONS[@]}"; do
-        local extension_info=""
+        extension_info=""
         while IFS=':' read -r ext_name supported_targets; do
             if [ "$ext_name" = "$extension" ]; then
                 extension_info="$supported_targets"
