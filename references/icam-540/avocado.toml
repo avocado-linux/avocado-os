@@ -68,7 +68,7 @@ nativesdk-rsync = "*"
 nativesdk-util-linux-mount = "*"
 
 [sdk.icam-540]
-container_args = ["--network=host", "-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
+container_args = ["--network=host", "-v", "/dev:/dev", "-v", "/sys:/sys", "--privileged"]
 
 ##
 ## Provisioning

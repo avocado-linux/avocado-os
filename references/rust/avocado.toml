@@ -90,4 +90,4 @@ container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
 container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
 
 [provision.tegraflash]
-container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
+container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys", "--privileged"]
