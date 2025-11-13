@@ -6,13 +6,14 @@ Requires=docker.service
 [Service]
 Type=simple
 ExecStartPre=+/bin/sh -c "cat /usr/share/ca-certificates/mozilla/*.crt > /etc/ssl/certs/ca-certificates.crt"
-ExecStart=/opt/roboflow/rfdm --debug
+ExecStartPre=+/bin/sh -c "mkdir -p /var/lib/rfdm"
+ExecStartPre=/usr/bin/rfdm-init.sh
+ExecStart=/var/lib/rfdm/bin/rfdm --debug
 Restart=always
 RestartSec=15
 StartLimitInterval=300
 StartLimitBurst=10
-Environment="RF_CONFIG_DIR=/opt/roboflow/config"
-WorkingDirectory=/opt/roboflow
+Environment="RF_CONFIG_DIR=/var/lib/rfdm/config"
 
 # Security hardening
 NoNewPrivileges=yes

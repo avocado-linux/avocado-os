@@ -29,11 +29,14 @@ types = ["sysext", "confext"]
 overlay = "references/roboflow/overlay"
 enable_services = ["roboflow.service"]
 on_merge = [
-  "systemctl restart --no-block roboflow.service"
+  "systemctl restart --no-block roboflow.service",
+  "nvbootctrl verify"
 ]
 
 [ext.roboflow.dependencies]
 rfdm = { compile = "rfdm", install = "references/roboflow/rfdm-install.sh" }
+tegra-redundant-boot-base = "*"
+curl = "*"
 pylon = "*"
 pylon-dev = "*"
 python3-pypylon = "*"
@@ -45,6 +48,7 @@ logrotate = "*"
 p11-kit = "*"
 openssl-bin = "*"
 tegra-tools = "*"
+util-linux = "*"
 
 [ext.nvidia-docker]
 types = ["sysext", "confext"]

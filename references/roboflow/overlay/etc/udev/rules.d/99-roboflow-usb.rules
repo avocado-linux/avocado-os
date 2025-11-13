@@ -1,0 +1,4 @@
+# Roboflow USB Mass Storage Device Detection
+# Trigger on USB mass storage device addition
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{DEVTYPE}=="partition", TAG+="systemd", ENV{SYSTEMD_WANTS}+="roboflow-usb-handler@%k.service"
+
