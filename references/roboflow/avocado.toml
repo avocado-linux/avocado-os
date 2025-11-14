@@ -1,6 +1,5 @@
 supported_targets = ["icam-540"]
 default_target = "icam-540"
-src_dir = "../../"
 
 ##
 ## Runtimes
@@ -26,7 +25,7 @@ avocado-bsp-icam-540 = { ext = "avocado-bsp-icam-540", vsn = "*" }
 
 [ext.roboflow]
 types = ["sysext", "confext"]
-overlay = "references/roboflow/overlay"
+overlay = "overlay"
 enable_services = ["roboflow.service"]
 on_merge = [
   "systemctl restart --no-block roboflow.service",
@@ -34,7 +33,7 @@ on_merge = [
 ]
 
 [ext.roboflow.dependencies]
-rfdm = { compile = "rfdm", install = "references/roboflow/rfdm-install.sh" }
+rfdm = { compile = "rfdm", install = "rfdm-install.sh" }
 tegra-redundant-boot-base = "*"
 curl = "*"
 pylon = "*"
@@ -103,7 +102,7 @@ nativesdk-util-linux-mount = "*"
 container_args = ["--network=host", "-v", "/dev:/dev", "-v", "/sys:/sys", "--privileged"]
 
 [sdk.compile.rfdm]
-compile = "references/roboflow/rfdm-fetch.sh"
+compile = "rfdm-fetch.sh"
 
 ##
 ## Provisioning

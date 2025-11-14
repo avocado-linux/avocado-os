@@ -8,5 +8,3 @@ Type=oneshot
 ExecStart=/usr/bin/roboflow-usb-handler.sh /dev/%I
 RemainAfterExit=no
 TimeoutSec=30
-
-
