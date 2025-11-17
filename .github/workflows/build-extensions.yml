@@ -517,20 +517,35 @@ jobs:
             BASE_PACKAGES_PATH="/home/runner/_repo/packages/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
           fi
 
-          # Set up both extension and SDK cache directories
+          # Determine releases base path
+          if [ -n "${{ inputs.releases_path }}" ]; then
+            BASE_RELEASES_PATH="${{ inputs.releases_path }}"
+          elif [ -n "${{ needs.setup-paths.result == 'success' && needs.setup-paths.outputs.releases_path || '' }}" ]; then
+            BASE_RELEASES_PATH="${{ needs.setup-paths.result == 'success' && needs.setup-paths.outputs.releases_path || '' }}"
+          else
+            BASE_RELEASES_PATH="/home/runner/_repo/releases/${{ inputs.distro_codename || github.event.inputs.distro_codename }}/${{ needs.setup-paths.outputs.release_date }}"
+          fi
+
+          # Set up both extension and SDK cache directories for packages and releases
           EXT_CACHE_DIR="$BASE_PACKAGES_PATH/target/${{ matrix.target }}-ext"
           SDK_CACHE_DIR="$BASE_PACKAGES_PATH/sdk/${{ matrix.target }}"
+          EXT_RELEASES_DIR="$BASE_RELEASES_PATH/target/${{ matrix.target }}-ext"
+          SDK_RELEASES_DIR="$BASE_RELEASES_PATH/sdk/${{ matrix.target }}"
 
-          if ! mkdir -p "$EXT_CACHE_DIR" "$SDK_CACHE_DIR"; then
+          if ! mkdir -p "$EXT_CACHE_DIR" "$SDK_CACHE_DIR" "$EXT_RELEASES_DIR" "$SDK_RELEASES_DIR"; then
             echo "ERROR: Failed to create cache directories"
             echo "  Extension cache dir: $EXT_CACHE_DIR"
             echo "  SDK cache dir: $SDK_CACHE_DIR"
+            echo "  Extension releases dir: $EXT_RELEASES_DIR"
+            echo "  SDK releases dir: $SDK_RELEASES_DIR"
             exit 1
           fi
 
           echo "Cache directories:"
           echo "  Extension packages: $EXT_CACHE_DIR"
           echo "  SDK packages: $SDK_CACHE_DIR"
+          echo "  Extension releases: $EXT_RELEASES_DIR"
+          echo "  SDK releases: $SDK_RELEASES_DIR"
 
           # Find and copy all built RPM packages
           # Determine the expected RPM pattern based on extension type
@@ -566,18 +581,28 @@ jobs:
               rpm_basename=$(basename "$rpm_file")
 
               if [[ "$rpm_basename" == *"all_avocadosdk"* ]]; then
-                # Copy all_avocadosdk packages to SDK directory
+                # Copy all_avocadosdk packages to SDK directories (both packages and releases)
                 echo "  SDK: $rpm_basename -> $SDK_CACHE_DIR"
                 if ! cp "$rpm_file" "$SDK_CACHE_DIR/"; then
-                  echo "ERROR: Failed to copy SDK RPM file: $rpm_file"
+                  echo "ERROR: Failed to copy SDK RPM file to packages: $rpm_file"
+                  exit 1
+                fi
+                echo "  SDK: $rpm_basename -> $SDK_RELEASES_DIR"
+                if ! cp "$rpm_file" "$SDK_RELEASES_DIR/"; then
+                  echo "ERROR: Failed to copy SDK RPM file to releases: $rpm_file"
                   exit 1
                 fi
                 sdk_rpm_count=$((sdk_rpm_count + 1))
               else
-                # Copy regular packages to extension directory
+                # Copy regular packages to extension directories (both packages and releases)
                 echo "  EXT: $rpm_basename -> $EXT_CACHE_DIR"
                 if ! cp "$rpm_file" "$EXT_CACHE_DIR/"; then
-                  echo "ERROR: Failed to copy extension RPM file: $rpm_file"
+                  echo "ERROR: Failed to copy extension RPM file to packages: $rpm_file"
+                  exit 1
+                fi
+                echo "  EXT: $rpm_basename -> $EXT_RELEASES_DIR"
+                if ! cp "$rpm_file" "$EXT_RELEASES_DIR/"; then
+                  echo "ERROR: Failed to copy extension RPM file to releases: $rpm_file"
                   exit 1
                 fi
                 regular_rpm_count=$((regular_rpm_count + 1))
@@ -586,8 +611,8 @@ jobs:
           done <<< "$RPM_FILES"
 
           echo "Package copying completed:"
-          echo "  $regular_rpm_count extension packages copied to $EXT_CACHE_DIR"
-          echo "  $sdk_rpm_count SDK packages copied to $SDK_CACHE_DIR"
+          echo "  $regular_rpm_count extension packages copied to $EXT_CACHE_DIR and $EXT_RELEASES_DIR"
+          echo "  $sdk_rpm_count SDK packages copied to $SDK_CACHE_DIR and $SDK_RELEASES_DIR"
 
       - name: Cleanup avocado state
         working-directory: /mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}/avocado-os
