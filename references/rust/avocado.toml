@@ -37,12 +37,14 @@ avocado-img-tegraflash = "*"
 
 [ext.config]
 types = ["confext"]
+version = "0.1.0"
 
 [ext.config.users.root]
 password = ""
 
 [ext.example-rust]
 types = ["sysext", "confext"]
+version = "0.1.0"
 
 [ext.example-rust.dependencies]
 example-rust-app = { compile = "example-rust-app", install = "example-rust-install.sh" }
@@ -61,7 +63,7 @@ nativesdk-libgcc-dev = "*"
 ##
 
 [sdk]
-image = "avocadolinux/sdk:apollo-edge"
+image = "docker.io/avocadolinux/sdk:apollo-edge"
 
 [sdk.dependencies]
 avocado-sdk-toolchain = "*"

@@ -45,12 +45,14 @@ avocado-img-ufs = "*"
 
 [ext.app]
 types = ["sysext", "confext"]
+version = "0.1.0"
 
 [ext.app.dependencies]
 i2c-tools = "*"
 
 [ext.config]
 types = ["confext"]
+version = "0.1.0"
 
 [ext.config.users.root]
 password = ""
@@ -60,7 +62,7 @@ password = ""
 ##
 
 [sdk]
-image = "avocadolinux/sdk:apollo-edge"
+image = "docker.io/avocadolinux/sdk:apollo-edge"
 
 [sdk.dependencies]
 avocado-sdk-toolchain = "*"

@@ -40,12 +40,14 @@ avocado-img-tegraflash = "*"
 
 [ext.config]
 types = ["confext"]
+version = "0.1.0"
 
 [ext.config.users.root]
 password = ""
 
 [ext.example-elixir]
 types = ["sysext", "confext"]
+version = "0.1.0"
 overlay = "overlay"
 enable_services = ["ref-elixir.service"]
 on_merge = [
@@ -84,7 +86,7 @@ nativesdk-nodejs = "*"
 ##
 
 [sdk]
-image = "avocadolinux/sdk:apollo-edge"
+image = "docker.io/avocadolinux/sdk:apollo-edge"
 
 [sdk.dependencies]
 avocado-sdk-toolchain = "*"

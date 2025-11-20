@@ -25,6 +25,7 @@ avocado-bsp-icam-540 = { ext = "avocado-bsp-icam-540", vsn = "*" }
 
 [ext.roboflow]
 types = ["sysext", "confext"]
+version = "0.1.0"
 overlay = "overlay"
 enable_services = ["roboflow.service"]
 on_merge = [
@@ -51,6 +52,7 @@ util-linux = "*"
 
 [ext.nvidia-docker]
 types = ["sysext", "confext"]
+version = "0.1.0"
 enable_services = ["docker.service"]
 on_merge = [
   "systemctl restart --no-block docker.service"
@@ -77,6 +79,7 @@ ca-certificates = "*"
 
 [ext.config]
 types = ["confext"]
+version = "0.1.0"
 
 [ext.config.users.root]
 password = ""
@@ -86,7 +89,7 @@ password = ""
 ##
 
 [sdk]
-image = "avocadolinux/sdk:apollo-edge"
+image = "docker.io/avocadolinux/sdk:apollo-edge"
 
 [sdk.dependencies]
 avocado-sdk-toolchain = "*"

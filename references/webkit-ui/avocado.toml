@@ -48,12 +48,14 @@ avocado-bsp-jetson-agx-orin-devkit = { ext = "avocado-bsp-jetson-agx-orin-devkit
 
 [ext.app]
 types = ["sysext", "confext"]
+version = "0.1.0"
 
 [ext.app.dependencies]
 libdrm-tests = "*"
 
 [ext.config]
 types = ["confext"]
+version = "0.1.0"
 
 [ext.config.users.root]
 password = ""
@@ -63,7 +65,7 @@ password = ""
 ##
 
 [sdk]
-image = "avocadolinux/sdk:apollo-edge"
+image = "docker.io/avocadolinux/sdk:apollo-edge"
 container_args = ["--network=host"]
 
 [sdk.dependencies]
