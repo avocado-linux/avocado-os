@@ -13,10 +13,13 @@ types = ["sysext", "confext"]
 on_merge = [
   "udevadm control --reload",
   "udevadm trigger --type=subsystems --action=add --settle",
-  "udevadm trigger --type=devices --action=add --settle"
+  "udevadm trigger --type=devices --action=add --settle",
+  "nvbootctrl verify"
 ]
 
 [ext.avocado-bsp-jetson-agx-orin-devkit.dependencies]
+tegra-redundant-boot-base = "*"
+swupdate = "*"
 kernel-module-snd-soc-tegra186-asrc = "*"
 kernel-module-snd-soc-tegra210-admaif = "*"
 kernel-module-snd-soc-tegra-utils = "*"
