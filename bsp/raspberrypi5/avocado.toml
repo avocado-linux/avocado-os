@@ -2,7 +2,7 @@ default_target = "raspberrypi5"
 supported_targets = ["raspberrypi5"]
 
 [ext.avocado-bsp-raspberrypi5]
-version = "1.0.0"
+version = "0.1.0"
 release = "r0"
 vendor = "Avocado Linux <info@avocadolinux.org>"
 summary = "Board support for the Raspberry Pi 5"

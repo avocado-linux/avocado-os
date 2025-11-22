@@ -3,7 +3,7 @@ supported_targets = "*"
 src_dir = "../../"
 
 [ext.avocado-ext-peridio]
-version = "1.0.0"
+version = "0.1.0"
 release = "r0"
 vendor = "Avocado Linux <info@avocadolinux.org>"
 summary = "Peridio firmware updater"

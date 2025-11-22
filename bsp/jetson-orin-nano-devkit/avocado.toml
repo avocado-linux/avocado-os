@@ -2,7 +2,7 @@ default_target = "jetson-orin-nano-devkit"
 supported_targets = ["jetson-orin-nano-devkit"]
 
 [ext.avocado-bsp-jetson-orin-nano-devkit]
-version = "1.0.0"
+version = "0.1.0"
 release = "r0"
 vendor = "Avocado Linux <info@avocadolinux.org>"
 summary = "Board support for the Nvidia Jetson Orin Nano devkit"

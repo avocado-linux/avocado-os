@@ -2,7 +2,7 @@ supported_targets = ["raspberrypi4", "raspberrypi5", "reterminal", "reterminal-d
 src_dir = "../../"
 
 [ext.avocado-ext-webkit]
-version = "1.0.0"
+version = "0.1.0"
 release = "r0"
 vendor = "Avocado Linux <info@avocadolinux.org>"
 summary = "WPE WebKit browser and display utilities"
