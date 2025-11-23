@@ -90,6 +90,7 @@ password = ""
 
 [sdk]
 image = "docker.io/avocadolinux/sdk:apollo-edge"
+container_args = ["--network=host"]
 
 [sdk.dependencies]
 avocado-sdk-toolchain = "*"

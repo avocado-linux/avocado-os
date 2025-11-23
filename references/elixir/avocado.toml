@@ -87,6 +87,7 @@ nativesdk-nodejs = "*"
 
 [sdk]
 image = "docker.io/avocadolinux/sdk:apollo-edge"
+container_args = ["--network=host"]
 
 [sdk.dependencies]
 avocado-sdk-toolchain = "*"
@@ -94,12 +95,6 @@ nativesdk-avocado-hitl = "*"
 nativesdk-openssh-ssh = "*"
 nativesdk-openssh-scp = "*"
 nativesdk-rsync = "*"
-
-[sdk.qemux86-64]
-container_args = ["--network=host"]
-
-[sdk.qemuarm64]
-container_args = ["--network=host"]
 
 [sdk.compile.example-elixir-app]
 compile = "elixir-compile.sh"

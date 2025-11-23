@@ -63,6 +63,7 @@ password = ""
 
 [sdk]
 image = "docker.io/avocadolinux/sdk:apollo-edge"
+container_args = ["--network=host"]
 
 [sdk.dependencies]
 avocado-sdk-toolchain = "*"
@@ -70,12 +71,6 @@ nativesdk-avocado-hitl = "*"
 nativesdk-openssh-ssh = "*"
 nativesdk-openssh-scp = "*"
 nativesdk-rsync = "*"
-
-[sdk.qemux86-64]
-container_args = ["--network=host"]
-
-[sdk.qemuarm64]
-container_args = ["--network=host"]
 
 ##
 ## Provisioning
@@ -88,7 +83,7 @@ container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
 container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
 
 [provision.tegraflash]
-container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]
+container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys", "--privileged"]
 
 [provision.ufs]
 container_args = ["-v", "/dev:/dev", "-v", "/sys:/sys:ro", "--privileged"]

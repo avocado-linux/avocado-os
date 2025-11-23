@@ -11,7 +11,7 @@ url = "https://github.com/avocadolinux/avocado-os"
 
 types = ["sysext", "confext"]
 enable_services = ["sshd.socket"]
-on_merge = ["systemctl restart sshd.socket"]
+on_merge = ["systemctl restart --no-block sshd.socket"]
 
 [ext.avocado-ext-sshd.dependencies]
 openssh = "*"
