@@ -3,7 +3,7 @@ supported_targets = ["reterminal-dm"]
 src_dir = "../../"
 
 [ext.avocado-bsp-reterminal-dm]
-version = "1.0.0"
+version = "0.1.0"
 release = "r0"
 vendor = "Avocado Linux <info@avocadolinux.org>"
 summary = "Board support for the ReTerminal DM"

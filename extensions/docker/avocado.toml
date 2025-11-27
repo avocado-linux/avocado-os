@@ -5,7 +5,7 @@ supported_targets = ["raspberrypi4", "raspberrypi5", "reterminal", "reterminal-d
 src_dir = "../../"
 
 [ext.avocado-ext-docker]
-version = "1.0.0"
+version = "0.1.0"
 release = "r0"
 vendor = "Avocado Linux <info@avocadolinux.org>"
 summary = "Avocado Docker container engine"

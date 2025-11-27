@@ -2,7 +2,7 @@ default_target = "icam-540"
 supported_targets = ["icam-540"]
 
 [ext.avocado-bsp-icam-540]
-version = "1.0.0"
+version = "0.1.0"
 release = "r0"
 vendor = "Avocado Linux <info@avocadolinux.org>"
 summary = "Board support for the Advantech ICAM 540"

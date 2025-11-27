@@ -2,7 +2,7 @@ default_target = "jetson-agx-orin-devkit"
 supported_targets = ["jetson-agx-orin-devkit"]
 
 [ext.avocado-bsp-jetson-agx-orin-devkit]
-version = "1.0.0"
+version = "0.1.0"
 release = "r0"
 vendor = "Avocado Linux <info@avocadolinux.org>"
 summary = "Board support for the Nvidia Jetson AGX Orin devkit"
