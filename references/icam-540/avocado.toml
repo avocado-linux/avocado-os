@@ -14,8 +14,8 @@ config = { ext = "config" }
 app = { ext = "app" }
 
 [runtime.dev.icam-540.dependencies]
-avocado-img-tegraflash = "*"
 avocado-bsp-icam-540 = { ext = "avocado-bsp-icam-540", vsn = "*" }
+avocado-img-tegraflash = "*"
 
 ##
 ## Extensions

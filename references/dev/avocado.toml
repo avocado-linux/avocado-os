@@ -31,9 +31,11 @@ avocado-bsp-icam-540 = { ext = "avocado-bsp-icam-540", vsn = "*" }
 avocado-img-tegraflash = "*"
 
 [runtime.dev.jetson-orin-nano-devkit.dependencies]
+avocado-bsp-jetson-orin-nano-devkit = { ext = "avocado-bsp-jetson-orin-nano-devkit", vsn = "*" }
 avocado-img-tegraflash = "*"
 
 [runtime.dev.jetson-agx-orin-devkit.dependencies]
+avocado-bsp-jetson-agx-orin-devkit = { ext = "avocado-bsp-jetson-agx-orin-devkit", vsn = "*" }
 avocado-img-tegraflash = "*"
 
 [runtime.dev.rubikpi3.dependencies]

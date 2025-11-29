@@ -26,9 +26,11 @@ avocado-bsp-raspberrypi5 = { ext = "avocado-bsp-raspberrypi5", vsn = "*" }
 avocado-bsp-raspberrypi4 = { ext = "avocado-bsp-raspberrypi4", vsn = "*" }
 
 [runtime.dev.jetson-orin-nano-devkit.dependencies]
+avocado-bsp-jetson-orin-nano-devkit = { ext = "avocado-bsp-jetson-orin-nano-devkit", vsn = "*" }
 avocado-img-tegraflash = "*"
 
 [runtime.dev.jetson-agx-orin-devkit.dependencies]
+avocado-bsp-jetson-agx-orin-devkit = { ext = "avocado-bsp-jetson-agx-orin-devkit", vsn = "*" }
 avocado-img-tegraflash = "*"
 
 ##
