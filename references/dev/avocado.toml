@@ -14,6 +14,9 @@ config = { ext = "config" }
 app = { ext = "app" }
 
 # BSPs
+[runtime.dev.imx93-evk.dependencies]
+avocado-bsp-imx93-evk = { ext = "avocado-bsp-imx93-evk", vsn = "*" }
+
 [runtime.dev.reterminal-dm.dependencies]
 avocado-bsp-reterminal-dm = { ext = "avocado-bsp-reterminal-dm", vsn = "*" }
 

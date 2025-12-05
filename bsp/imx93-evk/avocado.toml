@@ -1,0 +1,43 @@
+default_target = "imx93-evk"
+supported_targets = ["imx93-evk"]
+src_dir = "../../"
+
+[ext.avocado-bsp-imx93-evk]
+version = "0.1.0"
+release = "r0"
+vendor = "Avocado Linux <info@avocadolinux.org>"
+summary = "Board support for the i.MX 93 EVK"
+description = "Board support for the i.MX 93 EVK"
+license = "Apache-2.0"
+url = "https://github.com/avocadolinux/avocado-os"
+types = ["sysext", "confext"]
+on_merge = [
+  "udevadm control --reload",
+  "udevadm trigger --type=subsystems --action=add --settle",
+  "udevadm trigger --type=devices --action=add --settle"
+]
+
+[ext.avocado-bsp-imx93-evk.dependencies]
+kernel-module-crct10dif-ce = "*"
+kernel-module-polyval-ce = "*"
+kernel-module-polyval-generic = "*"
+kernel-module-snd-soc-imx-card = "*"
+kernel-module-snd-soc-fsl-asoc-card = "*"
+kernel-module-snd-soc-imx-audmux = "*"
+kernel-module-snd-soc-wm8962 = "*"
+kernel-module-layerscape-edac-mod = "*"
+kernel-module-snd-soc-fsl-micfil = "*"
+kernel-module-rtc-pcf2127 = "*"
+kernel-module-rtc-pcf2131 = "*"
+kernel-module-btnxpuart = "*"
+kernel-module-flexcan = "*"
+kernel-module-snd-soc-fsl-sai = "*"
+kernel-module-imx-pcm-dma = "*"
+kernel-module-can-dev = "*"
+kernel-module-imx8-media-dev = "*"
+kernel-module-snd-soc-fsl-xcvr = "*"
+kernel-module-snd-soc-fsl-utils = "*"
+fwup = "*"
+
+[sdk]
+image = "avocadolinux/sdk:apollo-edge"

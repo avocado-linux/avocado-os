@@ -13,6 +13,9 @@ config-ext = { ext = "config" }
 example-rust-ext = { ext = "example-rust" }
 
 # BSPs
+[runtime.example-rust.imx93-evk.dependencies]
+avocado-bsp-imx93-evk = { ext = "avocado-bsp-imx93-evk", vsn = "*" }
+
 [runtime.example-rust.reterminal-dm.dependencies]
 avocado-bsp-reterminal-dm = { ext = "avocado-bsp-reterminal-dm", vsn = "*" }
 
