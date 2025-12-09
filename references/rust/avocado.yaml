@@ -1,0 +1,71 @@
+src_dir: ../../
+
+supported_targets: '*'
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+runtime:
+  dev:
+    dependencies:
+      avocado-runtime: '{{ config.distro.version }}'
+      app:
+        ext: example-rust
+      config:
+        ext: config-dev
+      devtools:
+        ext: avocado-ext-dev
+        vsn: '*'
+      sshd-dev:
+        ext: avocado-ext-sshd-dev
+        vsn: '*'
+      bsp:
+        ext: avocado-bsp-{{ avocado.target }}
+        vsn: '*'
+
+ext:
+  config-dev:
+    version: 0.1.0
+
+    users:
+      root:
+        password: ''
+
+  example-rust:
+    version: 0.1.0
+
+    dependencies:
+      example-rust-app:
+        compile: example-rust-app
+        install: example-rust-install.sh
+
+    sdk:
+      dependencies:
+        nativesdk-binutils: '*'
+        nativesdk-cargo: '*'
+        nativesdk-gcc: '*'
+        nativesdk-glibc-dev: '*'
+        nativesdk-libgcc-dev: '*'
+        nativesdk-rust: '*'
+        rust-cross-canadian-aarch64: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+
+  container_args:
+  - --network=host
+  - --privileged
+  - -v /dev:/dev
+  - -v /sys:/sys
+
+  compile:
+    example-rust-app:
+      compile: rust-compile.sh
+
+  dependencies:
+    avocado-sdk-toolchain: '*'
+    nativesdk-avocado-hitl: '*'
+    nativesdk-openssh-scp: '*'
+    nativesdk-openssh-ssh: '*'
+    nativesdk-rsync: '*'

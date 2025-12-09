@@ -1,0 +1,96 @@
+src_dir: ../../
+
+supported_targets: '*'
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+runtime:
+  dev:
+    dependencies:
+      avocado-runtime: '{{ config.distro.version }}'
+      app:
+        ext: example-elixir
+      config:
+        ext: config-dev
+      devtools:
+        ext: avocado-ext-dev
+        vsn: '*'
+      sshd-dev:
+        ext: avocado-ext-sshd-dev
+        vsn: '*'
+      webkit:
+        ext: avocado-ext-webkit
+        vsn: '*'
+      bsp:
+        ext: avocado-bsp-{{ avocado.target }}
+        vsn: '*'
+
+ext:
+  config-dev:
+    version: 0.1.0
+
+    users:
+      root:
+        password: ''
+
+  example-elixir:
+    version: 0.1.0
+
+    overlay: overlay
+
+    enable_services:
+    - ref-elixir.service
+
+    on_merge:
+    - systemctl restart --no-block ref-elixir.service
+    - systemctl restart --no-block cog.service
+
+    dependencies:
+      example-elixir-app:
+        compile: example-elixir-app
+        install: elixir-install.sh
+
+    sdk:
+      dependencies:
+        nativesdk-ca-certificates: '*'
+        nativesdk-elixir: '*'
+        nativesdk-elixir-eex: '*'
+        nativesdk-elixir-ex-unit: '*'
+        nativesdk-elixir-mix: '*'
+        nativesdk-erlang: '*'
+        nativesdk-erlang-asn1: '*'
+        nativesdk-erlang-crypto: '*'
+        nativesdk-erlang-dev: '*'
+        nativesdk-erlang-inets: '*'
+        nativesdk-erlang-parsetools: '*'
+        nativesdk-erlang-public-key: '*'
+        nativesdk-erlang-public-key-dev: '*'
+        nativesdk-erlang-runtime-tools: '*'
+        nativesdk-erlang-ssl: '*'
+        nativesdk-erlang-stdlib: '*'
+        nativesdk-erlang-xmerl: '*'
+        nativesdk-erlang-xmerl-dev: '*'
+        nativesdk-git: '*'
+        nativesdk-nodejs: '*'
+        nativesdk-rebar3: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+
+  container_args:
+  - --privileged
+  - --network=host
+  - -v /dev:/dev
+  - -v /sys:/sys
+
+  compile:
+    example-elixir-app:
+      compile: elixir-compile.sh
+      dependencies:
+        erlang-erts: '*'
+
+  dependencies:
+    avocado-sdk-toolchain: '{{ config.distro.version }}'
+    nativesdk-avocado-ext-dev: '*'

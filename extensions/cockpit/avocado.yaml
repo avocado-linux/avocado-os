@@ -1,0 +1,40 @@
+src_dir: ../../
+
+supported_targets: '*'
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+ext:
+  avocado-ext-cockpit:
+    version: '{{ config.distro.version }}'
+    release: r0
+    summary: Cockpit with web interface
+    description: A web-based graphical interface for device configuration
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    enable_services:
+    - cockpit.service
+
+    on_merge:
+    - systemctl restart --no-block cockpit.service
+
+    dependencies:
+      bash: '*'
+      cockpit: '*'
+      cockpit-bridge: '*'
+      cockpit-dashboard: '*'
+      cockpit-networkmanager: '*'
+      cockpit-shell: '*'
+      cockpit-systemd: '*'
+      cockpit-ws: '*'
+      coreutils: '*'
+      sscg: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  dependencies:
+    avocado-sdk-toolchain: '*'

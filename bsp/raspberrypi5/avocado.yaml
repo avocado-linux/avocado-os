@@ -1,0 +1,32 @@
+src_dir: ../../
+
+default_target: raspberrypi5
+supported_targets:
+- raspberrypi5
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+ext:
+  avocado-bsp-raspberrypi5:
+    version: '{{ config.distro.version }}'
+    release: r0
+    summary: Board support for the Raspberry Pi 5
+    description: Board support for the Raspberry Pi 5
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+    - sysext
+    - confext
+
+    on_merge:
+    - udevadm trigger --action=add
+
+    dependencies:
+      fwup: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}

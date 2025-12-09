@@ -1,0 +1,33 @@
+src_dir: ../../
+
+supported_targets: '*'
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+ext:
+  avocado-ext-peridio:
+    version: '{{ config.distro.version }}'
+    release: r0
+    summary: Peridio firmware updater
+    description: Peridio firmware updater
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    overlay: extensions/peridio/overlay
+
+    enable_services:
+    - peridiod.service
+
+    on_merge:
+    - systemctl restart --no-block peridiod.service
+
+    dependencies:
+      peridiod: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  dependencies:
+    avocado-sdk-toolchain: '*'

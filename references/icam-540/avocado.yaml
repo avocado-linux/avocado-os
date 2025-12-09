@@ -1,0 +1,74 @@
+src_dir: ../../
+
+default_target: icam-540
+supported_targets:
+- icam-540
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+runtime:
+  dev:
+    dependencies:
+      avocado-runtime: '{{ config.distro.version }}'
+      app:
+        ext: app
+      config:
+        ext: config-dev
+      devtools:
+        ext: avocado-ext-dev
+        vsn: '*'
+      sshd-dev:
+        ext: avocado-ext-sshd-dev
+        vsn: '*'
+      bsp:
+        ext: avocado-bsp-{{ avocado.target }}
+        vsn: '*'
+
+ext:
+  app:
+    version: 0.1.0
+
+    dependencies:
+      gst-plugin-pylon: '*'
+      gstreamer1.0: '*'
+      gstreamer1.0-plugins-bad-mpegtsmux: '*'
+      gstreamer1.0-plugins-base-tcp: '*'
+      gstreamer1.0-plugins-base-videoconvertscale: '*'
+      gstreamer1.0-plugins-good-jpeg: '*'
+      gstreamer1.0-plugins-good-multipart: '*'
+      gstreamer1.0-plugins-good-rtp: '*'
+      gstreamer1.0-plugins-good-udp: '*'
+      gstreamer1.0-plugins-nvjpeg: '*'
+      gstreamer1.0-plugins-nvvidconv: '*'
+      i2c-tools: '*'
+      opencv: '*'
+      pylon: '*'
+      pylon-dev: '*'
+      udev-hwdb: '*'
+      usbutils: '*'
+      v4l-utils: '*'
+
+  config-dev:
+    version: 0.1.0
+    users:
+      root:
+        password: ''
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+
+  container_args:
+  - --network=host
+  - --privileged
+  - -v /dev:/dev
+  - -v /sys:/sys
+
+  dependencies:
+    avocado-sdk-toolchain: '*'
+    nativesdk-avocado-hitl: '*'
+    nativesdk-openssh-scp: '*'
+    nativesdk-openssh-ssh: '*'
+    nativesdk-rsync: '*'
+    nativesdk-util-linux-mount: '*'

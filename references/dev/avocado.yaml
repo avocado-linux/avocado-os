@@ -1,0 +1,51 @@
+src_dir: ../../
+
+supported_targets: '*'
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+runtime:
+  dev:
+    dependencies:
+      avocado-runtime: '{{ config.distro.version }}'
+      app:
+        ext: app
+      config:
+        ext: config-dev
+      devtools:
+        ext: avocado-ext-dev
+        vsn: '*'
+      sshd:
+        ext: avocado-ext-sshd-dev
+        vsn: '*'
+      bsp:
+        ext: avocado-bsp-{{ avocado.target }}
+        vsn: '*'
+
+ext:
+  app:
+    version: 0.1.0
+
+    dependencies:
+      i2c-tools: '*'
+
+  config-dev:
+    version: 0.1.0
+
+    users:
+      root:
+        password: ''
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  container_args:
+  - --privileged
+  - --network=host
+  - -v /dev:/dev
+  - -v /sys:/sys
+
+  dependencies:
+    avocado-sdk-toolchain: '{{ config.distro.version }}'
+    nativesdk-avocado-ext-dev: '*'

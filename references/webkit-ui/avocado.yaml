@@ -1,0 +1,65 @@
+src_dir: ../../
+
+supported_targets:
+- raspberrypi5
+- raspberrypi4
+- reterminal
+- reterminal-dm
+- icam-540
+- jetson-orin-nano-devkit
+- jetson-agx-orin-devkit
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+runtime:
+  dev:
+    dependencies:
+      avocado-runtime: '{{ config.distro.version }}'
+      app:
+        ext: app
+      config:
+        ext: config-dev
+      devtools:
+        ext: avocado-ext-dev
+        vsn: '*'
+      sshd-dev:
+        ext: avocado-ext-sshd-dev
+        vsn: '*'
+      webkit:
+        ext: avocado-ext-webkit
+        vsn: '*'
+      bsp:
+        ext: avocado-bsp-{{ avocado.target }}
+        vsn: '*'
+
+ext:
+  app:
+    version: 0.1.0
+
+    dependencies:
+      libdrm-tests: '*'
+
+  config-dev:
+    version: 0.1.0
+
+    users:
+      root:
+        password: ''
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+
+  container_args:
+  - --network=host
+  - --privileged
+  - -v /dev:/dev
+  - -v /sys:/sys
+
+  dependencies:
+    avocado-sdk-toolchain: '*'
+    nativesdk-avocado-hitl: '*'
+    nativesdk-openssh-scp: '*'
+    nativesdk-openssh-ssh: '*'
+    nativesdk-rsync: '*'
