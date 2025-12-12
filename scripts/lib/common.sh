@@ -85,23 +85,49 @@ avocado_validate_build_dir() {
     return 0
 }
 
+# Function to parse YAML supported_targets field (handles both inline and multi-line list formats)
+avocado_parse_yaml_supported_targets() {
+    local yaml_file="$1"
+
+    if ! grep -q '^supported_targets:' "$yaml_file"; then
+        # Field not present, default to all targets
+        echo "*"
+        return
+    fi
+
+    # First, try to get inline value (e.g., "supported_targets: '*'" or "supported_targets: [a, b]")
+    local inline_value=$(grep '^supported_targets:' "$yaml_file" | sed 's/supported_targets: *//' | tr -d '"' | tr -d "'" | tr -d ' ')
+
+    if [ -n "$inline_value" ]; then
+        # Inline format found
+        echo "$inline_value"
+        return
+    fi
+
+    # Multi-line YAML list format - extract items following "supported_targets:"
+    # Use awk to find lines starting with "- " after "supported_targets:" until next non-list line
+    local targets=$(awk '
+        /^supported_targets:/ { in_list=1; next }
+        in_list && /^[^ -]/ { exit }
+        in_list && /^- / { gsub(/^- /, ""); gsub(/["\047]/, ""); printf "%s,", $0 }
+    ' "$yaml_file" | sed 's/,$//')
+
+    if [ -n "$targets" ]; then
+        echo "$targets"
+    else
+        # No targets found, default to all
+        echo "*"
+    fi
+}
+
 # Function to discover extensions and their supported targets
 avocado_discover_extensions() {
     local extensions_info=()
     
     for ext_dir in extensions/*/; do
-        if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.toml" ]; then
+        if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.yaml" ]; then
             local extension=$(basename "$ext_dir")
-            
-            # Read supported_targets from avocado.toml
-            local supported_targets=""
-            if grep -q '^supported_targets' "$ext_dir/avocado.toml"; then
-                supported_targets=$(grep '^supported_targets' "$ext_dir/avocado.toml" | sed 's/supported_targets = //' | tr -d '"' | tr -d "'" | tr -d ' ')
-            else
-                # Default to all targets if not specified
-                supported_targets="*"
-            fi
-            
+            local supported_targets=$(avocado_parse_yaml_supported_targets "$ext_dir/avocado.yaml")
             extensions_info+=("$extension:$supported_targets")
         fi
     done
@@ -119,7 +145,7 @@ avocado_extension_supports_target() {
         return 0
     fi
     
-    # Parse TOML array format: ["target1", "target2"] or comma-separated
+    # Parse comma-separated targets or inline array format: [target1, target2]
     local targets_list=$(echo "$supported_targets" | sed 's/\[//g' | sed 's/\]//g' | sed 's/"//g' | sed "s/'//g" | tr ',' '\n')
     
     for supported_target in $targets_list; do

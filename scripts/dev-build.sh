@@ -352,19 +352,18 @@ log ""
 # Build extensions for all targets (unless disabled)
 if [ "$NO_EXTENSIONS" = false ]; then
     log "=== Building Extensions ==="
-    extension_failed_targets=()
     for target in "${TARGETS[@]}"; do
         if ! build_target_extensions "$target"; then
-            extension_failed_targets+=("$target")
+            log "ERROR: Extension build failed for target: $target"
+            if [ "$KEEP_REPO" = false ]; then
+                log "Stopping repository server due to build failure..."
+                stop_repo_server
+            fi
+            exit 1
         fi
     done
     
-    if [ ${#extension_failed_targets[@]} -gt 0 ]; then
-        log "WARNING: Extension build failed for targets: ${extension_failed_targets[*]}"
-        log "Distro packages are still available"
-    else
-        log "✓ Extension build completed for all targets"
-    fi
+    log "✓ Extension build completed for all targets"
     log ""
 else
     log "=== Skipping Extensions (--no-extensions) ==="
@@ -395,17 +394,6 @@ if [ "$KEEP_REPO" = true ]; then
     log "  ./scripts/dev-start-repo.sh --stop"
 fi
 
-if [ ${#sync_failed_targets[@]} -gt 0 ] || [ ${#extension_failed_targets[@]} -gt 0 ]; then
-    log ""
-    log "⚠ Some operations failed:"
-    if [ ${#sync_failed_targets[@]} -gt 0 ]; then
-        log "  Package sync failed: ${sync_failed_targets[*]}"
-    fi
-    if [ ${#extension_failed_targets[@]} -gt 0 ]; then
-        log "  Extension build failed: ${extension_failed_targets[*]}"
-    fi
-    exit 1
-fi
 
 # Clean up staging directory after successful build (only if extensions were built)
 if [ "$NO_EXTENSIONS" = false ]; then
