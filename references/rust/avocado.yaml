@@ -46,7 +46,7 @@ ext:
         nativesdk-glibc-dev: '*'
         nativesdk-libgcc-dev: '*'
         nativesdk-rust: '*'
-        packagegroup-rust-cross-canadian-{{ avocado.target }}: '*'
+        packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
