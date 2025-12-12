@@ -1,0 +1,35 @@
+src_dir: ../../
+
+supported_targets: '*'
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+ext:
+  avocado-ext-sshd:
+    version: '{{ config.distro.version }}'
+    release: r0
+    summary: OpenSSH server
+    description: OpenSSH server
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    enable_services:
+    - sshd.socket
+
+    on_merge:
+    - systemctl restart --no-block sshd.socket
+
+    dependencies:
+      openssh: '*'
+
+    sdk:
+      dependencies:
+        nativesdk-openssh-ssh: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  dependencies:
+    avocado-sdk-toolchain: '*'

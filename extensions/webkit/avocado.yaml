@@ -1,0 +1,51 @@
+src_dir: ../../
+
+supported_targets:
+- raspberrypi4
+- raspberrypi5
+- reterminal
+- reterminal-dm
+- icam-540
+- jetson-orin-nano-devkit
+- jetson-agx-orin-devkit
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+ext:
+  avocado-ext-webkit:
+    version: '{{ config.distro.version }}'
+    release: r0
+    summary: WPE WebKit browser and display utilities
+    description: WPE WebKit browser and display utilities
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    enable_services:
+    - cog.service
+
+    on_merge:
+    - systemctl restart --no-block cog.service
+
+    dependencies:
+      ca-certificates: '*'
+      cog: '*'
+      ethtool: '*'
+      glib-networking: '*'
+      p11-kit: '*'
+      weston: '*'
+      wpebackend-fdo: '*'
+      wpewebkit: '*'
+
+    reterminal:
+      overlay: extensions/webkit/overlays/reterminal
+
+    reterminal-dm:
+      overlay: extensions/webkit/overlays/reterminal-dm
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  dependencies:
+    avocado-sdk-toolchain: '*'

@@ -173,17 +173,52 @@ jobs:
             echo "No specific target specified, building for all targets"
           fi
 
+          # Function to parse YAML supported_targets field (handles both inline and multi-line list formats)
+          parse_yaml_supported_targets() {
+            local yaml_file="$1"
+
+            if ! grep -q '^supported_targets:' "$yaml_file"; then
+              # Field not present, default to all targets
+              echo "*"
+              return
+            fi
+
+            # First, try to get inline value (e.g., "supported_targets: '*'" or "supported_targets: [a, b]")
+            local inline_value=$(grep '^supported_targets:' "$yaml_file" | sed 's/supported_targets: *//' | tr -d '"' | tr -d "'" | tr -d ' ')
+
+            if [ -n "$inline_value" ]; then
+              # Inline format found
+              echo "$inline_value"
+              return
+            fi
+
+            # Multi-line YAML list format - extract items following "supported_targets:"
+            # Use awk to find lines starting with "- " after "supported_targets:" until next non-list line
+            local targets=$(awk '
+              /^supported_targets:/ { in_list=1; next }
+              in_list && /^[^ -]/ { exit }
+              in_list && /^- / { gsub(/^- /, ""); gsub(/["'"'"']/, ""); printf "%s,", $0 }
+            ' "$yaml_file" | sed 's/,$//')
+
+            if [ -n "$targets" ]; then
+              echo "$targets"
+            else
+              # No targets found, default to all
+              echo "*"
+            fi
+          }
+
           # Initialize matrix array
           matrix_includes=()
 
           # Process each regular extension directory
           for ext_dir in extensions/*/; do
-            if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.toml" ]; then
+            if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.yaml" ]; then
               extension=$(basename "$ext_dir")
               echo "Processing extension: $extension"
 
-              # Read supported_targets from avocado.toml
-              supported_targets=$(grep '^supported_targets' "$ext_dir/avocado.toml" | sed 's/supported_targets = //' | tr -d '"' | tr -d "'" | tr -d ' ')
+              # Read supported_targets from avocado.yaml (handles both inline and multi-line YAML formats)
+              supported_targets=$(parse_yaml_supported_targets "$ext_dir/avocado.yaml")
               echo "  supported_targets: $supported_targets"
 
               # Determine which targets this extension supports
@@ -191,8 +226,7 @@ jobs:
                 # Extension supports all targets, use filtered targets
                 extension_targets=("${FILTERED_TARGETS[@]}")
               else
-                # Parse the list of specific targets
-                # Handle TOML array format: ["target1", "target2"]
+                # Parse the comma-separated list of targets
                 targets_list=$(echo "$supported_targets" | sed 's/\[//g' | sed 's/\]//g' | sed 's/"//g' | sed "s/'//g" | tr ',' '\n')
 
                 extension_targets=()
@@ -221,13 +255,13 @@ jobs:
 
           # Process each BSP extension directory
           for bsp_dir in bsp/*/; do
-            if [ -d "$bsp_dir" ] && [ -f "$bsp_dir/avocado.toml" ]; then
+            if [ -d "$bsp_dir" ] && [ -f "$bsp_dir/avocado.yaml" ]; then
               bsp_name=$(basename "$bsp_dir")
               extension="bsp-$bsp_name"
               echo "Processing BSP extension: $extension"
 
-              # Read supported_targets from avocado.toml
-              supported_targets=$(grep '^supported_targets' "$bsp_dir/avocado.toml" | sed 's/supported_targets = //' | tr -d '"' | tr -d "'" | tr -d ' ')
+              # Read supported_targets from avocado.yaml (handles both inline and multi-line YAML formats)
+              supported_targets=$(parse_yaml_supported_targets "$bsp_dir/avocado.yaml")
               echo "  supported_targets: $supported_targets"
 
               # Determine which targets this extension supports
@@ -235,8 +269,7 @@ jobs:
                 # Extension supports all targets, use filtered targets
                 extension_targets=("${FILTERED_TARGETS[@]}")
               else
-                # Parse the list of specific targets
-                # Handle TOML array format: ["target1", "target2"]
+                # Parse the comma-separated list of targets
                 targets_list=$(echo "$supported_targets" | sed 's/\[//g' | sed 's/\]//g' | sed 's/"//g' | sed "s/'//g" | tr ',' '\n')
 
                 extension_targets=()

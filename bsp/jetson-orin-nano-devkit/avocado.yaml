@@ -1,0 +1,151 @@
+src_dir: ../../
+
+default_target: jetson-orin-nano-devkit
+supported_targets:
+- jetson-orin-nano-devkit
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+ext:
+  avocado-bsp-jetson-orin-nano-devkit:
+    version: '{{ config.distro.version }}'
+    release: r0
+    summary: Board support for the Nvidia Jetson Orin Nano devkit
+    description: Board support for the Nvidia Jetson Orin Nano devkit
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+    - sysext
+    - confext
+
+    on_merge:
+    - udevadm control --reload
+    - udevadm trigger --type=subsystems --action=add --settle
+    - udevadm trigger --type=devices --action=add --settle
+    - nvbootctrl verify
+
+    dependencies:
+      kernel-module-at24: '*'
+      kernel-module-bnep: '*'
+      kernel-module-can-dev: '*'
+      kernel-module-capture-ivc: '*'
+      kernel-module-cec: '*'
+      kernel-module-cfg80211: '*'
+      kernel-module-crct10dif-ce: '*'
+      kernel-module-drm-display-helper: '*'
+      kernel-module-drm-dp-aux-bus: '*'
+      kernel-module-fusb301: '*'
+      kernel-module-fuse: '*'
+      kernel-module-governor-pod-scaling: '*'
+      kernel-module-governor-userspace: '*'
+      kernel-module-host1x: '*'
+      kernel-module-host1x-fence: '*'
+      kernel-module-host1x-nvhost: '*'
+      kernel-module-hsp-mailbox-client: '*'
+      kernel-module-ina3221: '*'
+      kernel-module-ip-tables: '*'
+      kernel-module-iptable-filter: '*'
+      kernel-module-iptable-nat: '*'
+      kernel-module-ivc-bus: '*'
+      kernel-module-ivc-ext: '*'
+      kernel-module-libarc4: '*'
+      kernel-module-mac80211: '*'
+      kernel-module-mc: '*'
+      kernel-module-mc-hwpm: '*'
+      kernel-module-mc-utils: '*'
+      kernel-module-mttcan: '*'
+      kernel-module-nf-conntrack-netlink: '*'
+      kernel-module-nf-nat: '*'
+      kernel-module-nvgpu: '*'
+      kernel-module-nvhost-capture: '*'
+      kernel-module-nvhost-isp5: '*'
+      kernel-module-nvhost-nvcsi: '*'
+      kernel-module-nvhost-nvcsi-t194: '*'
+      kernel-module-nvhost-vi5: '*'
+      kernel-module-nvhwpm: '*'
+      kernel-module-nvidia: '*'
+      kernel-module-nvidia-drm: '*'
+      kernel-module-nvidia-modeset: '*'
+      kernel-module-nvidia-vrs-pseq: '*'
+      kernel-module-nvmap: '*'
+      kernel-module-nvme: '*'
+      kernel-module-nvme-core: '*'
+      kernel-module-nvpmodel-clk-cap: '*'
+      kernel-module-nvpps: '*'
+      kernel-module-nvsciipc: '*'
+      kernel-module-nvvrs-pseq-rtc: '*'
+      kernel-module-pcie-tegra194: '*'
+      kernel-module-phy-tegra194-p2u: '*'
+      kernel-module-pwm-fan: '*'
+      kernel-module-pwm-tegra: '*'
+      kernel-module-pwm-tegra-tachometer: '*'
+      kernel-module-r8169: '*'
+      kernel-module-realtek: '*'
+      kernel-module-rtk-btusb: '*'
+      kernel-module-rtw88-8822c: '*'
+      kernel-module-rtw88-8822ce: '*'
+      kernel-module-rtw88-core: '*'
+      kernel-module-rtw88-pci: '*'
+      kernel-module-sch-fq-codel: '*'
+      kernel-module-snd-hda-codec: '*'
+      kernel-module-snd-hda-codec-hdmi: '*'
+      kernel-module-snd-hda-core: '*'
+      kernel-module-snd-hda-tegra: '*'
+      kernel-module-snd-soc-audio-graph-card: '*'
+      kernel-module-snd-soc-simple-card-utils: '*'
+      kernel-module-snd-soc-tegra-audio-graph-card: '*'
+      kernel-module-snd-soc-tegra-machine-driver: '*'
+      kernel-module-snd-soc-tegra-pcm: '*'
+      kernel-module-snd-soc-tegra-utils: '*'
+      kernel-module-snd-soc-tegra186-arad: '*'
+      kernel-module-snd-soc-tegra186-asrc: '*'
+      kernel-module-snd-soc-tegra186-dspk: '*'
+      kernel-module-snd-soc-tegra210-admaif: '*'
+      kernel-module-snd-soc-tegra210-adx: '*'
+      kernel-module-snd-soc-tegra210-ahub: '*'
+      kernel-module-snd-soc-tegra210-amx: '*'
+      kernel-module-snd-soc-tegra210-dmic: '*'
+      kernel-module-snd-soc-tegra210-i2s: '*'
+      kernel-module-snd-soc-tegra210-mixer: '*'
+      kernel-module-snd-soc-tegra210-mvc: '*'
+      kernel-module-snd-soc-tegra210-ope: '*'
+      kernel-module-snd-soc-tegra210-sfc: '*'
+      kernel-module-spi-tegra114: '*'
+      kernel-module-spidev: '*'
+      kernel-module-tegra-aconnect: '*'
+      kernel-module-tegra-bpmp-thermal: '*'
+      kernel-module-tegra-cactmon-mc-all: '*'
+      kernel-module-tegra-camera: '*'
+      kernel-module-tegra-camera-platform: '*'
+      kernel-module-tegra-camera-rtcpu: '*'
+      kernel-module-tegra-dce: '*'
+      kernel-module-tegra-drm: '*'
+      kernel-module-tegra-wmark: '*'
+      kernel-module-tegra-xudc: '*'
+      kernel-module-tegra210-adma: '*'
+      kernel-module-tegra234-aon: '*'
+      kernel-module-tegra234-oc-event: '*'
+      kernel-module-thermal-trip-event: '*'
+      kernel-module-tsecriscv: '*'
+      kernel-module-v4l2-async: '*'
+      kernel-module-v4l2-dv-timings: '*'
+      kernel-module-v4l2-fwnode: '*'
+      kernel-module-videobuf2-common: '*'
+      kernel-module-videobuf2-dma-contig: '*'
+      kernel-module-videobuf2-memops: '*'
+      kernel-module-videobuf2-v4l2: '*'
+      kernel-module-videodev: '*'
+      kernel-module-x-tables: '*'
+      kernel-module-xt-addrtype: '*'
+      kernel-module-xt-conntrack: '*'
+      kernel-module-xt-masquerade: '*'
+      linux-firmware-rtl8168: '*'
+      swupdate: '*'
+      tegra-redundant-boot-base: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}

@@ -1,0 +1,29 @@
+src_dir: ../../
+
+default_target: qemux86-64
+supported_targets:
+- qemux86-64
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+ext:
+  avocado-bsp-qemux86-64:
+    version: '{{ config.distro.version }}'
+    release: r0
+    summary: Board support for QEMU x86-64
+    description: Board support for QEMU x86-64 virtual machine
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    on_merge:
+    - udevadm control --reload
+    - udevadm trigger --type=subsystems --action=add --settle
+    - udevadm trigger --type=devices --action=add --settle
+
+    dependencies:
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}

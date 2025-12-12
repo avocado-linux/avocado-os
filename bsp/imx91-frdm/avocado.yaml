@@ -1,0 +1,29 @@
+src_dir: ../../
+
+default_target: imx91-frdm
+supported_targets:
+- imx91-frdm
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+ext:
+  avocado-bsp-imx91-frdm:
+    version: '{{ config.distro.version }}'
+    release: r0
+    summary: Board support for the i.MX 91 FRDM
+    description: Board support for the i.MX 91 FRDM
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    on_merge:
+    - udevadm control --reload
+    - udevadm trigger --type=subsystems --action=add --settle
+    - udevadm trigger --type=devices --action=add --settle
+
+    dependencies:
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}

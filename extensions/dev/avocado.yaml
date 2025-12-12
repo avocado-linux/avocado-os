@@ -1,0 +1,36 @@
+src_dir: ../../
+
+supported_targets: '*'
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+ext:
+  avocado-ext-dev:
+    version: '{{ config.distro.version }}'
+    release: r0
+    summary: Avocado development tools
+    description: Avocado development tools
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    on_merge:
+    - btrfs filesystem resize max /var
+
+    dependencies:
+      avocado-hitl: '*'
+      rsync: '*'
+
+    sdk:
+      dependencies:
+        nativesdk-avocado-hitl: '*'
+        nativesdk-openssh-scp: '*'
+        nativesdk-openssh-ssh: '*'
+        nativesdk-rsync: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  dependencies:
+    avocado-sdk-toolchain: '*'

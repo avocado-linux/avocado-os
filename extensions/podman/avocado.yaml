@@ -1,0 +1,31 @@
+src_dir: ../../
+
+supported_targets:
+- raspberrypi4
+- raspberrypi5
+- reterminal
+- reterminal-dm
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+ext:
+  avocado-ext-podman:
+    version: '{{ config.distro.version }}'
+    release: r0
+    summary: Avocado Podman container engine
+    description: Avocado Podman container engine
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    dependencies:
+      kernel-module-br-netfilter: '*'
+      kernel-module-bridge: '*'
+      podman: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  dependencies:
+    avocado-sdk-toolchain: '*'

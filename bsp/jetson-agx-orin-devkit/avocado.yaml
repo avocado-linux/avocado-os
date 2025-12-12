@@ -1,0 +1,96 @@
+src_dir: ../../
+
+default_target: jetson-agx-orin-devkit
+supported_targets:
+- jetson-agx-orin-devkit
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+ext:
+  avocado-bsp-jetson-agx-orin-devkit:
+    version: '{{ config.distro.version }}'
+    release: r0
+    summary: Board support for the Nvidia Jetson AGX Orin devkit
+    description: Board support for the Nvidia Jetson AGX Orin devkit
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+    - sysext
+    - confext
+
+    on_merge:
+    - udevadm control --reload
+    - udevadm trigger --type=subsystems --action=add --settle
+    - udevadm trigger --type=devices --action=add --settle
+    - nvbootctrl verify
+
+    dependencies:
+      kernel-module-at24: '*'
+      kernel-module-cec: '*'
+      kernel-module-crct10dif-ce: '*'
+      kernel-module-fusb301: '*'
+      kernel-module-governor-pod-scaling: '*'
+      kernel-module-governor-userspace: '*'
+      kernel-module-host1x: '*'
+      kernel-module-host1x-fence: '*'
+      kernel-module-ina3221: '*'
+      kernel-module-mc-hwpm: '*'
+      kernel-module-mc-utils: '*'
+      kernel-module-nvgpu: '*'
+      kernel-module-nvhwpm: '*'
+      kernel-module-nvidia-vrs-pseq: '*'
+      kernel-module-nvmap: '*'
+      kernel-module-nvme: '*'
+      kernel-module-nvme-core: '*'
+      kernel-module-nvpmodel-clk-cap: '*'
+      kernel-module-nvsciipc: '*'
+      kernel-module-nvvrs-pseq-rtc: '*'
+      kernel-module-pcie-tegra194: '*'
+      kernel-module-phy-tegra194-p2u: '*'
+      kernel-module-pwm-fan: '*'
+      kernel-module-pwm-tegra: '*'
+      kernel-module-pwm-tegra-tachometer: '*'
+      kernel-module-snd-hda-codec: '*'
+      kernel-module-snd-hda-codec-hdmi: '*'
+      kernel-module-snd-hda-core: '*'
+      kernel-module-snd-hda-tegra: '*'
+      kernel-module-snd-soc-audio-graph-card: '*'
+      kernel-module-snd-soc-simple-card-utils: '*'
+      kernel-module-snd-soc-tegra-audio-graph-card: '*'
+      kernel-module-snd-soc-tegra-pcm: '*'
+      kernel-module-snd-soc-tegra-utils: '*'
+      kernel-module-snd-soc-tegra186-arad: '*'
+      kernel-module-snd-soc-tegra186-asrc: '*'
+      kernel-module-snd-soc-tegra186-dspk: '*'
+      kernel-module-snd-soc-tegra210-admaif: '*'
+      kernel-module-snd-soc-tegra210-adx: '*'
+      kernel-module-snd-soc-tegra210-ahub: '*'
+      kernel-module-snd-soc-tegra210-amx: '*'
+      kernel-module-snd-soc-tegra210-dmic: '*'
+      kernel-module-snd-soc-tegra210-i2s: '*'
+      kernel-module-snd-soc-tegra210-mixer: '*'
+      kernel-module-snd-soc-tegra210-mvc: '*'
+      kernel-module-snd-soc-tegra210-ope: '*'
+      kernel-module-snd-soc-tegra210-sfc: '*'
+      kernel-module-spi-tegra114: '*'
+      kernel-module-spidev: '*'
+      kernel-module-tegra-aconnect: '*'
+      kernel-module-tegra-bpmp-thermal: '*'
+      kernel-module-tegra-cactmon-mc-all: '*'
+      kernel-module-tegra-drm: '*'
+      kernel-module-tegra-wmark: '*'
+      kernel-module-tegra-xudc: '*'
+      kernel-module-tegra210-adma: '*'
+      kernel-module-tegra234-aon: '*'
+      kernel-module-tegra234-oc-event: '*'
+      kernel-module-thermal-trip-event: '*'
+      linux-firmware-rtl8168: '*'
+      swupdate: '*'
+      tegra-redundant-boot-base: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
