@@ -1,5 +1,3 @@
-src_dir: ../../
-
 default_target: icam-540
 supported_targets:
 - icam-540
@@ -22,26 +20,9 @@ runtime:
       avocado-ext-sshd-dev:
         ext: avocado-ext-sshd-dev
         vsn: '*'
-
-
       nvidia-docker:
         ext: nvidia-docker
 
-    icam-540:
-      dependencies:
-        avocado-bsp-icam-540:
-          ext: avocado-bsp-icam-540
-          vsn: '*'
-        avocado-img-tegraflash: '*'
-
-provision:
-  tegraflash:
-    container_args:
-    - -v
-    - /dev:/dev
-    - -v
-    - /sys:/sys
-    - --privileged
 
 ext:
   config:

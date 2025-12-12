@@ -1,5 +1,3 @@
-src_dir: ../../
-
 supported_targets:
 - raspberrypi5
 - raspberrypi4

@@ -1,5 +1,3 @@
-src_dir: ../../
-
 supported_targets: '*'
 
 distro:
@@ -38,7 +36,7 @@ ext:
     dependencies:
       example-rust-app:
         compile: example-rust-app
-        install: example-rust-install.sh
+        install: rust-install.sh
 
     sdk:
       dependencies:
@@ -48,7 +46,7 @@ ext:
         nativesdk-glibc-dev: '*'
         nativesdk-libgcc-dev: '*'
         nativesdk-rust: '*'
-        rust-cross-canadian-aarch64: '*'
+        packagegroup-rust-cross-canadian-{{ avocado.target }}: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
