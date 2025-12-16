@@ -824,5 +824,5 @@ jobs:
           echo "Updating extension packages metadata..."
           ./repo/update-metadata-extensions.sh "${{ env.PACKAGES_PATH }}" "" "$FINAL_RELEASES_PATH"
 
-          echo "Updating SDK packages metadata..."
-          ./repo/update-metadata-sdk.sh "${{ env.PACKAGES_PATH }}" "" "$FINAL_RELEASES_PATH"
+          # echo "Updating SDK packages metadata..."
+          # ./repo/update-metadata-sdk.sh "${{ env.PACKAGES_PATH }}" "" "$FINAL_RELEASES_PATH"
