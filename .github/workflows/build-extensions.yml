@@ -826,8 +826,3 @@ jobs:
 
           echo "Updating SDK packages metadata..."
           ./repo/update-metadata-sdk.sh "${{ env.PACKAGES_PATH }}" "" "$FINAL_RELEASES_PATH"
-
-          echo "Regenerating base distro repository metadata to include new SDK packages..."
-          echo "Extensions with sdk.dependencies produce nativesdk packages that are added to sdk/<target>/ directories."
-          echo "The base distro metadata must be regenerated to include these new SDK packages."
-          ./repo/update-metadata-distro.sh "${{ env.PACKAGES_PATH }}" "" "$FINAL_RELEASES_PATH"
