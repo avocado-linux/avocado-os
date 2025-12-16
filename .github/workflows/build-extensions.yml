@@ -581,20 +581,23 @@ jobs:
           echo "  SDK releases: $SDK_RELEASES_DIR"
 
           # Find and copy all built RPM packages
-          # Determine the expected RPM pattern based on extension type
+          # Determine the expected RPM patterns based on extension type
+          # Extensions with sdk.dependencies produce nativesdk-* packages in addition to regular packages
           if [ "${{ matrix.type }}" = "bsp" ]; then
             BSP_NAME="${{ matrix.extension }}"
             BSP_NAME="${BSP_NAME#bsp-}"  # Remove bsp- prefix
             RPM_PATTERN="avocado-bsp-$BSP_NAME-*.rpm"
+            NATIVESDK_PATTERN="nativesdk-avocado-bsp-$BSP_NAME-*.rpm"
           else
             RPM_PATTERN="avocado-ext-${{ matrix.extension }}-*.rpm"
+            NATIVESDK_PATTERN="nativesdk-avocado-ext-${{ matrix.extension }}-*.rpm"
           fi
 
-          # Find all RPM files matching the pattern
-          RPM_FILES=$(find . -name "$RPM_PATTERN" -type f)
+          # Find all RPM files matching both patterns (regular and nativesdk)
+          RPM_FILES=$(find . \( -name "$RPM_PATTERN" -o -name "$NATIVESDK_PATTERN" \) -type f)
 
           if [ -z "$RPM_FILES" ]; then
-            echo "Error: No RPM files found matching pattern $RPM_PATTERN"
+            echo "Error: No RPM files found matching patterns $RPM_PATTERN or $NATIVESDK_PATTERN"
             echo "Current directory contents:"
             ls -la
             echo "All .rpm files in current directory:"
@@ -823,3 +826,8 @@ jobs:
 
           echo "Updating SDK packages metadata..."
           ./repo/update-metadata-sdk.sh "${{ env.PACKAGES_PATH }}" "" "$FINAL_RELEASES_PATH"
+
+          echo "Regenerating base distro repository metadata to include new SDK packages..."
+          echo "Extensions with sdk.dependencies produce nativesdk packages that are added to sdk/<target>/ directories."
+          echo "The base distro metadata must be regenerated to include these new SDK packages."
+          ./repo/update-metadata-distro.sh "${{ env.PACKAGES_PATH }}" "" "$FINAL_RELEASES_PATH"
