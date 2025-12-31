@@ -1,0 +1,15 @@
+[Unit]
+Description=Rubicon USB Gadget Configuration
+DefaultDependencies=no
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/rubicon/rubicon-usb-gadget-setup start
+ExecStop=/usr/lib/rubicon/rubicon-usb-gadget-setup stop
+
+[Install]
+WantedBy=sysinit.target
+

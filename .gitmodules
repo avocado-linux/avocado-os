@@ -8,3 +8,7 @@
 [submodule "references/rust/ref-rust"]
 	path = references/rust/ref-rust
 	url = git@github.com:avocado-linux/ref-rust
+[submodule "references/rubicon/avocado-cli"]
+	path = references/rubicon/avocado-cli
+	url = https://github.com/avocado-linux/avocado-cli.git
+	branch = rel/0.21.0

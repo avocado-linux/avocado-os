@@ -1,0 +1,103 @@
+supported_targets: 
+- raspberrypi4
+- reterminal
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+runtime:
+  dev:
+    dependencies:
+      avocado-runtime: '{{ config.distro.version }}'
+      rubicon:
+        ext: rubicon
+      avocado_cli:
+        ext: avocado_cli
+      config:
+        ext: config-dev
+      devtools:
+        ext: avocado-ext-dev
+        vsn: '*'
+      sshd:
+        ext: avocado-ext-sshd-dev
+        vsn: '*'
+      bsp:
+        ext: avocado-bsp-{{ avocado.target }}
+        vsn: '*'
+
+ext:
+  rubicon:
+    version: 0.1.0
+    overlay: overlay
+
+    enable_services:
+    - rubicon-usb-gadget.service
+    - rubicon-usb-network.service
+    - serial-getty@ttyGS0.service
+    - dnsmasq.service
+    - avahi-daemon.service
+    - docker.service
+
+    on_merge:
+    - systemctl restart --no-block rubicon-usb-gadget.service
+    - systemctl restart --no-block rubicon-usb-network.service
+    - systemctl restart --no-block serial-getty@ttyGS0.service
+    - systemctl restart --no-block dnsmasq.service
+    - systemctl restart --no-block avahi-daemon.service
+    - systemctl restart --no-block docker.service
+
+    on_unmerge:
+    - systemctl stop --no-block docker.service
+    - systemctl stop --no-block avahi-daemon.service
+    - systemctl stop --no-block dnsmasq.service
+    - systemctl stop --no-block serial-getty@ttyGS0.service
+    - systemctl stop --no-block rubicon-usb-network.service
+    - systemctl stop --no-block rubicon-usb-gadget.service
+
+    dependencies:
+      dnsmasq: '*'
+      avahi-daemon: '*'
+      libgadget-configfs: '*'
+      docker: '*'
+
+  avocado_cli:
+    version: 0.1.0
+
+    dependencies:
+      avocado-cli-bin:
+        compile: avocado-cli-compile
+        install: avocado-cli-install.sh
+
+    sdk:
+      dependencies:
+        nativesdk-binutils: '*'
+        nativesdk-cargo: '*'
+        nativesdk-gcc: '*'
+        nativesdk-glibc-dev: '*'
+        nativesdk-libgcc-dev: '*'
+        nativesdk-rust: '*'
+        packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: '*'
+
+  config-dev:
+    version: 0.1.0
+
+    users:
+      root:
+        password: ''
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  container_args:
+  - --privileged
+  - --network=host
+  - -v /dev:/dev
+  - -v /sys:/sys
+
+  compile:
+    avocado-cli-compile:
+      compile: avocado-cli-compile.sh        
+
+  dependencies:
+    avocado-sdk-toolchain: '{{ config.distro.version }}'
+    nativesdk-avocado-ext-dev: '*'
