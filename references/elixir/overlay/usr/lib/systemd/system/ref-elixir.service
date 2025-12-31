@@ -12,3 +12,5 @@ Restart=always
 RestartSec=5
 SyslogIdentifier=ref-elixir
 
+[Install]
+WantedBy=multi-user.target
