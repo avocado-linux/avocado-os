@@ -275,6 +275,17 @@ cleanup_extension() {
     # Change to extension directory
     cd "$ext_dir"
     
+    # Parse src_dir from avocado.yaml and remove .avocado folder from there
+    local src_dir=$(grep '^src_dir:' avocado.yaml | sed 's/src_dir: *//' | tr -d '"' | tr -d "'" | xargs)
+    if [ -z "$src_dir" ]; then
+        src_dir="."
+    fi
+    local avocado_dir="$src_dir/.avocado"
+    if [ -d "$avocado_dir" ]; then
+        echo "  Removing .avocado folder from $avocado_dir..."
+        rm -rf "$avocado_dir"
+    fi
+    
     # Set up environment for avocado CLI (same as build)
     export AVOCADO_SDK_REPO_URL="$REPO_URL"
     export AVOCADO_CONTAINER_NETWORK="$NETWORK_NAME"
@@ -326,6 +337,17 @@ build_extension() {
     # Change to extension directory
     cd "$ext_dir"
     
+    # Parse src_dir from avocado.yaml and remove .avocado folder from there
+    local src_dir=$(grep '^src_dir:' avocado.yaml | sed 's/src_dir: *//' | tr -d '"' | tr -d "'" | xargs)
+    if [ -z "$src_dir" ]; then
+        src_dir="."
+    fi
+    local avocado_dir="$src_dir/.avocado"
+    if [ -d "$avocado_dir" ]; then
+        echo "  Removing .avocado folder from $avocado_dir..."
+        rm -rf "$avocado_dir"
+    fi
+    
     # Set up environment for avocado CLI
     export AVOCADO_SDK_REPO_URL="$REPO_URL"
     export AVOCADO_CONTAINER_NETWORK="$NETWORK_NAME"
@@ -333,19 +355,39 @@ build_extension() {
     
     local output_dir="$extension-$target"
     echo "  Clean environment..."
-    avocado clean
+    if ! avocado clean; then
+        echo "  ✗ Failed to clean environment" >&2
+        cd - > /dev/null
+        return 1
+    fi
 
     echo "  Installing SDK..."
-    avocado sdk install -f --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"
+    if ! avocado sdk install -f --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"; then
+        echo "  ✗ Failed to install SDK" >&2
+        cd - > /dev/null
+        return 1
+    fi
     
     echo "  Installing extension environment..."
-    avocado ext install -e "$package_name" -f --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"
+    if ! avocado ext install -e "$package_name" -f --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"; then
+        echo "  ✗ Failed to install extension environment" >&2
+        cd - > /dev/null
+        return 1
+    fi
     
     echo "  Building extension..."
-    avocado ext build -e "$package_name" --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"
+    if ! avocado ext build -e "$package_name" --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"; then
+        echo "  ✗ Failed to build extension" >&2
+        cd - > /dev/null
+        return 1
+    fi
     
     echo "  Packaging extension..."
-    avocado ext package -e "$package_name" --target "$target" --out-dir "$output_dir" --container-arg "--network" --container-arg "$NETWORK_NAME"
+    if ! avocado ext package -e "$package_name" --target "$target" --out-dir "$output_dir" --container-arg "--network" --container-arg "$NETWORK_NAME"; then
+        echo "  ✗ Failed to package extension" >&2
+        cd - > /dev/null
+        return 1
+    fi
     
     # Copy packages to repository (both packages and releases directories)
     local packages_target_ext_dir="$REPO_DIR/packages/$DISTRO_CODENAME/target/$target-ext"
@@ -670,8 +712,9 @@ for extension in "${EXTENSIONS[@]}"; do
         built_extensions+=("$extension")
         echo "✓ Successfully built extension: $extension"
     else
-        failed_extensions+=("$extension")
         echo "✗ Failed to build extension: $extension"
+        echo "Stopping build due to failure."
+        exit 1
     fi
 done
 
