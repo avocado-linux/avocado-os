@@ -1,5 +1,3 @@
-src_dir: ../../
-
 supported_targets:
 - raspberrypi4
 - raspberrypi5
@@ -40,10 +38,10 @@ ext:
       wpewebkit: '*'
 
     reterminal:
-      overlay: extensions/webkit/overlays/reterminal
+      overlay: overlays/reterminal
 
     reterminal-dm:
-      overlay: extensions/webkit/overlays/reterminal-dm
+      overlay: overlays/reterminal-dm
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}

@@ -1,5 +1,3 @@
-src_dir: ../../
-
 supported_targets: '*'
 
 distro:
@@ -16,7 +14,7 @@ ext:
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
 
-    overlay: extensions/peridio/overlay
+    overlay: overlay
 
     enable_services:
     - peridiod.service
