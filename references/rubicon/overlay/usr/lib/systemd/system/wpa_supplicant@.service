@@ -1,0 +1,17 @@
+[Unit]
+Description=WPA supplicant daemon (interface-specific version)
+Requires=sys-subsystem-net-devices-%i.device
+After=sys-subsystem-net-devices-%i.device
+Before=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/wpa_supplicant -c/etc/wpa_supplicant/wpa_supplicant-%I.conf -i%I
+ExecStartPost=/bin/sh -c 'sleep 5 && networkctl reload'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

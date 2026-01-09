@@ -1,0 +1,150 @@
+#!/bin/sh
+# Rubicon USB Gadget Setup Script
+# Configures USB-C as a composite gadget with serial (ACM) and network (ECM) functions
+
+set -e
+
+GADGET_NAME="rubicon"
+CONFIGFS_ROOT="/sys/kernel/config/usb_gadget"
+GADGET_PATH="${CONFIGFS_ROOT}/${GADGET_NAME}"
+
+# USB identifiers
+VENDOR_ID="0x1d6b"   # Linux Foundation
+PRODUCT_ID="0x0104"  # Multifunction Composite Gadget
+DEVICE_BCD="0x0100"  # Device version 1.0.0
+USB_BCD="0x0200"     # USB 2.0
+
+# Device strings
+MANUFACTURER="Avocado"
+PRODUCT="rubicon"
+SERIAL_NUMBER="$(cat /proc/cpuinfo | grep Serial | cut -d ' ' -f 2 || echo 'rubicon-0001')"
+
+# Configuration
+CONFIG_NAME="c.1"
+CONFIG_DESC="CDC ACM + ECM"
+
+# Function names
+ACM_FUNCTION="acm.usb0"
+ECM_FUNCTION="ecm.usb0"
+
+cleanup_gadget() {
+    if [ -d "${GADGET_PATH}" ]; then
+        echo "Cleaning up existing gadget configuration..."
+        
+        # Disable the gadget if enabled
+        if [ -e "${GADGET_PATH}/UDC" ]; then
+            echo "" > "${GADGET_PATH}/UDC" 2>/dev/null || true
+        fi
+        
+        # Remove function symlinks from config
+        for link in "${GADGET_PATH}/configs/${CONFIG_NAME}"/*; do
+            if [ -L "$link" ]; then
+                rm "$link" 2>/dev/null || true
+            fi
+        done
+        
+        # Remove strings directories
+        rmdir "${GADGET_PATH}/configs/${CONFIG_NAME}/strings/0x409" 2>/dev/null || true
+        rmdir "${GADGET_PATH}/configs/${CONFIG_NAME}" 2>/dev/null || true
+        
+        # Remove functions
+        rmdir "${GADGET_PATH}/functions/${ACM_FUNCTION}" 2>/dev/null || true
+        rmdir "${GADGET_PATH}/functions/${ECM_FUNCTION}" 2>/dev/null || true
+        
+        # Remove gadget strings
+        rmdir "${GADGET_PATH}/strings/0x409" 2>/dev/null || true
+        
+        # Remove gadget
+        rmdir "${GADGET_PATH}" 2>/dev/null || true
+    fi
+}
+
+setup_gadget() {
+    echo "Setting up USB gadget: ${GADGET_NAME}"
+    
+    # Load necessary modules
+    modprobe dwc2 || true
+    modprobe libcomposite || true
+    modprobe usb_f_acm || true
+    modprobe usb_f_ecm || true
+    
+    # Create gadget directory
+    mkdir -p "${GADGET_PATH}"
+    cd "${GADGET_PATH}"
+    
+    # Set USB identifiers
+    echo "${VENDOR_ID}" > idVendor
+    echo "${PRODUCT_ID}" > idProduct
+    echo "${DEVICE_BCD}" > bcdDevice
+    echo "${USB_BCD}" > bcdUSB
+    
+    # Set device class to miscellaneous (for composite devices)
+    echo "0xEF" > bDeviceClass
+    echo "0x02" > bDeviceSubClass
+    echo "0x01" > bDeviceProtocol
+    
+    # Create English strings
+    mkdir -p strings/0x409
+    echo "${SERIAL_NUMBER}" > strings/0x409/serialnumber
+    echo "${MANUFACTURER}" > strings/0x409/manufacturer
+    echo "${PRODUCT}" > strings/0x409/product
+    
+    # Create ACM function (serial port)
+    mkdir -p "functions/${ACM_FUNCTION}"
+    
+    # Create ECM function (ethernet)
+    mkdir -p "functions/${ECM_FUNCTION}"
+    # Set host MAC address (the connected computer will see this)
+    echo "aa:bb:cc:dd:ee:f1" > "functions/${ECM_FUNCTION}/host_addr"
+    # Set device MAC address (the Pi will use this)
+    echo "aa:bb:cc:dd:ee:f2" > "functions/${ECM_FUNCTION}/dev_addr"
+    
+    # Create configuration
+    mkdir -p "configs/${CONFIG_NAME}/strings/0x409"
+    echo "${CONFIG_DESC}" > "configs/${CONFIG_NAME}/strings/0x409/configuration"
+    echo 250 > "configs/${CONFIG_NAME}/MaxPower"
+    
+    # Link functions to configuration
+    ln -s "functions/${ACM_FUNCTION}" "configs/${CONFIG_NAME}/"
+    ln -s "functions/${ECM_FUNCTION}" "configs/${CONFIG_NAME}/"
+    
+    # Find UDC (USB Device Controller)
+    UDC=$(ls /sys/class/udc | head -n 1)
+    
+    if [ -z "${UDC}" ]; then
+        echo "Error: No USB Device Controller found"
+        exit 1
+    fi
+    
+    echo "Enabling gadget on UDC: ${UDC}"
+    echo "${UDC}" > UDC
+    
+    echo "USB gadget ${GADGET_NAME} configured successfully"
+    echo "  - Serial port: /dev/ttyGS0"
+    echo "  - Network interface: usb0"
+}
+
+# Check for configfs
+if [ ! -d "${CONFIGFS_ROOT}" ]; then
+    echo "Mounting configfs..."
+    mount -t configfs none /sys/kernel/config
+fi
+
+case "${1:-start}" in
+    start)
+        cleanup_gadget
+        setup_gadget
+        ;;
+    stop)
+        cleanup_gadget
+        ;;
+    restart)
+        cleanup_gadget
+        setup_gadget
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+

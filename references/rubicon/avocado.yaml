@@ -1,0 +1,120 @@
+supported_targets: 
+- raspberrypi4
+- reterminal
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+runtime:
+  dev:
+    stone_manifest: stone-raspberrypi4.json
+    stone_include_paths: 
+    - stone/{{ avocado.target }}
+    dependencies:
+      avocado-runtime: '{{ config.distro.version }}'
+      rubicon:
+        ext: rubicon
+      avocado_cli:
+        ext: avocado_cli
+      config:
+        ext: config-dev
+      docker:
+        ext: avocado-ext-docker
+        vsn: '*'
+      devtools:
+        ext: avocado-ext-dev
+        vsn: '*'
+      sshd:
+        ext: avocado-ext-sshd-dev
+        vsn: '*'
+      bsp:
+        ext: avocado-bsp-{{ avocado.target }}
+        vsn: '*'
+
+ext:
+  rubicon:
+    version: 0.1.0
+    overlay: overlay
+
+    modprobe:
+    - brcmfmac
+
+    enable_services:
+    - rubicon-usb-gadget.service
+    - rubicon-usb-network.service
+    - serial-getty@ttyGS0.service
+    - dnsmasq.service
+    - avahi-daemon.service
+    - wpa_supplicant@wlan0.service
+
+    on_merge:
+    - systemctl restart --no-block rubicon-usb-gadget.service
+    - systemctl restart --no-block rubicon-usb-network.service
+    - systemctl restart --no-block serial-getty@ttyGS0.service
+    - systemctl restart --no-block dnsmasq.service
+    - systemctl restart --no-block avahi-daemon.service
+    - systemctl restart --no-block wpa_supplicant@wlan0.service
+    - systemctl restart --no-block docker.service
+    - networkctl reload
+
+    on_unmerge:
+    - systemctl stop --no-block wpa_supplicant@wlan0.service
+    - systemctl stop --no-block avahi-daemon.service
+    - systemctl stop --no-block dnsmasq.service
+    - systemctl stop --no-block serial-getty@ttyGS0.service
+
+    dependencies:
+      dnsmasq: '*'
+      avahi-daemon: '*'
+      kernel-module-dwc2: '*'
+      kernel-module-libcomposite: '*'
+      kernel-module-usb-f-acm: '*'
+      kernel-module-usb-f-ecm: '*'
+  
+  avocado_cli:
+    version: 0.1.0
+
+    dependencies:
+      bash: '*'
+      avocado-cli-bin:
+        compile: avocado-cli-compile
+        install: avocado-cli-install.sh
+
+    sdk:
+      dependencies:
+        nativesdk-binutils: '*'
+        nativesdk-cargo: '*'
+        nativesdk-gcc: '*'
+        nativesdk-glibc-dev: '*'
+        nativesdk-libgcc-dev: '*'
+        nativesdk-rust: '*'
+        nativesdk-git: '*'
+        packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: '*'
+
+  config-dev:
+    version: 0.1.0
+
+    users:
+      root:
+        password: ''
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  container_args:
+  - --privileged
+  - --network=host
+  - -v /dev:/dev
+  - -v /sys:/sys
+  - --add-host=rubicon.local:10.55.0.1
+
+  compile:
+    avocado-cli-compile:
+      compile: avocado-cli-compile.sh
+      dependencies:
+        libstd-rs: '*'
+        libstd-rs-dev: '*'
+
+  dependencies:
+    avocado-sdk-toolchain: '{{ config.distro.version }}'
+    nativesdk-avocado-ext-dev: '*'

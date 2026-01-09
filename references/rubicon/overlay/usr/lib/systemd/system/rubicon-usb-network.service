@@ -1,0 +1,17 @@
+[Unit]
+Description=Rubicon USB Network Interface Configuration
+After=rubicon-usb-gadget.service
+Wants=rubicon-usb-gadget.service
+Before=dnsmasq.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ip link set usb0 up
+ExecStart=/sbin/ip addr add 10.55.0.1/24 dev usb0
+ExecStop=/sbin/ip addr del 10.55.0.1/24 dev usb0
+ExecStop=/sbin/ip link set usb0 down
+
+[Install]
+WantedBy=multi-user.target
+
