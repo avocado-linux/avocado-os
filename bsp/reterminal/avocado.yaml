@@ -2,7 +2,7 @@ src_dir: ../../
 
 default_target: reterminal
 supported_targets:
-- reterminal
+  - reterminal
 
 distro:
   version: 0.1.0
@@ -19,17 +19,17 @@ extensions:
     vendor: Avocado Linux <info@avocadolinux.org>
 
     types:
-    - sysext
-    - confext
+      - sysext
+      - confext
 
     modprobe:
-    - gpio-pca953x
-    - rtc-pcf8563
+      - gpio-pca953x
+      - rtc-pcf8563
 
     on_merge:
-    - udevadm control --reload
-    - udevadm trigger --type=subsystems --action=add --settle
-    - udevadm trigger --type=devices --action=add --settle
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
 
     packages:
       fwup: '*'

@@ -16,6 +16,21 @@ runtimes:
       - avocado-bsp-{{ avocado.target }}
 
 extensions:
+  avocado-ext-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-sshd-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: '*'
+
   app:
     version: 0.1.0
 
@@ -32,10 +47,10 @@ extensions:
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
   container_args:
-  - --privileged
-  - --network=host
-  - -v /dev:/dev
-  - -v /sys:/sys
+    - --privileged
+    - --network=host
+    - -v /dev:/dev
+    - -v /sys:/sys
 
   packages:
     avocado-sdk-toolchain: '{{ avocado.distro.version }}'

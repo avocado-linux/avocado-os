@@ -2,7 +2,7 @@ src_dir: ../../
 
 default_target: icam-540
 supported_targets:
-- icam-540
+  - icam-540
 
 distro:
   version: 0.1.0
@@ -19,18 +19,18 @@ extensions:
     vendor: Avocado Linux <info@avocadolinux.org>
 
     types:
-    - sysext
-    - confext
+      - sysext
+      - confext
 
     modprobe:
-    - gpio-pca953x
+      - gpio-pca953x
 
     on_merge:
-    - gpioset -t 500,500,0 -c 2 5=0
-    - udevadm control --reload
-    - udevadm trigger --type=subsystems --action=add --settle
-    - udevadm trigger --type=devices --action=add --settle
-    - nvbootctrl verify
+      - gpioset -t 500,500,0 -c 2 5=0
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+      - nvbootctrl verify
 
     packages:
       kernel-module-aes-ce-blk: '*'

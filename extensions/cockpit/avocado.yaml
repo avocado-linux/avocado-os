@@ -15,10 +15,10 @@ extensions:
     vendor: Avocado Linux <info@avocadolinux.org>
 
     enable_services:
-    - cockpit.service
+      - cockpit.service
 
     on_merge:
-    - systemctl restart --no-block cockpit.service
+      - systemctl restart --no-block cockpit.service
 
     packages:
       bash: '*'

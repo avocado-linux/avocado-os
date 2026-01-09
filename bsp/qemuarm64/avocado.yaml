@@ -2,7 +2,7 @@ src_dir: ../../
 
 default_target: qemuarm64
 supported_targets:
-- qemuarm64
+  - qemuarm64
 
 distro:
   version: 0.1.0
@@ -19,9 +19,9 @@ extensions:
     vendor: Avocado Linux <info@avocadolinux.org>
 
     on_merge:
-    - udevadm control --reload
-    - udevadm trigger --type=subsystems --action=add --settle
-    - udevadm trigger --type=devices --action=add --settle
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
 
     packages:
 

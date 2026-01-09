@@ -2,7 +2,7 @@ src_dir: ../../
 
 default_target: raspberrypi4
 supported_targets:
-- raspberrypi4
+  - raspberrypi4
 
 distro:
   version: 0.1.0
@@ -19,11 +19,11 @@ extensions:
     vendor: Avocado Linux <info@avocadolinux.org>
 
     types:
-    - sysext
-    - confext
+      - sysext
+      - confext
 
     on_merge:
-    - udevadm trigger --action=add
+      - udevadm trigger --action=add
 
     packages:
       fwup: '*'

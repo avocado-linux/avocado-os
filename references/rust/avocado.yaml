@@ -16,6 +16,21 @@ runtimes:
       - avocado-bsp-{{ avocado.target }}
 
 extensions:
+  avocado-ext-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-sshd-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: '*'
+
   config-dev:
     version: 0.1.0
 
@@ -45,10 +60,10 @@ sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
 
   container_args:
-  - --network=host
-  - --privileged
-  - -v /dev:/dev
-  - -v /sys:/sys
+    - --network=host
+    - --privileged
+    - -v /dev:/dev
+    - -v /sys:/sys
 
   compile:
     example-rust-app:

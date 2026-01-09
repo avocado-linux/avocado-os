@@ -1,11 +1,11 @@
 supported_targets:
-- raspberrypi5
-- raspberrypi4
-- reterminal
-- reterminal-dm
-- icam-540
-- jetson-orin-nano-devkit
-- jetson-agx-orin-devkit
+  - raspberrypi5
+  - raspberrypi4
+  - reterminal
+  - reterminal-dm
+  - icam-540
+  - jetson-orin-nano-devkit
+  - jetson-agx-orin-devkit
 
 distro:
   version: 0.1.0
@@ -24,6 +24,26 @@ runtimes:
       - avocado-bsp-{{ avocado.target }}
 
 extensions:
+  avocado-ext-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-sshd-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-webkit:
+    source:
+      type: package
+      version: '*'
+
+  avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: '*'
+
   app:
     version: 0.1.0
 
@@ -41,10 +61,10 @@ sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
 
   container_args:
-  - --network=host
-  - --privileged
-  - -v /dev:/dev
-  - -v /sys:/sys
+    - --network=host
+    - --privileged
+    - -v /dev:/dev
+    - -v /sys:/sys
 
   packages:
     avocado-sdk-toolchain: '*'

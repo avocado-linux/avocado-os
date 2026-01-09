@@ -17,10 +17,10 @@ extensions:
     overlay: overlay
 
     enable_services:
-    - peridiod.service
+      - peridiod.service
 
     on_merge:
-    - systemctl restart --no-block peridiod.service
+      - systemctl restart --no-block peridiod.service
 
     packages:
       peridiod: '*'

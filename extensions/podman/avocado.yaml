@@ -1,8 +1,8 @@
 supported_targets:
-- raspberrypi4
-- raspberrypi5
-- reterminal
-- reterminal-dm
+  - raspberrypi4
+  - raspberrypi5
+  - reterminal
+  - reterminal-dm
 
 distro:
   version: 0.1.0

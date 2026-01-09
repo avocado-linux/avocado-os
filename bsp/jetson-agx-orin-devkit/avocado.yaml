@@ -2,7 +2,7 @@ src_dir: ../../
 
 default_target: jetson-agx-orin-devkit
 supported_targets:
-- jetson-agx-orin-devkit
+  - jetson-agx-orin-devkit
 
 distro:
   version: 0.1.0
@@ -19,14 +19,14 @@ extensions:
     vendor: Avocado Linux <info@avocadolinux.org>
 
     types:
-    - sysext
-    - confext
+      - sysext
+      - confext
 
     on_merge:
-    - udevadm control --reload
-    - udevadm trigger --type=subsystems --action=add --settle
-    - udevadm trigger --type=devices --action=add --settle
-    - nvbootctrl verify
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+      - nvbootctrl verify
 
     packages:
       kernel-module-at24: '*'

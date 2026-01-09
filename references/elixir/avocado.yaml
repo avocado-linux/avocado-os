@@ -17,6 +17,26 @@ runtimes:
       - avocado-bsp-{{ avocado.target }}
 
 extensions:
+  avocado-ext-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-sshd-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-webkit:
+    source:
+      type: package
+      version: '*'
+
+  avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: '*'
+
   config-dev:
     version: 0.1.0
 
@@ -30,11 +50,11 @@ extensions:
     overlay: overlay
 
     enable_services:
-    - ref-elixir.service
+      - ref-elixir.service
 
     on_merge:
-    - systemctl restart --no-block ref-elixir.service
-    - systemctl restart --no-block cog.service
+      - systemctl restart --no-block ref-elixir.service
+      - systemctl restart --no-block cog.service
 
     packages:
       example-elixir-app:
@@ -69,10 +89,10 @@ sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
 
   container_args:
-  - --privileged
-  - --network=host
-  - -v /dev:/dev
-  - -v /sys:/sys
+    - --privileged
+    - --network=host
+    - -v /dev:/dev
+    - -v /sys:/sys
 
   compile:
     example-elixir-app:
@@ -82,4 +102,4 @@ sdk:
 
   packages:
     avocado-sdk-toolchain: '{{ avocado.distro.version }}'
-    nativesdk-avocado-ext-dev: '*'
+

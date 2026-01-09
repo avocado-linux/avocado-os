@@ -15,7 +15,7 @@ extensions:
     vendor: Avocado Linux <info@avocadolinux.org>
 
     on_merge:
-    - btrfs filesystem resize max /var
+      - btrfs filesystem resize max /var
 
     packages:
       avocado-hitl: '*'

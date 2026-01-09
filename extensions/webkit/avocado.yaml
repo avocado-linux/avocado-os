@@ -1,11 +1,11 @@
 supported_targets:
-- raspberrypi4
-- raspberrypi5
-- reterminal
-- reterminal-dm
-- icam-540
-- jetson-orin-nano-devkit
-- jetson-agx-orin-devkit
+  - raspberrypi4
+  - raspberrypi5
+  - reterminal
+  - reterminal-dm
+  - icam-540
+  - jetson-orin-nano-devkit
+  - jetson-agx-orin-devkit
 
 distro:
   version: 0.1.0
@@ -22,10 +22,10 @@ extensions:
     vendor: Avocado Linux <info@avocadolinux.org>
 
     enable_services:
-    - cog.service
+      - cog.service
 
     on_merge:
-    - systemctl restart --no-block cog.service
+      - systemctl restart --no-block cog.service
 
     packages:
       ca-certificates: '*'

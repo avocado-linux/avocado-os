@@ -17,10 +17,10 @@ extensions:
     overlay: overlay
 
     enable_services:
-    - sshd.socket
+      - sshd.socket
 
     on_merge:
-    - systemctl restart --no-block sshd.socket
+      - systemctl restart --no-block sshd.socket
 
     packages:
       openssh: '*'
