@@ -1,0 +1,14 @@
+# Ignore the cloned v4l2loopback repository
+v4l2loopback/
+
+# Ignore build artifacts
+*.ko
+*.o
+*.mod.c
+*.mod
+.*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+
+

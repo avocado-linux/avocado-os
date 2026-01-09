@@ -1,0 +1,57 @@
+supported_targets:
+- jetson-orin-nano-devkit
+- jetson-agx-orin-devkit
+- raspberrypi4
+- raspberrypi5
+- qemuarm64
+- qemux86-64
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+extensions:
+  avocado-ext-kmod-v4l2loopback:
+    version: '{{ avocado.distro.version }}'
+    release: r0
+    summary: V4L2 loopback kernel module
+    description: Virtual video device kernel module for V4L2
+    license: GPL-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    modprobe:
+      - videodev
+      - v4l2loopback
+
+    packages:
+      kernel-module-videodev: '*'
+      v4l2loopback-module:
+        compile: v4l2loopback-build
+        install: v4l2loopback-install.sh
+
+    sdk:
+      packages:
+        nativesdk-binutils: '*'
+        nativesdk-gcc: '*'
+        nativesdk-glibc-dev: '*'
+        nativesdk-libgcc-dev: '*'
+        nativesdk-kmod: '*'
+        nativesdk-make: '*'
+        nativesdk-git: '*'
+        # Required for building kernel scripts (make modules_prepare)
+        nativesdk-flex: '*'
+        nativesdk-bison: '*'
+        nativesdk-bc: '*'
+        nativesdk-openssl-dev: '*'
+        nativesdk-elfutils-dev: '*'
+        packagegroup-cross-canadian-avocado-{{ avocado.target }}: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+
+  compile:
+    v4l2loopback-build:
+      compile: v4l2loopback-compile.sh
+      packages:
+        kernel-devsrc: '*'

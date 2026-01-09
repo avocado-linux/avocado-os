@@ -4,9 +4,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-ext-sshd-dev:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: SSH server with root login
     description: SSH server that allows root login with no password. DO NOT USE IN PRODUCTION.
@@ -22,10 +22,8 @@ ext:
     on_merge:
     - systemctl restart --no-block sshd.socket
 
-    dependencies:
+    packages:
       openssh: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
-  dependencies:
-    avocado-sdk-toolchain: '*'
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

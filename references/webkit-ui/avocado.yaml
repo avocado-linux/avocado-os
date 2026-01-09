@@ -11,32 +11,23 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-runtime:
+runtimes:
   dev:
-    dependencies:
-      avocado-runtime: '{{ config.distro.version }}'
-      app:
-        ext: app
-      config:
-        ext: config-dev
-      devtools:
-        ext: avocado-ext-dev
-        vsn: '*'
-      sshd-dev:
-        ext: avocado-ext-sshd-dev
-        vsn: '*'
-      webkit:
-        ext: avocado-ext-webkit
-        vsn: '*'
-      bsp:
-        ext: avocado-bsp-{{ avocado.target }}
-        vsn: '*'
+    packages:
+      avocado-runtime: '{{ avocado.distro.version }}'
+    extensions:
+      - app
+      - config-dev
+      - avocado-ext-dev
+      - avocado-ext-sshd-dev
+      - avocado-ext-webkit
+      - avocado-bsp-{{ avocado.target }}
 
-ext:
+extensions:
   app:
     version: 0.1.0
 
-    dependencies:
+    packages:
       libdrm-tests: '*'
 
   config-dev:
@@ -47,7 +38,7 @@ ext:
         password: ''
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
 
   container_args:
   - --network=host
@@ -55,7 +46,7 @@ sdk:
   - -v /dev:/dev
   - -v /sys:/sys
 
-  dependencies:
+  packages:
     avocado-sdk-toolchain: '*'
     nativesdk-avocado-hitl: '*'
     nativesdk-openssh-scp: '*'

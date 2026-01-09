@@ -8,9 +8,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-ext-podman:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: Avocado Podman container engine
     description: Avocado Podman container engine
@@ -18,12 +18,10 @@ ext:
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
 
-    dependencies:
+    packages:
       kernel-module-br-netfilter: '*'
       kernel-module-bridge: '*'
       podman: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
-  dependencies:
-    avocado-sdk-toolchain: '*'
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

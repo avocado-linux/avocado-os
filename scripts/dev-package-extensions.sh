@@ -5,19 +5,15 @@ set -e # Exit immediately if a command exits with a non-zero status.
 # Default configuration
 DEFAULT_REPO_DIR="/tmp/avocado-dev-repo"
 DEFAULT_DISTRO_CODENAME="latest/apollo/edge"
-DEFAULT_CONTAINER_NAME="avocado-dev-repo"
-DEFAULT_NETWORK_NAME="avocado-dev-network"
-DEFAULT_REPO_URL="http://$DEFAULT_CONTAINER_NAME"
 DEFAULT_RELEASE_DIR=""  # Empty means auto-detect latest
 DEFAULT_SKIP_CLEANUP=false
-DEFAULT_SKIP_PACKAGE=false
 
 # Function to show usage
 usage() {
     cat << EOF
 Usage: $0 [OPTIONS] -t <target> [extension1] [extension2] ...
 
-Build extensions for a specific target using the development repository.
+Package extensions for a specific target using the development repository.
 
 Required:
     -t, --target TARGET     Target name (e.g., qemux86-64, raspberrypi4)
@@ -25,30 +21,31 @@ Required:
 Options:
     -r, --repo-dir DIR      Repository directory (default: $DEFAULT_REPO_DIR)
     -d, --distro CODENAME   Distribution codename (default: $DEFAULT_DISTRO_CODENAME)
-    -u, --repo-url URL      Repository URL (default: http://<container-name>)
-    -n, --container-name NAME   Repository container name (default: $DEFAULT_CONTAINER_NAME)
-    --network NETWORK       Docker network name (default: $DEFAULT_NETWORK_NAME)
     --release-dir DIR       Specific release directory name (default: auto-detect latest)
-    --skip-cleanup          Skip cleaning up extension build artifacts after building
-    --skip-package          Skip packaging extensions after building
-    --all                   Build all extensions that support the target
+    --skip-cleanup          Skip cleaning up extension build artifacts after packaging
+    --all                   Package all extensions that support the target
     --list                  List available extensions and their supported targets
     -h, --help              Show this help message
 
 Examples:
-    $0 -t qemux86-64 --all                     # Build all extensions for qemux86-64
-    $0 -t raspberrypi4 docker sshd             # Build specific extensions
-    $0 -t raspberrypi4 bsp-raspberrypi4        # Build BSP extension for raspberrypi4
+    $0 -t qemux86-64 --all                     # Package all extensions for qemux86-64
+    $0 -t raspberrypi4 docker sshd             # Package specific extensions
+    $0 -t raspberrypi4 bsp-raspberrypi4        # Package BSP extension for raspberrypi4
     $0 --list                                   # List all extensions
-    $0 -t qemux86-64 -u http://my-repo-container dev   # Use custom repo container
-    $0 -t qemux86-64 --all --skip-cleanup      # Build all extensions but skip cleanup
-    $0 -t qemux86-64 --all --skip-package      # Build only, skip packaging
+    $0 -t qemux86-64 --all --skip-cleanup      # Package all extensions but skip cleanup
 
 This script:
-1. Checks that the repository server is running
-2. Discovers available extensions (both regular and BSP) and their supported targets
-3. Builds the specified extensions for the target using 'avocado build'
-4. Calls dev-package-extensions.sh to package and deploy (unless --skip-package)
+1. Discovers available extensions (both regular and BSP) and their supported targets
+2. Packages the specified extensions for the target using 'avocado ext package'
+3. Copies built packages to the repository
+4. Updates extension repository metadata
+5. Generates targets.json from target fragments
+6. Cleans up extension build artifacts (unless --skip-cleanup is used)
+
+Note: This script does not require the repository server to be running.
+
+The built extension packages will be available in:
+    <repo-dir>/packages/<distro-codename>/target/<target>-ext/
 
 EOF
 }
@@ -83,27 +80,6 @@ check_avocado_cli() {
         echo "  chmod +x /usr/local/bin/avocado" >&2
         exit 1
     fi
-}
-
-# Function to check if repository server is running
-check_repo_server() {
-    if ! docker ps --filter "name=^${CONTAINER_NAME}$" --filter "status=running" --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"; then
-        echo "Error: Repository server container '$CONTAINER_NAME' is not running" >&2
-        echo "Start it first with: ./scripts/dev-start-repo.sh -r '$REPO_DIR'" >&2
-        exit 1
-    fi
-    
-    # Test if the repository is accessible via localhost port mapping
-    # (The avocado CLI will use the container name, but we test via localhost)
-    LOCAL_REPO_URL="http://localhost:8080"
-    if ! curl -s --connect-timeout 5 "$LOCAL_REPO_URL" > /dev/null; then
-        echo "Error: Repository server is not accessible via $LOCAL_REPO_URL" >&2
-        echo "Check that the container is running and port 8080 is mapped" >&2
-        echo "The avocado CLI will connect to: $REPO_URL" >&2
-        exit 1
-    fi
-    
-    echo "✓ Repository server is accessible (avocado CLI will use: $REPO_URL)"
 }
 
 # Function to parse YAML supported_targets field (handles both inline and multi-line list formats)
@@ -242,12 +218,64 @@ get_extensions_for_target() {
     printf '%s\n' "${extensions[@]}"
 }
 
-# Function to build extension
-build_extension() {
+# Function to clean up extension build artifacts
+cleanup_extension() {
     local extension="$1"
     local target="$2"
     
-    echo "Building extension: $extension for target: $target"
+    echo "Cleaning up extension: $extension for target: $target"
+    
+    # Determine extension directory and package name based on type
+    local ext_dir=""
+    local package_name=""
+    
+    if [[ "$extension" == bsp-* ]]; then
+        # BSP extension
+        local bsp_name="${extension#bsp-}"
+        ext_dir="bsp/$bsp_name"
+        package_name="avocado-bsp-$bsp_name"
+    else
+        # Regular extension
+        ext_dir="extensions/$extension"
+        package_name="avocado-ext-$extension"
+    fi
+    
+    if [ ! -d "$ext_dir" ]; then
+        echo "  ⚠ Extension directory '$ext_dir' not found, skipping cleanup" >&2
+        return 0
+    fi
+    
+    # Change to extension directory
+    cd "$ext_dir"
+    
+    # Parse src_dir from avocado.yaml and remove .avocado folder from there
+    local src_dir=$(grep '^src_dir:' avocado.yaml | sed 's/src_dir: *//' | tr -d '"' | tr -d "'" | xargs)
+    if [ -z "$src_dir" ]; then
+        src_dir="."
+    fi
+    local avocado_dir="$src_dir/.avocado"
+    if [ -d "$avocado_dir" ]; then
+        echo "  Removing .avocado folder from $avocado_dir..."
+        rm -rf "$avocado_dir"
+    fi
+    
+    echo "  Cleaning extension environment..."
+    if avocado clean --target "$target" 2>/dev/null; then
+        echo "  ✓ Extension $extension cleaned successfully"
+    else
+        echo "  ⚠ Extension $extension cleanup had issues"
+    fi
+    
+    # Return to original directory
+    cd - > /dev/null
+}
+
+# Function to package extension
+package_extension() {
+    local extension="$1"
+    local target="$2"
+    
+    echo "Packaging extension: $extension for target: $target"
     
     # Determine extension directory and package name based on type
     local ext_dir=""
@@ -288,33 +316,170 @@ build_extension() {
         rm -rf "$avocado_dir"
     fi
     
-    # Set up environment for avocado CLI
-    export AVOCADO_SDK_REPO_URL="$REPO_URL"
-    export AVOCADO_CONTAINER_NETWORK="$NETWORK_NAME"
-    export AVOCADO_SDK_REPO_RELEASE="$DISTRO_CODENAME"
+    local output_dir="$extension-$target"
     
-    echo "  Building extension with avocado build..."
-    if ! avocado build -e "$package_name" --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"; then
-        echo "  ✗ Failed to build extension" >&2
+    # Clean up any leftover output directory from previous runs
+    if [ -d "$output_dir" ]; then
+        echo "  Removing leftover output directory: $output_dir"
+        rm -rf "$output_dir"
+    fi
+    
+    echo "  Packaging extension with avocado ext package..."
+    if ! avocado ext package -e "$package_name" --target "$target" --out-dir "$output_dir"; then
+        echo "  ✗ Failed to package extension" >&2
         cd - > /dev/null
         return 1
+    fi
+    
+    # Copy packages to repository (both packages and releases directories)
+    local packages_target_ext_dir="$REPO_DIR/packages/$DISTRO_CODENAME/target/$target-ext"
+    local releases_target_ext_dir="$REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/target/$target-ext"
+    local packages_sdk_dir="$REPO_DIR/packages/$DISTRO_CODENAME/sdk/$target"
+    local releases_sdk_dir="$REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/sdk/$target"
+    
+    echo "  Copying packages to repository:"
+    echo "    Extension packages: $packages_target_ext_dir"
+    echo "    Extension releases: $releases_target_ext_dir"
+    echo "    SDK packages: $packages_sdk_dir"
+    echo "    SDK releases: $releases_sdk_dir"
+    
+    mkdir -p "$packages_target_ext_dir"
+    mkdir -p "$releases_target_ext_dir"
+    mkdir -p "$packages_sdk_dir"
+    mkdir -p "$releases_sdk_dir"
+    
+    if [ -d "$output_dir" ]; then
+        local regular_rpm_count=0
+        local sdk_rpm_count=0
+        
+        # Process each RPM package individually to handle all_avocadosdk packages specially
+        while IFS= read -r -d '' rpm_file; do
+            local rpm_basename=$(basename "$rpm_file")
+            
+            if [[ "$rpm_basename" == *"all_avocadosdk"* ]]; then
+                # Copy all_avocadosdk packages to SDK directories
+                cp "$rpm_file" "$packages_sdk_dir/"
+                cp "$rpm_file" "$releases_sdk_dir/"
+                ((sdk_rpm_count++))
+                echo "    SDK: $rpm_basename"
+            else
+                # Copy regular packages to extension directories
+                cp "$rpm_file" "$packages_target_ext_dir/"
+                cp "$rpm_file" "$releases_target_ext_dir/"
+                ((regular_rpm_count++))
+                echo "    EXT: $rpm_basename"
+            fi
+        done < <(find "$output_dir" -name "*.rpm" -print0)
+        
+        echo "  ✓ Copied $regular_rpm_count extension packages and $sdk_rpm_count SDK packages"
+        
+        # Clean up output directory after copying packages
+        echo "  Removing output directory: $output_dir"
+        rm -rf "$output_dir"
+    else
+        echo "  ⚠ No output directory found: $output_dir"
     fi
     
     # Return to original directory
     cd - > /dev/null
     
-    echo "  ✓ Extension $extension built successfully for $target"
+    echo "  ✓ Extension $extension packaged successfully for $target"
+}
+
+# Function to update extension metadata
+update_extension_metadata() {
+    echo "Updating extension repository metadata..."
+    echo "Extension metadata will use relative paths to packages"
+    
+    # Update metadata for both packages and releases directories
+    local packages_dir="$REPO_DIR/packages/$DISTRO_CODENAME"
+    local releases_dir="$REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR"
+    
+    echo "Updating extension packages metadata..."
+    ./repo/update-metadata-extensions.sh "$packages_dir" "" "$releases_dir"
+    
+    if [ $? -eq 0 ]; then
+        echo "✓ Extension metadata updated successfully"
+    else
+        echo "✗ Extension metadata update failed" >&2
+        return 1
+    fi
+    
+    echo "Updating SDK packages metadata..."
+    ./repo/update-metadata-sdk.sh "$packages_dir" "" "$releases_dir"
+    
+    if [ $? -eq 0 ]; then
+        echo "✓ SDK metadata updated successfully"
+    else
+        echo "✗ SDK metadata update failed" >&2
+        return 1
+    fi
+    
+    # Generate targets.json file from fragments
+    echo "Generating targets.json file..."
+    
+    # Find the staging directory that matches our release
+    local staging_base_dir="$REPO_DIR/staging"
+    local fragments_dir=""
+    local targets_json_file="$releases_dir/targets.json"
+    local persistent_targets_file="$staging_base_dir/$DISTRO_CODENAME/targets.json"
+    
+    if [ -d "$staging_base_dir" ]; then
+        # Look for staging directory matching our release ID
+        local staging_dir="$staging_base_dir/$RELEASE_DIR"
+        
+        if [ -d "$staging_dir/fragments" ]; then
+            fragments_dir="$staging_dir/fragments"
+            echo "Using fragments from staging directory: $staging_dir"
+        else
+            # Fallback: find the most recent staging directory with fragments
+            local latest_staging_dir=$(find "$staging_base_dir" -maxdepth 1 -type d -not -path "$staging_base_dir" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)
+            
+            if [ -n "$latest_staging_dir" ] && [ -d "$latest_staging_dir/fragments" ]; then
+                fragments_dir="$latest_staging_dir/fragments"
+                echo "Using fragments from latest staging directory: $latest_staging_dir"
+            fi
+        fi
+    fi
+    
+    if [ -n "$fragments_dir" ] && [ -d "$fragments_dir" ]; then
+        # Count fragments to provide better feedback
+        local fragment_count=$(find "$fragments_dir" -name "*-fragment.json" -type f | wc -l)
+        echo "Found $fragment_count target fragment(s) in $fragments_dir"
+        
+        # Check for existing persistent targets.json in staging directory
+        if [ -f "$persistent_targets_file" ] && [ -s "$persistent_targets_file" ]; then
+            echo "Found existing persistent targets.json: $persistent_targets_file"
+            echo "Will merge with existing targets to preserve all available targets"
+            ./repo/aggregate-targets.sh "$fragments_dir" "$targets_json_file" "$persistent_targets_file"
+        else
+            echo "No existing persistent targets.json found, creating new file"
+            ./repo/aggregate-targets.sh "$fragments_dir" "$targets_json_file"
+        fi
+        
+        if [ $? -eq 0 ]; then
+            echo "✓ targets.json generated successfully from $fragment_count target(s)"
+            
+            # Update the persistent targets.json in staging directory for future builds
+            echo "Updating persistent targets.json in staging directory"
+            mkdir -p "$(dirname "$persistent_targets_file")"
+            cp "$targets_json_file" "$persistent_targets_file"
+        else
+            echo "✗ targets.json generation failed" >&2
+            return 1
+        fi
+    else
+        echo "⚠ No fragments directory found in staging, skipping targets.json generation"
+        echo "  Expected location: $staging_base_dir/$RELEASE_DIR/fragments/"
+        echo "  This is normal if no distro packages have been synced yet"
+    fi
 }
 
 # Parse command line arguments
 REPO_DIR="$DEFAULT_REPO_DIR"
 DISTRO_CODENAME="$DEFAULT_DISTRO_CODENAME"
-REPO_URL="$DEFAULT_REPO_URL"
-CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
-NETWORK_NAME="$DEFAULT_NETWORK_NAME"
 RELEASE_DIR="$DEFAULT_RELEASE_DIR"
 SKIP_CLEANUP="$DEFAULT_SKIP_CLEANUP"
-SKIP_PACKAGE="$DEFAULT_SKIP_PACKAGE"
 TARGET=""
 EXTENSIONS=()
 BUILD_ALL=false
@@ -334,28 +499,12 @@ while [[ $# -gt 0 ]]; do
             DISTRO_CODENAME="$2"
             shift 2
             ;;
-        -u|--repo-url)
-            REPO_URL="$2"
-            shift 2
-            ;;
-        -n|--container-name)
-            CONTAINER_NAME="$2"
-            shift 2
-            ;;
-        --network)
-            NETWORK_NAME="$2"
-            shift 2
-            ;;
         --release-dir)
             RELEASE_DIR="$2"
             shift 2
             ;;
         --skip-cleanup)
             SKIP_CLEANUP=true
-            shift
-            ;;
-        --skip-package)
-            SKIP_PACKAGE=true
             shift
             ;;
         --all)
@@ -385,7 +534,7 @@ done
 # Convert relative path to absolute path
 REPO_DIR="$(realpath "$REPO_DIR")"
 
-echo "=== Avocado Development Extension Builder ==="
+echo "=== Avocado Development Extension Packager ==="
 
 # Handle list-only mode
 if [ "$LIST_ONLY" = true ]; then
@@ -402,7 +551,7 @@ fi
 
 # Check prerequisites
 check_avocado_cli
-check_repo_server
+# Note: Repository server is not required for packaging, only for building
 
 # Determine release directory
 if [ -z "$RELEASE_DIR" ]; then
@@ -425,20 +574,12 @@ echo "Target: $TARGET"
 echo "Repository directory: $REPO_DIR"
 echo "Distribution codename: $DISTRO_CODENAME"
 echo "Release directory: $RELEASE_DIR"
-echo "Container name: $CONTAINER_NAME"
-echo "Network name: $NETWORK_NAME"
 echo "Skip cleanup: $SKIP_CLEANUP"
-echo "Skip package: $SKIP_PACKAGE"
-echo ""
-echo "Docker networking configuration:"
-echo "  Repository URL (for avocado CLI): $REPO_URL"
-echo "  Avocado containers will connect via Docker network: $NETWORK_NAME"
-echo "  All avocado commands will use --container-arg --network --container-arg $NETWORK_NAME"
 echo ""
 
-# Determine which extensions to build
+# Determine which extensions to package
 if [ "$BUILD_ALL" = true ]; then
-    echo "Building all extensions that support target: $TARGET"
+    echo "Packaging all extensions that support target: $TARGET"
     mapfile -t EXTENSIONS < <(get_extensions_for_target "$TARGET")
     
     if [ ${#EXTENSIONS[@]} -eq 0 ]; then
@@ -446,7 +587,7 @@ if [ "$BUILD_ALL" = true ]; then
         exit 0
     fi
     
-    echo "Extensions to build: ${EXTENSIONS[*]}"
+    echo "Extensions to package: ${EXTENSIONS[*]}"
 elif [ ${#EXTENSIONS[@]} -eq 0 ]; then
     echo "Error: No extensions specified. Use --all or specify extension names" >&2
     usage >&2
@@ -483,67 +624,48 @@ if [ "$BUILD_ALL" = false ]; then
     echo ""
 fi
 
-# Build extensions
-echo "Building ${#EXTENSIONS[@]} extension(s)..."
+# Package extensions
+echo "Packaging ${#EXTENSIONS[@]} extension(s)..."
 failed_extensions=()
-built_extensions=()
+packaged_extensions=()
 
 for extension in "${EXTENSIONS[@]}"; do
     echo ""
-    echo "--- Building $extension ---"
-    if build_extension "$extension" "$TARGET"; then
-        built_extensions+=("$extension")
-        echo "✓ Successfully built extension: $extension"
+    echo "--- Packaging $extension ---"
+    if package_extension "$extension" "$TARGET"; then
+        packaged_extensions+=("$extension")
+        echo "✓ Successfully packaged extension: $extension"
     else
-        echo "✗ Failed to build extension: $extension"
-        echo "Stopping build due to failure."
+        echo "✗ Failed to package extension: $extension"
+        echo "Stopping packaging due to failure."
         exit 1
     fi
 done
 
-echo ""
-echo "=== Build Complete ==="
-echo "✓ All ${#EXTENSIONS[@]} extension(s) built successfully"
+# Clean up packaged extensions unless skipped
+if [ "$SKIP_CLEANUP" = false ] && [ ${#packaged_extensions[@]} -gt 0 ]; then
+    echo ""
+    echo "--- Cleaning up extension build artifacts ---"
+    for extension in "${packaged_extensions[@]}"; do
+        cleanup_extension "$extension" "$TARGET"
+    done
+fi
 
-# Call packaging script unless skipped
-if [ "$SKIP_PACKAGE" = false ]; then
-    echo ""
-    echo "=== Packaging Extensions ==="
-    
-    # Build the arguments for the packaging script
-    PACKAGE_ARGS=(
-        --target "$TARGET"
-        --repo-dir "$REPO_DIR"
-        --distro "$DISTRO_CODENAME"
-        --repo-url "$REPO_URL"
-        --container-name "$CONTAINER_NAME"
-        --network "$NETWORK_NAME"
-        --release-dir "$RELEASE_DIR"
-    )
-    
-    if [ "$SKIP_CLEANUP" = true ]; then
-        PACKAGE_ARGS+=(--skip-cleanup)
-    fi
-    
-    # Pass the extensions to package
-    PACKAGE_ARGS+=("${built_extensions[@]}")
-    
-    # Get the directory of this script to find the packaging script
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    
-    "$SCRIPT_DIR/dev-package-extensions.sh" "${PACKAGE_ARGS[@]}"
-    
-    if [ $? -eq 0 ]; then
-        echo "✓ Packaging completed successfully"
-    else
-        echo "✗ Packaging failed"
-        exit 1
-    fi
+echo ""
+
+# Update metadata if any extensions were packaged successfully
+if [ ${#failed_extensions[@]} -lt ${#EXTENSIONS[@]} ]; then
+    update_extension_metadata
+fi
+
+# Report results
+echo ""
+echo "=== Packaging Complete ==="
+if [ ${#failed_extensions[@]} -eq 0 ]; then
+    echo "✓ All ${#EXTENSIONS[@]} extension(s) packaged successfully"
 else
-    echo ""
-    echo "Skipping packaging (--skip-package was specified)"
-    echo "To package extensions later, run:"
-    echo "  ./scripts/dev-package-extensions.sh -t $TARGET ${built_extensions[*]}"
+    echo "✓ $((${#EXTENSIONS[@]} - ${#failed_extensions[@]})) extension(s) packaged successfully"
+    echo "✗ ${#failed_extensions[@]} extension(s) failed: ${failed_extensions[*]}"
 fi
 
 echo ""
@@ -553,4 +675,8 @@ echo "  Extension releases: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/tar
 echo "  SDK packages: $REPO_DIR/packages/$DISTRO_CODENAME/sdk/$TARGET/"
 echo "  SDK releases: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/sdk/$TARGET/"
 echo "  targets.json: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR/targets.json"
-echo "Repository URL: $REPO_URL/"
+
+if [ ${#failed_extensions[@]} -gt 0 ]; then
+    exit 1
+fi
+

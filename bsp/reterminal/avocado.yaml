@@ -8,9 +8,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-bsp-reterminal:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: Board support for the ReTerminal
     description: Board support for the ReTerminal
@@ -31,7 +31,7 @@ ext:
     - udevadm trigger --type=subsystems --action=add --settle
     - udevadm trigger --type=devices --action=add --settle
 
-    dependencies:
+    packages:
       fwup: '*'
       kernel-module-bcm2835-codec: '*'
       kernel-module-bcm2835-isp: '*'
@@ -75,4 +75,4 @@ ext:
       kernel-module-videodev: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

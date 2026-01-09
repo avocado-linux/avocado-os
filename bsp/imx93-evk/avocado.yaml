@@ -8,9 +8,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-bsp-imx93-evk:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: Board support for the i.MX 93 EVK
     description: Board support for the i.MX 93 EVK
@@ -23,7 +23,7 @@ ext:
     - udevadm trigger --type=subsystems --action=add --settle
     - udevadm trigger --type=devices --action=add --settle
 
-    dependencies:
+    packages:
       fwup: '*'
       kernel-module-btnxpuart: '*'
       kernel-module-can-dev: '*'
@@ -46,4 +46,4 @@ ext:
       kernel-module-snd-soc-wm8962: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

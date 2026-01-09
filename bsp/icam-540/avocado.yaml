@@ -8,9 +8,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-bsp-icam-540:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: Board support for the Advantech ICAM 540
     description: Board support for the Advantech ICAM 540
@@ -32,7 +32,7 @@ ext:
     - udevadm trigger --type=devices --action=add --settle
     - nvbootctrl verify
 
-    dependencies:
+    packages:
       kernel-module-aes-ce-blk: '*'
       kernel-module-aes-ce-cipher: '*'
       kernel-module-at24: '*'
@@ -114,4 +114,4 @@ ext:
       tegra-redundant-boot-base: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

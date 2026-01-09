@@ -8,9 +8,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-bsp-raspberrypi5:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: Board support for the Raspberry Pi 5
     description: Board support for the Raspberry Pi 5
@@ -25,8 +25,8 @@ ext:
     on_merge:
     - udevadm trigger --action=add
 
-    dependencies:
+    packages:
       fwup: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

@@ -8,9 +8,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-bsp-jetson-orin-nano-devkit:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: Board support for the Nvidia Jetson Orin Nano devkit
     description: Board support for the Nvidia Jetson Orin Nano devkit
@@ -28,7 +28,7 @@ ext:
     - udevadm trigger --type=devices --action=add --settle
     - nvbootctrl verify
 
-    dependencies:
+    packages:
       kernel-module-at24: '*'
       kernel-module-bnep: '*'
       kernel-module-can-dev: '*'
@@ -148,4 +148,4 @@ ext:
       tegra-redundant-boot-base: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

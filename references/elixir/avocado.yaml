@@ -4,28 +4,19 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-runtime:
+runtimes:
   dev:
-    dependencies:
-      avocado-runtime: '{{ config.distro.version }}'
-      app:
-        ext: example-elixir
-      config:
-        ext: config-dev
-      devtools:
-        ext: avocado-ext-dev
-        vsn: '*'
-      sshd-dev:
-        ext: avocado-ext-sshd-dev
-        vsn: '*'
-      webkit:
-        ext: avocado-ext-webkit
-        vsn: '*'
-      bsp:
-        ext: avocado-bsp-{{ avocado.target }}
-        vsn: '*'
+    packages:
+      avocado-runtime: '{{ avocado.distro.version }}'
+    extensions:
+      - example-elixir
+      - config-dev
+      - avocado-ext-dev
+      - avocado-ext-sshd-dev
+      - avocado-ext-webkit
+      - avocado-bsp-{{ avocado.target }}
 
-ext:
+extensions:
   config-dev:
     version: 0.1.0
 
@@ -45,13 +36,13 @@ ext:
     - systemctl restart --no-block ref-elixir.service
     - systemctl restart --no-block cog.service
 
-    dependencies:
+    packages:
       example-elixir-app:
         compile: example-elixir-app
         install: elixir-install.sh
 
     sdk:
-      dependencies:
+      packages:
         nativesdk-ca-certificates: '*'
         nativesdk-elixir: '*'
         nativesdk-elixir-eex: '*'
@@ -75,7 +66,7 @@ ext:
         nativesdk-rebar3: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
 
   container_args:
   - --privileged
@@ -86,9 +77,9 @@ sdk:
   compile:
     example-elixir-app:
       compile: elixir-compile.sh
-      dependencies:
+      packages:
         erlang-erts: '*'
 
-  dependencies:
-    avocado-sdk-toolchain: '{{ config.distro.version }}'
+  packages:
+    avocado-sdk-toolchain: '{{ avocado.distro.version }}'
     nativesdk-avocado-ext-dev: '*'

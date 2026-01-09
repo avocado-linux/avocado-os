@@ -8,9 +8,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-bsp-raspberrypi4:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: Board support for the Raspberry Pi 4
     description: Board support for the Raspberry Pi 4
@@ -25,7 +25,7 @@ ext:
     on_merge:
     - udevadm trigger --action=add
 
-    dependencies:
+    packages:
       fwup: '*'
       kernel-module-bcm2835-codec: '*'
       kernel-module-bcm2835-isp: '*'
@@ -62,4 +62,4 @@ ext:
       kernel-module-videodev: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

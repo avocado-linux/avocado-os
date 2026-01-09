@@ -26,28 +26,30 @@ Options:
     -i, --release-id ID     Release identifier (default: auto-generated timestamp)
     -p, --port PORT         Repository server port (default: $DEFAULT_PORT)
     --sync-only             Only sync packages, don't start repo or build extensions
-    --no-extensions         Skip building extensions
-    --extensions EXT1,EXT2  Build only specific extensions (comma-separated)
+    --no-extensions         Skip building/packaging extensions
+    --build-ext             Build extensions before packaging (default: package only)
+    --extensions EXT1,EXT2  Build/package only specific extensions (comma-separated)
     --keep-repo             Keep repository server running after build
     --build-dir DIR         Custom build directory pattern (default: build-<target>)
     -h, --help              Show this help message
 
 Examples:
-    $0 qemux86-64                           # Build everything for qemux86-64
-    $0 qemux86-64 raspberrypi4              # Build for multiple targets
+    $0 qemux86-64                           # Sync packages and package extensions for qemux86-64
+    $0 qemux86-64 raspberrypi4              # Process multiple targets
     $0 -i stable-v1.0 qemux86-64            # Use custom release ID
     $0 --sync-only qemux86-64               # Only sync packages
     $0 --no-extensions qemux86-64           # Skip extensions
-    $0 --extensions docker,sshd qemux86-64  # Build specific extensions
+    $0 --build-ext qemux86-64               # Build extensions before packaging
+    $0 --extensions docker,sshd qemux86-64  # Package specific extensions
     $0 --keep-repo qemux86-64               # Keep repo server running
 
 This script performs the following steps for each target:
 1. Sync packages from build-<target> to the repository
 2. Generate target fragments in staging directory
 3. Start the package repository server (if not already running)
-4. Build extensions for the target
+4. Package extensions for the target (or build then package with --build-ext)
 5. Update extension repository metadata and generate targets.json
-6. Clean up staging directory (if extensions were built)
+6. Clean up staging directory (if extensions were processed)
 7. Optionally stop the repository server
 
 The repository will aggregate packages from all targets, allowing you to
@@ -132,36 +134,56 @@ start_repo_server() {
     fi
 }
 
-# Function to build extensions for a target
-build_target_extensions() {
+# Function to process extensions for a target (build and/or package)
+process_target_extensions() {
     local target="$1"
     
-    log "Building extensions for target: $target"
-    
-    local ext_args=(
-        --target "$target"
-        --repo-dir "$REPO_DIR"
-        --distro "$DISTRO_CODENAME"
-        --repo-url "http://$CONTAINER_NAME"
-        --container-name "$CONTAINER_NAME"
-        --network "$NETWORK_NAME"
-    )
-    
-    if [ "$BUILD_ALL_EXTENSIONS" = true ]; then
-        ext_args+=(--all)
-    elif [ ${#SPECIFIC_EXTENSIONS[@]} -gt 0 ]; then
-        ext_args+=("${SPECIFIC_EXTENSIONS[@]}")
+    if [ "$BUILD_EXT" = true ]; then
+        # Build script needs repo server options
+        local ext_args=(
+            --target "$target"
+            --repo-dir "$REPO_DIR"
+            --distro "$DISTRO_CODENAME"
+            --repo-url "http://$CONTAINER_NAME"
+            --container-name "$CONTAINER_NAME"
+            --network "$NETWORK_NAME"
+        )
+        
+        if [ "$BUILD_ALL_EXTENSIONS" = true ]; then
+            ext_args+=(--all)
+        elif [ ${#SPECIFIC_EXTENSIONS[@]} -gt 0 ]; then
+            ext_args+=("${SPECIFIC_EXTENSIONS[@]}")
+        else
+            ext_args+=(--all)
+        fi
+        
+        log "Building and packaging extensions for target: $target"
+        ./scripts/dev-build-extensions.sh "${ext_args[@]}"
     else
-        ext_args+=(--all)
+        # Package script doesn't need repo server options
+        local ext_args=(
+            --target "$target"
+            --repo-dir "$REPO_DIR"
+            --distro "$DISTRO_CODENAME"
+        )
+        
+        if [ "$BUILD_ALL_EXTENSIONS" = true ]; then
+            ext_args+=(--all)
+        elif [ ${#SPECIFIC_EXTENSIONS[@]} -gt 0 ]; then
+            ext_args+=("${SPECIFIC_EXTENSIONS[@]}")
+        else
+            ext_args+=(--all)
+        fi
+        
+        log "Packaging extensions for target: $target"
+        ./scripts/dev-package-extensions.sh "${ext_args[@]}"
     fi
     
-    ./scripts/dev-build-extensions.sh "${ext_args[@]}"
-    
     if [ $? -eq 0 ]; then
-        log "✓ Extension build completed for target: $target"
+        log "✓ Extension processing completed for target: $target"
         return 0
     else
-        log "✗ Extension build failed for target: $target"
+        log "✗ Extension processing failed for target: $target"
         return 1
     fi
 }
@@ -192,6 +214,7 @@ BUILD_DIR_PATTERN=""
 TARGETS=()
 SYNC_ONLY=false
 NO_EXTENSIONS=false
+BUILD_EXT=false
 SPECIFIC_EXTENSIONS=()
 BUILD_ALL_EXTENSIONS=true
 KEEP_REPO=false
@@ -224,6 +247,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-extensions)
             NO_EXTENSIONS=true
+            shift
+            ;;
+        --build-ext)
+            BUILD_EXT=true
             shift
             ;;
         --extensions)
@@ -272,6 +299,7 @@ log "Release ID: $RELEASE_ID"
 log "Repository port: $PORT"
 log "Sync only: $SYNC_ONLY"
 log "No extensions: $NO_EXTENSIONS"
+log "Build extensions: $BUILD_EXT"
 if [ "$BUILD_ALL_EXTENSIONS" = false ]; then
     log "Specific extensions: ${SPECIFIC_EXTENSIONS[*]}"
 fi
@@ -341,37 +369,45 @@ if [ "$SYNC_ONLY" = true ]; then
     exit 0
 fi
 
-# Start repository server
-log "=== Starting Repository Server ==="
-if ! start_repo_server; then
-    log "ERROR: Failed to start repository server"
-    exit 1
+# Start repository server only if building extensions (not needed for packaging only)
+REPO_STARTED=false
+if [ "$BUILD_EXT" = true ] && [ "$NO_EXTENSIONS" = false ]; then
+    log "=== Starting Repository Server ==="
+    if ! start_repo_server; then
+        log "ERROR: Failed to start repository server"
+        exit 1
+    fi
+    REPO_STARTED=true
+    log ""
 fi
-log ""
 
-# Build extensions for all targets (unless disabled)
+# Process extensions for all targets (unless disabled)
 if [ "$NO_EXTENSIONS" = false ]; then
-    log "=== Building Extensions ==="
+    if [ "$BUILD_EXT" = true ]; then
+        log "=== Building and Packaging Extensions ==="
+    else
+        log "=== Packaging Extensions ==="
+    fi
     for target in "${TARGETS[@]}"; do
-        if ! build_target_extensions "$target"; then
-            log "ERROR: Extension build failed for target: $target"
-            if [ "$KEEP_REPO" = false ]; then
-                log "Stopping repository server due to build failure..."
+        if ! process_target_extensions "$target"; then
+            log "ERROR: Extension processing failed for target: $target"
+            if [ "$REPO_STARTED" = true ] && [ "$KEEP_REPO" = false ]; then
+                log "Stopping repository server due to failure..."
                 stop_repo_server
             fi
             exit 1
         fi
     done
     
-    log "✓ Extension build completed for all targets"
+    log "✓ Extension processing completed for all targets"
     log ""
 else
     log "=== Skipping Extensions (--no-extensions) ==="
     log ""
 fi
 
-# Stop repository server unless --keep-repo
-if [ "$KEEP_REPO" = false ]; then
+# Stop repository server unless --keep-repo (only if we started it)
+if [ "$REPO_STARTED" = true ] && [ "$KEEP_REPO" = false ]; then
     log "=== Stopping Repository Server ==="
     stop_repo_server
     log ""
@@ -384,7 +420,7 @@ log "Packages: $REPO_DIR/packages/$DISTRO_CODENAME"
 log "Metadata: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_ID"
 log "targets.json: $REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_ID/targets.json"
 
-if [ "$KEEP_REPO" = true ]; then
+if [ "$REPO_STARTED" = true ] && [ "$KEEP_REPO" = true ]; then
     log "Repository server:"
     log "  Host access: http://localhost:$PORT/"
     log "  Container name: $CONTAINER_NAME (for avocado CLI)"
@@ -395,7 +431,7 @@ if [ "$KEEP_REPO" = true ]; then
 fi
 
 
-# Clean up staging directory after successful build (only if extensions were built)
+# Clean up staging directory after successful processing (only if extensions were processed)
 if [ "$NO_EXTENSIONS" = false ]; then
     log "Cleaning up staging directory..."
     STAGING_DIR="$REPO_DIR/staging/$RELEASE_ID"

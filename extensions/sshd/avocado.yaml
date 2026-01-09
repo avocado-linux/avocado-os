@@ -4,9 +4,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-ext-sshd:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: OpenSSH server
     description: OpenSSH server
@@ -20,14 +20,12 @@ ext:
     on_merge:
     - systemctl restart --no-block sshd.socket
 
-    dependencies:
+    packages:
       openssh: '*'
 
     sdk:
-      dependencies:
+      packages:
         nativesdk-openssh-ssh: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
-  dependencies:
-    avocado-sdk-toolchain: '*'
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

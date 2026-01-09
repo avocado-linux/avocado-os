@@ -11,9 +11,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-ext-webkit:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: WPE WebKit browser and display utilities
     description: WPE WebKit browser and display utilities
@@ -27,7 +27,7 @@ ext:
     on_merge:
     - systemctl restart --no-block cog.service
 
-    dependencies:
+    packages:
       ca-certificates: '*'
       cog: '*'
       ethtool: '*'
@@ -44,6 +44,4 @@ ext:
       overlay: overlays/reterminal-dm
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
-  dependencies:
-    avocado-sdk-toolchain: '*'
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

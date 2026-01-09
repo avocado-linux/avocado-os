@@ -8,9 +8,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-ext-docker:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: Avocado Docker container engine
     description: Avocado Docker container engine
@@ -21,12 +21,10 @@ ext:
     enable_services:
     - docker.service
 
-    dependencies:
+    packages:
       docker: '*'
       kernel-module-br-netfilter: '*'
       kernel-module-bridge: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
-  dependencies:
-    avocado-sdk-toolchain: '*'
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

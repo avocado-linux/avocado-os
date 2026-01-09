@@ -4,9 +4,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-ext-dev:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: Avocado development tools
     description: Avocado development tools
@@ -17,18 +17,16 @@ ext:
     on_merge:
     - btrfs filesystem resize max /var
 
-    dependencies:
+    packages:
       avocado-hitl: '*'
       rsync: '*'
 
     sdk:
-      dependencies:
+      packages:
         nativesdk-avocado-hitl: '*'
         nativesdk-openssh-scp: '*'
         nativesdk-openssh-ssh: '*'
         nativesdk-rsync: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
-  dependencies:
-    avocado-sdk-toolchain: '*'
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

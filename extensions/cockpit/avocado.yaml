@@ -4,9 +4,9 @@ distro:
   version: 0.1.0
   channel: apollo-edge
 
-ext:
+extensions:
   avocado-ext-cockpit:
-    version: '{{ config.distro.version }}'
+    version: '{{ avocado.distro.version }}'
     release: r0
     summary: Cockpit with web interface
     description: A web-based graphical interface for device configuration
@@ -20,7 +20,7 @@ ext:
     on_merge:
     - systemctl restart --no-block cockpit.service
 
-    dependencies:
+    packages:
       bash: '*'
       cockpit: '*'
       cockpit-bridge: '*'
@@ -33,6 +33,4 @@ ext:
       sscg: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ config.distro.channel }}
-  dependencies:
-    avocado-sdk-toolchain: '*'
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
