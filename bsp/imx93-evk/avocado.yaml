@@ -1,5 +1,3 @@
-src_dir: ../../
-
 default_target: imx93-evk
 supported_targets:
   - imx93-evk

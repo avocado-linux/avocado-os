@@ -1,5 +1,3 @@
-src_dir: ../../
-
 default_target: reterminal
 supported_targets:
   - reterminal

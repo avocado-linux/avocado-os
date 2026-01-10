@@ -1,5 +1,3 @@
-src_dir: ../../
-
 default_target: icam-540
 supported_targets:
   - icam-540

@@ -1,5 +1,3 @@
-src_dir: ../../
-
 default_target: qemux86-64
 supported_targets:
   - qemux86-64

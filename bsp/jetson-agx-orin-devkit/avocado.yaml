@@ -1,5 +1,3 @@
-src_dir: ../../
-
 default_target: jetson-agx-orin-devkit
 supported_targets:
   - jetson-agx-orin-devkit

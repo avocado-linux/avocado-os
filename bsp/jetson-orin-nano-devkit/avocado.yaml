@@ -1,5 +1,3 @@
-src_dir: ../../
-
 default_target: jetson-orin-nano-devkit
 supported_targets:
   - jetson-orin-nano-devkit

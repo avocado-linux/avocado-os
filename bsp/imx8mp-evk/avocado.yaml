@@ -1,5 +1,3 @@
-src_dir: ../../
-
 default_target: imx8mp-evk
 supported_targets:
   - imx8mp-evk

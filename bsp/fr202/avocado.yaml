@@ -1,5 +1,3 @@
-src_dir: ../../
-
 default_target: fr202
 supported_targets:
   - fr202

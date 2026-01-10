@@ -1,5 +1,3 @@
-src_dir: ../../
-
 default_target: imx91-frdm
 supported_targets:
   - imx91-frdm
