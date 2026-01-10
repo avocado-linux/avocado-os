@@ -324,6 +324,11 @@ package_extension() {
         rm -rf "$output_dir"
     fi
     
+    echo "  Cleaning extension environment before packaging..."
+    if ! avocado ext clean --target "$target"; then
+        echo "  ⚠ Extension clean had issues, continuing..."
+    fi
+    
     echo "  Packaging extension with avocado ext package..."
     if ! avocado ext package -e "$package_name" --target "$target" --out-dir "$output_dir"; then
         echo "  ✗ Failed to package extension" >&2

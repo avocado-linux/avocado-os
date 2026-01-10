@@ -528,6 +528,9 @@ jobs:
           echo "Running: avocado sdk install -f --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
           avocado sdk install -f --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
 
+          echo "Running: avocado ext clean --target ${{ matrix.target }}"
+          avocado ext clean --target "${{ matrix.target }}" || echo "Extension clean had issues, continuing..."
+
           echo "Running: avocado ext install -e $PACKAGE_NAME -f --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
           avocado ext install -e "$PACKAGE_NAME" -f --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
 

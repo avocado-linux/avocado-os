@@ -293,6 +293,11 @@ build_extension() {
     export AVOCADO_CONTAINER_NETWORK="$NETWORK_NAME"
     export AVOCADO_SDK_REPO_RELEASE="$DISTRO_CODENAME"
     
+    echo "  Cleaning extension environment before build..."
+    if ! avocado ext clean --target "$target"; then
+        echo "  ⚠ Extension clean had issues, continuing..."
+    fi
+    
     echo "  Building extension with avocado build..."
     if ! avocado build -e "$package_name" --target "$target" --container-arg "--network" --container-arg "$NETWORK_NAME"; then
         echo "  ✗ Failed to build extension" >&2
