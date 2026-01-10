@@ -57,6 +57,7 @@ extensions:
     enable_services:
       - rubicon-usb-gadget.service
       - rubicon-usb-network.service
+      - rubicon-ca-certificates.service
       - serial-getty@ttyGS0.service
       - dnsmasq.service
       - avahi-daemon.service
@@ -65,6 +66,7 @@ extensions:
     on_merge:
       - systemctl restart --no-block rubicon-usb-gadget.service
       - systemctl restart --no-block rubicon-usb-network.service
+      - systemctl restart --no-block rubicon-ca-certificates.service
       - systemctl restart --no-block serial-getty@ttyGS0.service
       - systemctl restart --no-block dnsmasq.service
       - systemctl restart --no-block avahi-daemon.service
