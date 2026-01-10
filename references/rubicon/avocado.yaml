@@ -8,7 +8,6 @@ distro:
 
 runtimes:
   dev:
-    stone_manifest: stone-raspberrypi4.json
     stone_include_paths:
       - stone/{{ avocado.target }}
     packages:
