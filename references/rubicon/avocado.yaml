@@ -14,11 +14,11 @@ runtimes:
       avocado-runtime: '{{ avocado.distro.version }}'
     extensions:
       - rubicon
-      - avocado_cli
       - config-dev
       - avocado-ext-docker
       - avocado-ext-dev
       - avocado-ext-sshd-dev
+      - avocado-ext-cli
       - avocado-bsp-{{ avocado.target }}
 
 extensions:
@@ -38,6 +38,11 @@ extensions:
       version: '*'
 
   avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-cli:
     source:
       type: package
       version: '*'
@@ -81,26 +86,6 @@ extensions:
       kernel-module-usb-f-acm: '*'
       kernel-module-usb-f-ecm: '*'
 
-  avocado_cli:
-    version: 0.1.0
-
-    packages:
-      bash: '*'
-      avocado-cli-bin:
-        compile: avocado-cli-compile
-        install: avocado-cli-install.sh
-
-    sdk:
-      packages:
-        nativesdk-binutils: '*'
-        nativesdk-cargo: '*'
-        nativesdk-gcc: '*'
-        nativesdk-glibc-dev: '*'
-        nativesdk-libgcc-dev: '*'
-        nativesdk-rust: '*'
-        nativesdk-git: '*'
-        packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: '*'
-
   config-dev:
     version: 0.1.0
 
@@ -116,13 +101,6 @@ sdk:
     - -v /dev:/dev
     - -v /sys:/sys
     - --add-host=rubicon.local:10.55.0.1
-
-  compile:
-    avocado-cli-compile:
-      compile: avocado-cli-compile.sh
-      packages:
-        libstd-rs: '*'
-        libstd-rs-dev: '*'
 
   packages:
     avocado-sdk-toolchain: '{{ avocado.distro.version }}'

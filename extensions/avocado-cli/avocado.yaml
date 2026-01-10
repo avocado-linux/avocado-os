@@ -1,0 +1,42 @@
+supported_targets: '*'
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+extensions:
+  avocado-ext-cli:
+    version: '{{ avocado.distro.version }}'
+    release: r0
+    summary: Avocado build system command line interface
+    description: Avocado build system command line interface for managing the system
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    packages:
+      bash: '*'
+      avocado-cli-bin:
+        compile: avocado-cli-compile
+        install: avocado-cli-install.sh
+
+    sdk:
+      packages:
+        nativesdk-binutils: '*'
+        nativesdk-cargo: '*'
+        nativesdk-gcc: '*'
+        nativesdk-glibc-dev: '*'
+        nativesdk-libgcc-dev: '*'
+        nativesdk-rust: '*'
+        nativesdk-git: '*'
+        packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+
+  compile:
+    avocado-cli-compile:
+      compile: avocado-cli-compile.sh
+      packages:
+        libstd-rs: '*'
+        libstd-rs-dev: '*'
