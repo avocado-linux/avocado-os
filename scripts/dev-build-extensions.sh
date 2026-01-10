@@ -127,11 +127,11 @@ parse_yaml_supported_targets() {
     fi
     
     # Multi-line YAML list format - extract items following "supported_targets:"
-    # Use awk to find lines starting with "- " after "supported_targets:" until next non-list line
+    # Use awk to find lines starting with "- " (possibly indented) after "supported_targets:" until next non-list line
     local targets=$(awk '
         /^supported_targets:/ { in_list=1; next }
-        in_list && /^[^ -]/ { exit }
-        in_list && /^- / { gsub(/^- /, ""); gsub(/["\047]/, ""); printf "%s,", $0 }
+        in_list && /^[^ \t-]/ { exit }
+        in_list && /^[ \t]*- / { gsub(/^[ \t]*- /, ""); gsub(/["\047]/, ""); printf "%s,", $0 }
     ' "$yaml_file" | sed 's/,$//')
     
     if [ -n "$targets" ]; then
@@ -294,7 +294,7 @@ build_extension() {
     export AVOCADO_SDK_REPO_RELEASE="$DISTRO_CODENAME"
     
     echo "  Cleaning extension environment before build..."
-    if ! avocado ext clean --target "$target"; then
+    if ! avocado ext clean -e "$package_name" --target "$target"; then
         echo "  ⚠ Extension clean had issues, continuing..."
     fi
     
