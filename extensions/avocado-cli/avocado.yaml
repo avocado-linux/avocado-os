@@ -13,6 +13,10 @@ extensions:
     license: Apache-2.0
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
+    package_files:
+      - avocado-cli
+      - avocado.yaml
+      - avocado-cli-*.sh
 
     packages:
       bash: '*'
@@ -37,6 +41,7 @@ sdk:
   compile:
     avocado-cli-compile:
       compile: avocado-cli-compile.sh
+      clean: avocado-cli-clean.sh
       packages:
         libstd-rs: '*'
         libstd-rs-dev: '*'
