@@ -1,0 +1,12 @@
+[Unit]
+Description=Update CA Certificates Bundle
+DefaultDependencies=no
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'cat /usr/share/ca-certificates/mozilla/*.crt > /etc/ssl/certs/ca-certificates.crt'
+
+[Install]
+WantedBy=multi-user.target
