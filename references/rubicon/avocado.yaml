@@ -1,5 +1,6 @@
 supported_targets:
   - raspberrypi4
+  - raspberrypi5
 
 
 distro:
