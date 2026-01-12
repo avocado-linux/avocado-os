@@ -125,6 +125,8 @@ jobs:
     runs-on: avocado-sdk
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      extensions_map: ${{ steps.set-matrix.outputs.extensions_map }}
+      has_targets: ${{ steps.set-matrix.outputs.has_targets }}
       avocado_version: ${{ steps.get-version.outputs.version }}
     steps:
       - name: Checkout repository
@@ -193,11 +195,18 @@ jobs:
             fi
 
             # Multi-line YAML list format - extract items following "supported_targets:"
-            # Use awk to find lines starting with "- " after "supported_targets:" until next non-list line
+            # Handle indented list items like:
+            #   supported_targets:
+            #     - raspberrypi5
             local targets=$(awk '
               /^supported_targets:/ { in_list=1; next }
-              in_list && /^[^ -]/ { exit }
-              in_list && /^- / { gsub(/^- /, ""); gsub(/["'"'"']/, ""); printf "%s,", $0 }
+              in_list && /^[^ \t-]/ { exit }
+              in_list && /^[ \t]*-[ \t]+/ {
+                gsub(/^[ \t]*-[ \t]+/, "");
+                gsub(/["'"'"']/, "");
+                gsub(/[ \t]+$/, "");
+                printf "%s,", $0
+              }
             ' "$yaml_file" | sed 's/,$//')
 
             if [ -n "$targets" ]; then
@@ -208,48 +217,36 @@ jobs:
             fi
           }
 
-          # Initialize matrix array
-          matrix_includes=()
+          # Function to check if extension supports a target
+          extension_supports_target() {
+            local supported_targets="$1"
+            local target="$2"
+
+              if [ "$supported_targets" = "*" ]; then
+              return 0
+            fi
+
+            # Parse comma-separated targets
+            local targets_list=$(echo "$supported_targets" | sed 's/\[//g' | sed 's/\]//g' | sed 's/"//g' | sed "s/'//g" | tr ',' '\n')
+            for supported_target in $targets_list; do
+              supported_target=$(echo "$supported_target" | xargs)
+              if [ "$supported_target" = "$target" ]; then
+                return 0
+                      fi
+                    done
+            return 1
+          }
+
+          # Build extensions map: { "extension_name": { "type": "regular|bsp", "supported_targets": "..." }, ... }
+          declare -A extensions_info
 
           # Process each regular extension directory
           for ext_dir in extensions/*/; do
             if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.yaml" ]; then
               extension=$(basename "$ext_dir")
-              echo "Processing extension: $extension"
-
-              # Read supported_targets from avocado.yaml (handles both inline and multi-line YAML formats)
               supported_targets=$(parse_yaml_supported_targets "$ext_dir/avocado.yaml")
-              echo "  supported_targets: $supported_targets"
-
-              # Determine which targets this extension supports
-              if [ "$supported_targets" = "*" ]; then
-                # Extension supports all targets, use filtered targets
-                extension_targets=("${FILTERED_TARGETS[@]}")
-              else
-                # Parse the comma-separated list of targets
-                targets_list=$(echo "$supported_targets" | sed 's/\[//g' | sed 's/\]//g' | sed 's/"//g' | sed "s/'//g" | tr ',' '\n')
-
-                extension_targets=()
-                for target in $targets_list; do
-                  target=$(echo "$target" | xargs) # trim whitespace
-                  if [ -n "$target" ]; then
-                    # Check if this target is in our filtered targets
-                    for filtered_target in "${FILTERED_TARGETS[@]}"; do
-                      if [ "$target" = "$filtered_target" ]; then
-                        extension_targets+=("$target")
-                        break
-                      fi
-                    done
-                  fi
-                done
-              fi
-
-              # Add matrix entries for this extension's supported targets
-              for target in "${extension_targets[@]}"; do
-                matrix_includes+=("{\"extension\": \"$extension\", \"target\": \"$target\", \"type\": \"regular\"}")
-              done
-
-              echo "  Extension $extension will build for targets: ${extension_targets[*]}"
+              extensions_info["$extension"]="regular:$supported_targets"
+              echo "Extension $extension (regular): supported_targets=$supported_targets"
             fi
           done
 
@@ -258,42 +255,43 @@ jobs:
             if [ -d "$bsp_dir" ] && [ -f "$bsp_dir/avocado.yaml" ]; then
               bsp_name=$(basename "$bsp_dir")
               extension="bsp-$bsp_name"
-              echo "Processing BSP extension: $extension"
-
-              # Read supported_targets from avocado.yaml (handles both inline and multi-line YAML formats)
               supported_targets=$(parse_yaml_supported_targets "$bsp_dir/avocado.yaml")
-              echo "  supported_targets: $supported_targets"
-
-              # Determine which targets this extension supports
-              if [ "$supported_targets" = "*" ]; then
-                # Extension supports all targets, use filtered targets
-                extension_targets=("${FILTERED_TARGETS[@]}")
-              else
-                # Parse the comma-separated list of targets
-                targets_list=$(echo "$supported_targets" | sed 's/\[//g' | sed 's/\]//g' | sed 's/"//g' | sed "s/'//g" | tr ',' '\n')
-
-                extension_targets=()
-                for target in $targets_list; do
-                  target=$(echo "$target" | xargs) # trim whitespace
-                  if [ -n "$target" ]; then
-                    # Check if this target is in our filtered targets
-                    for filtered_target in "${FILTERED_TARGETS[@]}"; do
-                      if [ "$target" = "$filtered_target" ]; then
-                        extension_targets+=("$target")
-                        break
-                      fi
-                    done
-                  fi
-                done
-              fi
-
-              # Add matrix entries for this BSP extension's supported targets
-              for target in "${extension_targets[@]}"; do
-                matrix_includes+=("{\"extension\": \"$extension\", \"target\": \"$target\", \"type\": \"bsp\"}")
-              done
-
-              echo "  BSP Extension $extension will build for targets: ${extension_targets[*]}"
+              extensions_info["$extension"]="bsp:$supported_targets"
+              echo "Extension $extension (bsp): supported_targets=$supported_targets"
             fi
+          done
+
+          # Create extensions_map JSON for use in build job
+          extensions_map_json="{"
+          first=true
+          for ext in "${!extensions_info[@]}"; do
+            IFS=':' read -r type supported_targets <<< "${extensions_info[$ext]}"
+            if [ "$first" = true ]; then
+              first=false
+            else
+              extensions_map_json+=","
+            fi
+            extensions_map_json+="\"$ext\":{\"type\":\"$type\",\"supported_targets\":\"$supported_targets\"}"
+          done
+          extensions_map_json+="}"
+
+          echo "Extensions map:"
+          echo "$extensions_map_json" | jq '.'
+
+          # Create target-based matrix (one job per target, not per extension)
+          # This allows scaling to 256 targets with unlimited extensions
+          matrix_includes=()
+          for target in "${FILTERED_TARGETS[@]}"; do
+            # Count extensions that support this target
+            ext_count=0
+            for ext in "${!extensions_info[@]}"; do
+              IFS=':' read -r type supported_targets <<< "${extensions_info[$ext]}"
+              if extension_supports_target "$supported_targets" "$target"; then
+                ext_count=$((ext_count + 1))
+              fi
+            done
+            echo "Target $target: $ext_count extensions to build"
+            matrix_includes+=("{\"target\": \"$target\"}")
           done
 
           # Create JSON matrix
@@ -306,10 +304,19 @@ jobs:
           done
           matrix_json+="]"
 
-          echo "Generated matrix:"
+          echo "Generated target matrix (${#matrix_includes[@]} targets):"
           echo "$matrix_json" | jq '.'
 
+          # Output whether we have targets to build
+          if [ ${#matrix_includes[@]} -gt 0 ]; then
+            echo "has_targets=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_targets=false" >> $GITHUB_OUTPUT
+            echo "WARNING: No targets to build!"
+          fi
+
           echo "matrix={\"include\":$matrix_json}" >> $GITHUB_OUTPUT
+          echo "extensions_map=$extensions_map_json" >> $GITHUB_OUTPUT
 
   setup-package-repo:
     needs: setup-paths
@@ -445,6 +452,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: avocado-os
+          submodules: recursive
 
       - run: |
           mkdir -p /mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}
@@ -494,29 +502,17 @@ jobs:
           # Verify installation
           avocado --version
 
-      - name: Build extension for target
+      - name: Build all extensions for target
         working-directory: /mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}/avocado-os
+        env:
+          EXTENSIONS_MAP: ${{ needs.generate-matrix.outputs.extensions_map }}
         run: |
-          # Determine extension directory and package name based on type
-          if [ "${{ matrix.type }}" = "bsp" ]; then
-            # BSP extension
-            BSP_NAME="${{ matrix.extension }}"
-            BSP_NAME="${BSP_NAME#bsp-}"  # Remove bsp- prefix
-            EXT_DIR="bsp/$BSP_NAME"
-            PACKAGE_NAME="avocado-bsp-$BSP_NAME"
-          else
-            # Regular extension
-            EXT_DIR="extensions/${{ matrix.extension }}"
-            PACKAGE_NAME="avocado-ext-${{ matrix.extension }}"
-          fi
-
-          cd "$EXT_DIR"
-          echo "Building extension: ${{ matrix.extension }} (type: ${{ matrix.type }}) for target: ${{ matrix.target }}"
-          echo "Extension directory: $EXT_DIR"
-          echo "Package name: $PACKAGE_NAME"
+          TARGET="${{ matrix.target }}"
+          echo "=========================================="
+          echo "Building all extensions for target: $TARGET"
+          echo "=========================================="
 
           # Configure avocado to use the shared package repo service container
-          # The container is accessible by its name within the Docker network
           export AVOCADO_SDK_REPO_URL="http://${{ needs.setup-package-repo.outputs.container_name }}"
           export AVOCADO_CONTAINER_NETWORK="${{ needs.setup-package-repo.outputs.network_name }}"
           export AVOCADO_SDK_REPO_RELEASE="${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
@@ -524,27 +520,114 @@ jobs:
           echo "Using Docker network: $AVOCADO_CONTAINER_NETWORK"
           echo "Using SDK repo release: $AVOCADO_SDK_REPO_RELEASE"
 
-          echo "Building extension package ..."
-          echo "Running: avocado sdk install -f --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
-          avocado sdk install -f --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
+          # Function to check if extension supports this target
+          extension_supports_target() {
+            local supported_targets="$1"
+            local target="$2"
 
-          echo "Running: avocado ext clean -e $PACKAGE_NAME --target ${{ matrix.target }}"
-          avocado ext clean -e "$PACKAGE_NAME" --target "${{ matrix.target }}" || echo "Extension clean had issues, continuing..."
+            if [ "$supported_targets" = "*" ]; then
+              return 0
+            fi
 
-          echo "Running: avocado ext install -e $PACKAGE_NAME -f --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
-          avocado ext install -e "$PACKAGE_NAME" -f --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
+            # Parse comma-separated targets
+            local targets_list=$(echo "$supported_targets" | sed 's/\[//g' | sed 's/\]//g' | sed 's/"//g' | sed "s/'//g" | tr ',' '\n')
+            for supported_target in $targets_list; do
+              supported_target=$(echo "$supported_target" | xargs)
+              if [ "$supported_target" = "$target" ]; then
+                return 0
+              fi
+            done
+            return 1
+          }
 
-          echo "Running: avocado ext build -e $PACKAGE_NAME --target ${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
-          avocado ext build -e "$PACKAGE_NAME" --target "${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
+          # Parse extensions map and build each extension that supports this target
+          EXTENSIONS=$(echo "$EXTENSIONS_MAP" | jq -r 'keys[]')
 
-          echo "Running: avocado ext package -e $PACKAGE_NAME --target ${{ matrix.target }} --out-dir ${{ matrix.extension }}-${{ matrix.target }} --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
-          avocado ext package -e "$PACKAGE_NAME" --target "${{ matrix.target }}" --out-dir "${{ matrix.extension }}-${{ matrix.target }}" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"
+          built_extensions=()
+          failed_extensions=()
+          skipped_extensions=()
 
-      - name: Copy package to cache directory
+          for extension in $EXTENSIONS; do
+            ext_type=$(echo "$EXTENSIONS_MAP" | jq -r --arg ext "$extension" '.[$ext].type')
+            supported_targets=$(echo "$EXTENSIONS_MAP" | jq -r --arg ext "$extension" '.[$ext].supported_targets')
+
+            # Check if this extension supports our target
+            if ! extension_supports_target "$supported_targets" "$TARGET"; then
+              echo ""
+              echo "--- Skipping $extension (does not support $TARGET) ---"
+              skipped_extensions+=("$extension")
+              continue
+            fi
+
+            echo ""
+            echo "=========================================="
+            echo "Building extension: $extension (type: $ext_type) for target: $TARGET"
+            echo "=========================================="
+
+          # Determine extension directory and package name based on type
+            if [ "$ext_type" = "bsp" ]; then
+              BSP_NAME="${extension#bsp-}"
+            EXT_DIR="bsp/$BSP_NAME"
+            PACKAGE_NAME="avocado-bsp-$BSP_NAME"
+          else
+              EXT_DIR="extensions/$extension"
+              PACKAGE_NAME="avocado-ext-$extension"
+            fi
+
+            if [ ! -d "$EXT_DIR" ]; then
+              echo "ERROR: Extension directory $EXT_DIR not found, skipping"
+              failed_extensions+=("$extension")
+              continue
+          fi
+
+          cd "$EXT_DIR"
+          echo "Extension directory: $EXT_DIR"
+          echo "Package name: $PACKAGE_NAME"
+
+            # Unlock any stale locks before running avocado commands
+            echo "Running: avocado unlock"
+            avocado unlock || echo "Unlock had issues, continuing..."
+
+            # Clean extension environment before packaging
+            echo "Running: avocado ext clean -e $PACKAGE_NAME --target $TARGET"
+            avocado ext clean -e "$PACKAGE_NAME" --target "$TARGET" || echo "Extension clean had issues, continuing..."
+
+            # Package the extension (this handles sdk install, ext install, ext build internally)
+            OUTPUT_DIR="$extension-$TARGET"
+            echo "Running: avocado ext package -e $PACKAGE_NAME --target $TARGET --out-dir $OUTPUT_DIR --container-arg --network=$AVOCADO_CONTAINER_NETWORK"
+            if ! avocado ext package -e "$PACKAGE_NAME" --target "$TARGET" --out-dir "$OUTPUT_DIR" --container-arg "--network=$AVOCADO_CONTAINER_NETWORK"; then
+              echo "ERROR: Failed to package extension $extension"
+              failed_extensions+=("$extension")
+              echo "✗ Extension $extension FAILED for target $TARGET"
+            else
+              built_extensions+=("$extension")
+              echo "✓ Extension $extension packaged successfully for target $TARGET"
+            fi
+
+            # Return to workspace root
+            cd /mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}/avocado-os
+          done
+
+          echo ""
+          echo "=========================================="
+          echo "Build Summary for target: $TARGET"
+          echo "=========================================="
+          echo "Built: ${#built_extensions[@]} extensions"
+          echo "Failed: ${#failed_extensions[@]} extensions"
+          echo "Skipped: ${#skipped_extensions[@]} extensions"
+
+          if [ ${#failed_extensions[@]} -gt 0 ]; then
+            echo ""
+            echo "Failed extensions: ${failed_extensions[*]}"
+            exit 1
+          fi
+
+      - name: Copy packages to cache directory
         working-directory: /mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}/avocado-os
         run: |
+          TARGET="${{ matrix.target }}"
+
           # Create the cache directory structure using provided packages path or default
-          # Priority: inputs.packages_path > setup-paths outputs > default
           if [ -n "${{ inputs.packages_path }}" ]; then
             BASE_PACKAGES_PATH="${{ inputs.packages_path }}"
           elif [ -n "${{ needs.setup-paths.result == 'success' && needs.setup-paths.outputs.packages_path || '' }}" ]; then
@@ -553,7 +636,6 @@ jobs:
             BASE_PACKAGES_PATH="/home/runner/_repo/packages/${{ inputs.distro_codename || github.event.inputs.distro_codename }}"
           fi
 
-          # Determine releases base path
           if [ -n "${{ inputs.releases_path }}" ]; then
             BASE_RELEASES_PATH="${{ inputs.releases_path }}"
           elif [ -n "${{ needs.setup-paths.result == 'success' && needs.setup-paths.outputs.releases_path || '' }}" ]; then
@@ -562,20 +644,13 @@ jobs:
             BASE_RELEASES_PATH="/home/runner/_repo/releases/${{ inputs.distro_codename || github.event.inputs.distro_codename }}/${{ needs.setup-paths.outputs.release_date }}"
           fi
 
-          # Set up both extension and SDK cache directories for packages and releases
-          EXT_CACHE_DIR="$BASE_PACKAGES_PATH/target/${{ matrix.target }}-ext"
-          SDK_CACHE_DIR="$BASE_PACKAGES_PATH/sdk/${{ matrix.target }}"
-          EXT_RELEASES_DIR="$BASE_RELEASES_PATH/target/${{ matrix.target }}-ext"
-          SDK_RELEASES_DIR="$BASE_RELEASES_PATH/sdk/${{ matrix.target }}"
+          # Set up cache directories
+          EXT_CACHE_DIR="$BASE_PACKAGES_PATH/target/$TARGET-ext"
+          SDK_CACHE_DIR="$BASE_PACKAGES_PATH/sdk/$TARGET"
+          EXT_RELEASES_DIR="$BASE_RELEASES_PATH/target/$TARGET-ext"
+          SDK_RELEASES_DIR="$BASE_RELEASES_PATH/sdk/$TARGET"
 
-          if ! mkdir -p "$EXT_CACHE_DIR" "$SDK_CACHE_DIR" "$EXT_RELEASES_DIR" "$SDK_RELEASES_DIR"; then
-            echo "ERROR: Failed to create cache directories"
-            echo "  Extension cache dir: $EXT_CACHE_DIR"
-            echo "  SDK cache dir: $SDK_CACHE_DIR"
-            echo "  Extension releases dir: $EXT_RELEASES_DIR"
-            echo "  SDK releases dir: $SDK_RELEASES_DIR"
-            exit 1
-          fi
+          mkdir -p "$EXT_CACHE_DIR" "$SDK_CACHE_DIR" "$EXT_RELEASES_DIR" "$SDK_RELEASES_DIR"
 
           echo "Cache directories:"
           echo "  Extension packages: $EXT_CACHE_DIR"
@@ -583,152 +658,91 @@ jobs:
           echo "  Extension releases: $EXT_RELEASES_DIR"
           echo "  SDK releases: $SDK_RELEASES_DIR"
 
-          # Find and copy all built RPM packages
-          # Determine the expected RPM patterns based on extension type
-          # Extensions with sdk.dependencies produce nativesdk-* packages in addition to regular packages
-          if [ "${{ matrix.type }}" = "bsp" ]; then
-            BSP_NAME="${{ matrix.extension }}"
-            BSP_NAME="${BSP_NAME#bsp-}"  # Remove bsp- prefix
-            RPM_PATTERN="avocado-bsp-$BSP_NAME-*.rpm"
-            NATIVESDK_PATTERN="nativesdk-avocado-bsp-$BSP_NAME-*.rpm"
-          else
-            RPM_PATTERN="avocado-ext-${{ matrix.extension }}-*.rpm"
-            NATIVESDK_PATTERN="nativesdk-avocado-ext-${{ matrix.extension }}-*.rpm"
-          fi
+          # Find and copy all built RPM packages from all extension output directories
+          total_ext_count=0
+          total_sdk_count=0
 
-          # Find all RPM files matching both patterns (regular and nativesdk)
-          RPM_FILES=$(find . \( -name "$RPM_PATTERN" -o -name "$NATIVESDK_PATTERN" \) -type f)
+          for output_dir in extensions/*/"*-$TARGET" bsp/*/"bsp-*-$TARGET"; do
+            # Use glob expansion to find actual directories
+            for dir in $output_dir; do
+              if [ -d "$dir" ]; then
+                echo "Processing output directory: $dir"
 
-          if [ -z "$RPM_FILES" ]; then
-            echo "Error: No RPM files found matching patterns $RPM_PATTERN or $NATIVESDK_PATTERN"
-            echo "Current directory contents:"
-            ls -la
-            echo "All .rpm files in current directory:"
-            find . -name "*.rpm" -type f || echo "No .rpm files found at all"
-            exit 1
-          fi
+                while IFS= read -r -d '' rpm_file; do
+                  rpm_basename=$(basename "$rpm_file")
 
-          echo "Found RPM files:"
-          echo "$RPM_FILES"
+                  if [[ "$rpm_basename" == *"all_avocadosdk"* ]]; then
+                    cp "$rpm_file" "$SDK_CACHE_DIR/"
+                    cp "$rpm_file" "$SDK_RELEASES_DIR/"
+                    echo "  SDK: $rpm_basename"
+                    total_sdk_count=$((total_sdk_count + 1))
+                  else
+                    cp "$rpm_file" "$EXT_CACHE_DIR/"
+                    cp "$rpm_file" "$EXT_RELEASES_DIR/"
+                    echo "  EXT: $rpm_basename"
+                    total_ext_count=$((total_ext_count + 1))
+                  fi
+                done < <(find "$dir" -name "*.rpm" -print0 2>/dev/null)
+              fi
+            done
+          done
 
-          # Process each RPM file and route to appropriate directory
-          regular_rpm_count=0
-          sdk_rpm_count=0
+          # Also check for packages in direct extension directories (different output structure)
+          for ext_dir in extensions/* bsp/*; do
+            if [ -d "$ext_dir" ]; then
+              ext_name=$(basename "$ext_dir")
+              output_dir="$ext_dir/$ext_name-$TARGET"
 
-          while IFS= read -r rpm_file; do
-            if [ -n "$rpm_file" ]; then
-              rpm_basename=$(basename "$rpm_file")
+              # For BSP, the output dir name includes bsp- prefix
+              if [[ "$ext_dir" == bsp/* ]]; then
+                output_dir="$ext_dir/bsp-$ext_name-$TARGET"
+              fi
 
-              if [[ "$rpm_basename" == *"all_avocadosdk"* ]]; then
-                # Copy all_avocadosdk packages to SDK directories (both packages and releases)
-                echo "  SDK: $rpm_basename -> $SDK_CACHE_DIR"
-                if ! cp "$rpm_file" "$SDK_CACHE_DIR/"; then
-                  echo "ERROR: Failed to copy SDK RPM file to packages: $rpm_file"
-                  exit 1
-                fi
-                echo "  SDK: $rpm_basename -> $SDK_RELEASES_DIR"
-                if ! cp "$rpm_file" "$SDK_RELEASES_DIR/"; then
-                  echo "ERROR: Failed to copy SDK RPM file to releases: $rpm_file"
-                  exit 1
-                fi
-                sdk_rpm_count=$((sdk_rpm_count + 1))
-              else
-                # Copy regular packages to extension directories (both packages and releases)
-                echo "  EXT: $rpm_basename -> $EXT_CACHE_DIR"
-                if ! cp "$rpm_file" "$EXT_CACHE_DIR/"; then
-                  echo "ERROR: Failed to copy extension RPM file to packages: $rpm_file"
-                  exit 1
-                fi
-                echo "  EXT: $rpm_basename -> $EXT_RELEASES_DIR"
-                if ! cp "$rpm_file" "$EXT_RELEASES_DIR/"; then
-                  echo "ERROR: Failed to copy extension RPM file to releases: $rpm_file"
-                  exit 1
-                fi
-                regular_rpm_count=$((regular_rpm_count + 1))
+              if [ -d "$output_dir" ]; then
+                echo "Processing output directory: $output_dir"
+
+                while IFS= read -r -d '' rpm_file; do
+                  rpm_basename=$(basename "$rpm_file")
+
+                  if [[ "$rpm_basename" == *"all_avocadosdk"* ]]; then
+                    cp "$rpm_file" "$SDK_CACHE_DIR/"
+                    cp "$rpm_file" "$SDK_RELEASES_DIR/"
+                    echo "  SDK: $rpm_basename"
+                    total_sdk_count=$((total_sdk_count + 1))
+                  else
+                    cp "$rpm_file" "$EXT_CACHE_DIR/"
+                    cp "$rpm_file" "$EXT_RELEASES_DIR/"
+                    echo "  EXT: $rpm_basename"
+                    total_ext_count=$((total_ext_count + 1))
+                  fi
+                done < <(find "$output_dir" -name "*.rpm" -print0 2>/dev/null)
               fi
             fi
-          done <<< "$RPM_FILES"
+          done
 
-          echo "Package copying completed:"
-          echo "  $regular_rpm_count extension packages copied to $EXT_CACHE_DIR and $EXT_RELEASES_DIR"
-          echo "  $sdk_rpm_count SDK packages copied to $SDK_CACHE_DIR and $SDK_RELEASES_DIR"
+          echo ""
+          echo "Package copying completed for target $TARGET:"
+          echo "  $total_ext_count extension packages"
+          echo "  $total_sdk_count SDK packages"
 
       - name: Cleanup avocado state
         working-directory: /mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}/avocado-os
         if: always()
         run: |
-          # Determine extension directory based on type
-          if [ "${{ matrix.type }}" = "bsp" ]; then
-            BSP_NAME="${{ matrix.extension }}"
-            BSP_NAME="${BSP_NAME#bsp-}"  # Remove bsp- prefix
-            EXT_DIR="bsp/$BSP_NAME"
-          else
-            EXT_DIR="extensions/${{ matrix.extension }}"
-          fi
+          TARGET="${{ matrix.target }}"
+          echo "Cleaning up avocado state for target: $TARGET"
 
-          cd "$EXT_DIR"
-          echo "Cleaning up avocado state for extension: ${{ matrix.extension }} (type: ${{ matrix.type }})"
-
-          # Try normal cleanup first
-          if ! avocado clean; then
-            echo "Normal avocado clean failed, attempting force cleanup..."
-
-            # Extract volume name from error if present
-            VOLUME_ERROR=$(avocado clean 2>&1 | grep -o "volume is in use - \[.*\]" | sed 's/volume is in use - \[\(.*\)\]/\1/' || true)
-
-            if [ -n "$VOLUME_ERROR" ]; then
-              echo "Found container using volume: $VOLUME_ERROR"
-
-              # Force kill the container
-              echo "Force killing container: $VOLUME_ERROR"
-              docker kill "$VOLUME_ERROR" 2>/dev/null || true
-              docker rm -f "$VOLUME_ERROR" 2>/dev/null || true
-
-              # Wait a moment for cleanup
-              sleep 2
+          # Clean up all extension directories using avocado clean
+          for ext_dir in extensions/* bsp/*; do
+            if [ -d "$ext_dir" ]; then
+              cd "$ext_dir"
+              echo "Cleaning extension directory: $ext_dir"
+              avocado clean --target "$TARGET" 2>/dev/null || true
+              cd /mnt/raid/tmp/runs/${{ github.run_id }}/${{ github.run_number }}/${{ runner.name }}/avocado-os
             fi
+          done
 
-            # Find and remove any avocado-related volumes
-            echo "Finding and removing avocado-related volumes..."
-            AVOCADO_VOLUMES=$(docker volume ls -q | grep "^avo-" || true)
-
-            if [ -n "$AVOCADO_VOLUMES" ]; then
-              echo "Found avocado volumes to remove:"
-              echo "$AVOCADO_VOLUMES"
-
-              # Force remove each volume
-              for volume in $AVOCADO_VOLUMES; do
-                echo "Removing volume: $volume"
-
-                # First, try to find and kill any containers using this volume
-                CONTAINERS_USING_VOLUME=$(docker ps -aq --filter volume="$volume" 2>/dev/null || true)
-                if [ -n "$CONTAINERS_USING_VOLUME" ]; then
-                  echo "Force killing containers using volume $volume: $CONTAINERS_USING_VOLUME"
-                  docker kill $CONTAINERS_USING_VOLUME 2>/dev/null || true
-                  docker rm -f $CONTAINERS_USING_VOLUME 2>/dev/null || true
-                  sleep 1
-                fi
-
-                # Now remove the volume
-                docker volume rm -f "$volume" 2>/dev/null || echo "Failed to remove volume $volume, but continuing..."
-              done
-            fi
-
-            # Clean up any remaining avocado containers
-            echo "Cleaning up any remaining avocado containers..."
-            AVOCADO_CONTAINERS=$(docker ps -aq --filter name="avocado" 2>/dev/null || true)
-            if [ -n "$AVOCADO_CONTAINERS" ]; then
-              echo "Force removing avocado containers: $AVOCADO_CONTAINERS"
-              docker kill $AVOCADO_CONTAINERS 2>/dev/null || true
-              docker rm -f $AVOCADO_CONTAINERS 2>/dev/null || true
-            fi
-
-            # Try avocado clean one more time
-            echo "Attempting final avocado clean..."
-            avocado clean || echo "Final cleanup attempt failed, but continuing..."
-          fi
-
-          echo "Cleanup completed for extension: ${{ matrix.extension }}"
+          echo "Cleanup completed for target: $TARGET"
 
       - name: Cleanup temporary build directory
         if: always()
@@ -769,8 +783,17 @@ jobs:
 
   update-extension-metadata:
     needs:
-      [build-extensions, setup-package-repo, setup-paths, cleanup-package-repo]
-    if: always() && !cancelled() && needs.setup-package-repo.result == 'success'
+      [build-extensions, setup-package-repo, setup-paths, cleanup-package-repo, generate-matrix]
+    # Only run if:
+    # - build-extensions actually ran (not skipped due to empty matrix)
+    # - package repo was available
+    # - there were targets to build
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.setup-package-repo.result == 'success' &&
+      needs.build-extensions.result != 'skipped' &&
+      needs.generate-matrix.outputs.has_targets == 'true'
     runs-on: avocado-sdk
     env:
       PACKAGES_PATH: ${{ inputs.packages_path || (needs.setup-paths.result == 'success' && needs.setup-paths.outputs.packages_path) || format('/home/runner/_repo/packages/{0}', inputs.distro_codename || github.event.inputs.distro_codename) }}

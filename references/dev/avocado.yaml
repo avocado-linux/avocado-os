@@ -54,4 +54,3 @@ sdk:
 
   packages:
     avocado-sdk-toolchain: '{{ avocado.distro.version }}'
-    nativesdk-avocado-ext-dev: '*'
