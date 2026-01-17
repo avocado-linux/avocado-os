@@ -16,9 +16,11 @@ extensions:
 
     enable_services:
       - cockpit.service
+      - NetworkManager.service
 
     on_merge:
       - systemctl restart --no-block cockpit.service
+      - systemctl start --no-block NetworkManager.service
 
     packages:
       bash: '*'
