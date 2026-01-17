@@ -16,6 +16,7 @@ runtimes:
     extensions:
       - rubicon
       - config-dev
+      - avocado-ext-cockpit
       - avocado-ext-docker
       - avocado-ext-dev
       - avocado-ext-sshd-dev
@@ -23,6 +24,11 @@ runtimes:
       - avocado-bsp-{{ avocado.target }}
 
 extensions:
+  avocado-ext-cockpit:
+    source:
+      type: package
+      version: '*'
+
   avocado-ext-docker:
     source:
       type: package

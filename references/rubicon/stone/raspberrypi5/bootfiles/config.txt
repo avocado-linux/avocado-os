@@ -1,0 +1,6 @@
+# U-Boot requires UART
+enable_uart=1          
+# Enable VC4 Graphics
+dtoverlay=vc4-kms-v3d-pi5
+# Enable USB gadget mode on USB-C port
+dtoverlay=dwc2,dr_mode=peripheral
