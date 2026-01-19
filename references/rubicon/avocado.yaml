@@ -94,6 +94,8 @@ extensions:
       kernel-module-libcomposite: '*'
       kernel-module-usb-f-acm: '*'
       kernel-module-usb-f-ecm: '*'
+      qemu-user-static: '*'
+      qemu-user-static-binfmt: '*'
 
   config-dev:
     version: 0.1.0

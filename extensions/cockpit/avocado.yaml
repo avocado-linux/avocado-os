@@ -14,22 +14,30 @@ extensions:
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
 
+    overlay: overlay
+
     enable_services:
-      - cockpit.service
+      - cockpit.socket
       - NetworkManager.service
 
     on_merge:
-      - systemctl restart --no-block cockpit.service
+      - systemctl restart --no-block cockpit.socket
       - systemctl start --no-block NetworkManager.service
 
     packages:
       bash: '*'
       cockpit: '*'
+      cockpit-apps: '*'
       cockpit-bridge: '*'
       cockpit-dashboard: '*'
+      cockpit-desktop: '*'
+      cockpit-kdump: '*'
       cockpit-networkmanager: '*'
+      cockpit-selinux: '*'
       cockpit-shell: '*'
+      cockpit-sosreport: '*'
       cockpit-systemd: '*'
+      cockpit-users: '*'
       cockpit-ws: '*'
       coreutils: '*'
       sscg: '*'
