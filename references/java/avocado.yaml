@@ -1,0 +1,71 @@
+supported_targets: '*'
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+runtimes:
+  dev:
+    packages:
+      avocado-runtime: '{{ avocado.distro.version }}'
+    extensions:
+      - example-java
+      - config-dev
+      - avocado-ext-dev
+      - avocado-ext-sshd-dev
+      - avocado-bsp-{{ avocado.target }}
+
+extensions:
+  avocado-ext-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-sshd-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: '*'
+
+  config-dev:
+    version: 0.1.0
+
+    users:
+      root:
+        password: ''
+
+  example-java:
+    version: 0.1.0
+
+    packages:
+      example-java-app:
+        compile: example-java-app
+        install: java-install.sh
+
+    sdk:
+      packages:
+        nativesdk-openjdk-17-jdk: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+
+  container_args:
+    - --network=host
+    - --privileged
+    - -v /dev:/dev
+    - -v /sys:/sys
+
+  compile:
+    example-java-app:
+      compile: java-compile.sh
+
+  packages:
+    avocado-sdk-toolchain: '*'
+    nativesdk-avocado-hitl: '*'
+    nativesdk-openssh-scp: '*'
+    nativesdk-openssh-ssh: '*'
+    nativesdk-rsync: '*'
