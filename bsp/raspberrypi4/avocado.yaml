@@ -21,7 +21,9 @@ extensions:
       - confext
 
     on_merge:
-      - udevadm trigger --action=add
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
 
     packages:
       fwup: '*'
