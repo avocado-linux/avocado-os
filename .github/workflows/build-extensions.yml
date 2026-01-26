@@ -54,6 +54,7 @@ on:
           - reterminal-dm
           - jetson-orin-nano-devkit
           - jetson-agx-orin-devkit
+          - raspberrypi0-2w
           - raspberrypi4
           - raspberrypi5
 
