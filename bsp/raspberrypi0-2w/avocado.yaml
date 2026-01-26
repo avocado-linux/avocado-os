@@ -1,0 +1,73 @@
+default_target: raspberrypi0-2w
+supported_targets:
+  - raspberrypi0-2w
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+extensions:
+  avocado-bsp-raspberrypi0-2w:
+    version: '{{ avocado.distro.version }}'
+    release: r0
+    summary: Board support for the Raspberry Pi Zero 2 W
+    description: Board support for the Raspberry Pi Zero 2 W
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+      - sysext
+      - confext
+
+    on_merge:
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+
+    packages:
+      bluez-firmware-rpidistro-bcm43430a1-hcd: '*'
+      bluez-firmware-rpidistro-bcm43430b0-hcd: '*'
+      fwup: '*'
+      linux-firmware-rpidistro-bcm43430: '*'
+      linux-firmware-rpidistro-bcm43436: '*'
+      linux-firmware-rpidistro-bcm43436s: '*'
+      kernel-module-bcm2835-codec: '*'
+      kernel-module-bcm2835-isp: '*'
+      kernel-module-bcm2835-mmal-vchiq: '*'
+      kernel-module-bcm2835-v4l2: '*'
+      kernel-module-bluetooth: '*'
+      kernel-module-brcmfmac: '*'
+      kernel-module-brcmfmac-wcc: '*'
+      kernel-module-brcmutil: '*'
+      kernel-module-btbcm: '*'
+      kernel-module-cfg80211: '*'
+      kernel-module-ecc: '*'
+      kernel-module-ecdh-generic: '*'
+      kernel-module-fuse: '*'
+      kernel-module-hci-uart: '*'
+      kernel-module-ipv6: '*'
+      kernel-module-libaes: '*'
+      kernel-module-lz4: '*'
+      kernel-module-lz4-compress: '*'
+      kernel-module-mc: '*'
+      kernel-module-raspberrypi-gpiomem: '*'
+      kernel-module-raspberrypi-hwmon: '*'
+      kernel-module-rfkill: '*'
+      kernel-module-sch-fq-codel: '*'
+      kernel-module-snd-bcm2835: '*'
+      kernel-module-uio: '*'
+      kernel-module-uio-pdrv-genirq: '*'
+      kernel-module-v4l2-mem2mem: '*'
+      kernel-module-vc-sm-cma: '*'
+      kernel-module-videobuf2-common: '*'
+      kernel-module-videobuf2-dma-contig: '*'
+      kernel-module-videobuf2-memops: '*'
+      kernel-module-videobuf2-v4l2: '*'
+      kernel-module-videobuf2-vmalloc: '*'
+      kernel-module-videodev: '*'
+      kernel-module-zram: '*'
+      kernel-module-zsmalloc: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
