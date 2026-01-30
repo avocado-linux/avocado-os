@@ -42,7 +42,6 @@ on:
         type: choice
         required: false
         options:
-          - fr202
           - icam-540
           - imx8mp-evk
           - imx91-frdm
