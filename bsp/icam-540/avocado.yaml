@@ -31,13 +31,9 @@ extensions:
       - nvbootctrl verify
 
     packages:
-      kernel-module-aes-ce-blk: '*'
-      kernel-module-aes-ce-cipher: '*'
       kernel-module-at24: '*'
       kernel-module-cec: '*'
       kernel-module-crct10dif-ce: '*'
-      kernel-module-crct10dif-common: '*'
-      kernel-module-drm-display-helper: '*'
       kernel-module-drm-dp-aux-bus: '*'
       kernel-module-fusb301: '*'
       kernel-module-ghash-ce: '*'
