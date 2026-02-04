@@ -36,6 +36,7 @@ extensions:
       kernel-module-brcmutil: '*'
       kernel-module-btbcm: '*'
       kernel-module-cfg80211: '*'
+      kernel-module-dwc2: '*'
       kernel-module-ecc: '*'
       kernel-module-ecdh-generic: '*'
       kernel-module-fuse: '*'
@@ -43,10 +44,13 @@ extensions:
       kernel-module-hci-uart: '*'
       kernel-module-ipv6: '*'
       kernel-module-libaes: '*'
+      kernel-module-lz4: '*'
+      kernel-module-lz4-compress: '*'
       kernel-module-mc: '*'
       kernel-module-raspberrypi-gpiomem: '*'
       kernel-module-raspberrypi-hwmon: '*'
       kernel-module-rfkill: '*'
+      kernel-module-rpivid-hevc: '*'
       kernel-module-sch-fq-codel: '*'
       kernel-module-snd-bcm2835: '*'
       kernel-module-uio: '*'
@@ -60,6 +64,8 @@ extensions:
       kernel-module-videobuf2-v4l2: '*'
       kernel-module-videobuf2-vmalloc: '*'
       kernel-module-videodev: '*'
+      kernel-module-zram: '*'
+      kernel-module-zsmalloc: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}

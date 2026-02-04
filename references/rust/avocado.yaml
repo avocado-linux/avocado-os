@@ -71,7 +71,3 @@ sdk:
 
   packages:
     avocado-sdk-toolchain: '*'
-    nativesdk-avocado-hitl: '*'
-    nativesdk-openssh-scp: '*'
-    nativesdk-openssh-ssh: '*'
-    nativesdk-rsync: '*'
