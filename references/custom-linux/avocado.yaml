@@ -1,0 +1,80 @@
+default_target: qemux86-64
+supported_targets:
+  - qemux86-64
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+##
+## Runtimes
+##
+
+runtimes:
+  dev:
+    extensions:
+      - avocado-ext-dev
+      - avocado-ext-sshd-dev
+      - avocado-bsp-{{ avocado.target }}
+      - config-dev
+      - app
+    packages:
+      avocado-runtime: '{{ avocado.distro.version }}'
+
+    # Cross-compile Linux 6.12.69 from source via the SDK.
+    # The compile step runs kernel-compile.sh (which builds bzImage),
+    # then the install step copies it to $AVOCADO_RUNTIME_BUILD_DIR.
+    kernel:
+      compile: kernel
+      install: kernel-install.sh
+
+##
+## Extensions
+##
+
+extensions:
+  avocado-ext-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-sshd-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: '*'
+
+  app:
+    version: 0.1.0
+
+  config-dev:
+    version: 0.1.0
+
+    users:
+      root:
+        password: ''
+
+##
+## SDK
+##
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+
+  container_args:
+    - --network=host
+
+  compile:
+    kernel:
+      compile: kernel-compile.sh
+      packages:
+        libelf1: '*'
+
+  packages:
+    avocado-sdk-toolchain: '{{ avocado.distro.version }}'
+    nativesdk-bc: '*'
+    nativesdk-libelf1: '*'
