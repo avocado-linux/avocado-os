@@ -41,6 +41,17 @@ extensions:
   example-rust:
     version: 0.1.0
 
+    overlay: overlay
+
+    enable_services:
+      - ref-rust.service
+
+    on_merge:
+      - systemctl restart --no-block ref-rust.service
+
+    on_unmerge:
+      - systemctl stop ref-rust.service
+
     packages:
       example-rust-app:
         compile: example-rust-app
