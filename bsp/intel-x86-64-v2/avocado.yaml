@@ -1,0 +1,113 @@
+default_target: intel-x86-64-v2
+supported_targets:
+  - intel-x86-64-v2
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+extensions:
+  avocado-bsp-intel-x86-64-v2:
+    version: '{{ avocado.distro.version }}'
+    release: r0
+    summary: Board support for Intel x86-64-v2 systems (SSE4.2)
+    description: >
+      Board support for Atom-class Intel x86-64 systems (Celeron, Pentium,
+      N-series, Jasper Lake, Elkhart Lake, Alder Lake-N).
+      Includes kernel modules for Intel networking, WiFi, GPU, audio,
+      Bluetooth, USB serial adapters, and common peripheral support.
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+      - sysext
+      - confext
+
+    on_merge:
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+
+    packages:
+      # --- Intel CPU microcode ---
+      intel-microcode: '*'
+
+      # --- Intel GPU firmware ---
+      linux-firmware-i915: '*'
+
+      # --- WiFi firmware ---
+      linux-firmware-iwlwifi: '*'
+      linux-firmware-ath10k: '*'
+      linux-firmware-ath11k: '*'
+      linux-firmware-rtl8192ce: '*'
+      linux-firmware-rtl8192cu: '*'
+      linux-firmware-rtl8723: '*'
+      linux-firmware-rtl8821: '*'
+
+      # --- Ethernet drivers (Intel) ---
+      kernel-module-e1000e: '*'
+      kernel-module-igb: '*'
+      kernel-module-ixgbe: '*'
+
+      # --- Ethernet drivers (Realtek) ---
+      kernel-module-r8169: '*'
+
+      # --- WiFi stack ---
+      kernel-module-cfg80211: '*'
+      kernel-module-mac80211: '*'
+      kernel-module-rfkill: '*'
+
+      # --- Bluetooth (Intel) ---
+      kernel-module-bluetooth: '*'
+      kernel-module-btusb: '*'
+      kernel-module-btintel: '*'
+
+      # --- Audio (Intel HD Audio) ---
+      kernel-module-snd-hda-intel: '*'
+      kernel-module-snd-hda-codec-hdmi: '*'
+      kernel-module-snd-hda-codec-realtek: '*'
+
+      # --- Intel GPU driver ---
+      kernel-module-i915: '*'
+
+      # --- USB serial adapters ---
+      kernel-module-usbserial: '*'
+      kernel-module-ftdi-sio: '*'
+      kernel-module-pl2303: '*'
+      kernel-module-cp210x: '*'
+      kernel-module-ch341: '*'
+
+      # --- Network filtering (container support) ---
+      kernel-module-ip-tables: '*'
+      kernel-module-iptable-filter: '*'
+      kernel-module-iptable-nat: '*'
+      kernel-module-nf-nat: '*'
+      kernel-module-nf-conntrack: '*'
+      kernel-module-x-tables: '*'
+      kernel-module-xt-conntrack: '*'
+      kernel-module-xt-masquerade: '*'
+
+      # --- Filesystem ---
+      kernel-module-fuse: '*'
+
+      # --- Networking ---
+      kernel-module-sch-fq-codel: '*'
+      kernel-module-wireguard: '*'
+      kernel-module-tun: '*'
+      kernel-module-bridge: '*'
+
+      # --- Hardware monitoring ---
+      kernel-module-coretemp: '*'
+
+      # --- Userspace tools ---
+      swupdate: '*'
+      efibootmgr: '*'
+      tpm2-tools: '*'
+      pciutils: '*'
+      dmidecode: '*'
+      nvme-cli: '*'
+      smartmontools: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
