@@ -47,6 +47,9 @@ on:
           - imx91-frdm
           - imx93-frdm
           - imx93-evk
+          - intel-x86-64-v2
+          - intel-x86-64-v3
+          - intel-x86-64-v4
           - qemuarm64
           - qemux86-64
           - reterminal
