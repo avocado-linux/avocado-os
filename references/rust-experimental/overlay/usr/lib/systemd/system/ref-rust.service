@@ -1,0 +1,13 @@
+[Unit]
+Description=Ref Rust Application
+After=network.target
+Wants=network.target
+
+[Service]
+ExecStart=/usr/bin/ref_rust
+Restart=always
+RestartSec=5
+SyslogIdentifier=ref-rust
+
+[Install]
+WantedBy=multi-user.target
