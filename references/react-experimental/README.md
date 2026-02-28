@@ -23,16 +23,13 @@ avocado build -t qemux86-64
 # Provision the bootable disk image
 avocado provision -f -r dev -t qemux86-64
 
-# Boot QEMU interactively
-avocado sdk run -iE -t qemux86-64 vm dev
+# Boot QEMU with port forwarding (SSH on 2222, dashboard on 4000)
+avocado sdk run -iE -t qemux86-64 vm dev --host-fwd "2222-:22" --host-fwd "4000-:4000"
 ```
 
 To SSH in from another terminal:
 
 ```bash
-avocado sdk run -iE -t qemux86-64 vm dev --host-fwd "2222-:22" --host-fwd "4000-:4000"
-
-# Then from another terminal:
 ssh -o StrictHostKeyChecking=no -p 2222 root@localhost
 ```
 
