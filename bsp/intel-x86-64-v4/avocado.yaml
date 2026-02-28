@@ -57,6 +57,10 @@ extensions:
       kernel-module-cfg80211: '*'
       kernel-module-mac80211: '*'
       kernel-module-rfkill: '*'
+      kernel-module-iwlwifi: '*'
+      kernel-module-iwlmvm: '*'
+      kernel-module-ccm: '*'
+      kernel-module-ctr: '*'
 
       # --- Bluetooth (Intel) ---
       kernel-module-bluetooth: '*'
