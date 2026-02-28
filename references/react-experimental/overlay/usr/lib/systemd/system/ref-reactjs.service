@@ -1,0 +1,16 @@
+[Unit]
+Description=Ref React.js Application
+After=network.target
+Wants=network.target
+
+[Service]
+WorkingDirectory=/usr/lib/ref-reactjs
+ExecStart=/usr/bin/node /usr/lib/ref-reactjs/server.js
+Environment=NODE_ENV=production
+Environment=PORT=4000
+Restart=always
+RestartSec=5
+SyslogIdentifier=ref-reactjs
+
+[Install]
+WantedBy=multi-user.target

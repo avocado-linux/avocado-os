@@ -1,0 +1,82 @@
+supported_targets: '*'
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+runtimes:
+  dev:
+    packages:
+      avocado-runtime: '{{ avocado.distro.version }}'
+    extensions:
+      - example-reactjs
+      - config-dev
+      - avocado-ext-dev
+      - avocado-ext-sshd-dev
+      - avocado-bsp-{{ avocado.target }}
+
+extensions:
+  avocado-ext-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-sshd-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: '*'
+
+  config-dev:
+    version: 0.1.0
+
+    users:
+      root:
+        password: ''
+
+  example-reactjs:
+    version: 0.1.0
+
+    overlay: overlay
+
+    enable_services:
+      - ref-reactjs.service
+
+    on_merge:
+      - systemctl restart --no-block ref-reactjs.service
+
+    on_unmerge:
+      - systemctl stop ref-reactjs.service
+
+    packages:
+      example-reactjs-app:
+        compile: example-reactjs-app
+        install: reactjs-install.sh
+      nodejs: '*'
+
+    sdk:
+      packages:
+        nativesdk-nodejs: '*'
+        nativesdk-nodejs-npm: '*'
+        nativesdk-ca-certificates: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+
+  container_args:
+    - --privileged
+    - --network=host
+    - -v /dev:/dev
+    - -v /sys:/sys
+
+  compile:
+    example-reactjs-app:
+      compile: reactjs-compile.sh
+      clean: reactjs-clean.sh
+
+  packages:
+    avocado-sdk-toolchain: '{{ avocado.distro.version }}'
