@@ -1,0 +1,12 @@
+[Unit]
+Description=Device Heartbeat Monitor
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/heartbeat.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
