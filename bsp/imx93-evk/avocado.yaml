@@ -3,12 +3,12 @@ supported_targets:
   - imx93-evk
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 extensions:
   avocado-bsp-imx93-evk:
-    version: '{{ avocado.distro.version }}'
+    version: 2024.1.0
     release: r0
     summary: Board support for the i.MX 93 EVK
     description: Board support for the i.MX 93 EVK
@@ -44,4 +44,4 @@ extensions:
       kernel-module-snd-soc-wm8962: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}

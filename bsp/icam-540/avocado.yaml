@@ -3,12 +3,12 @@ supported_targets:
   - icam-540
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 extensions:
   avocado-bsp-icam-540:
-    version: '{{ avocado.distro.version }}'
+    version: 2024.1.0
     release: r0
     summary: Board support for the Advantech ICAM 540
     description: Board support for the Advantech ICAM 540
@@ -108,4 +108,4 @@ extensions:
       tegra-redundant-boot-base: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}

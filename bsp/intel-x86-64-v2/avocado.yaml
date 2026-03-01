@@ -3,12 +3,12 @@ supported_targets:
   - intel-x86-64-v2
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 extensions:
   avocado-bsp-intel-x86-64-v2:
-    version: '{{ avocado.distro.version }}'
+    version: 2024.1.0
     release: r0
     summary: Board support for Intel x86-64-v2 systems (SSE4.2)
     description: >
@@ -110,4 +110,4 @@ extensions:
       smartmontools: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}

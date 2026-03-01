@@ -7,12 +7,12 @@ supported_targets:
 - qemux86-64
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 extensions:
   avocado-ext-kmod-v4l2loopback:
-    version: '{{ avocado.distro.version }}'
+    version: 2024.1.0
     release: r0
     summary: V4L2 loopback kernel module
     description: Virtual video device kernel module for V4L2
@@ -48,7 +48,7 @@ extensions:
         packagegroup-cross-canadian-avocado-{{ avocado.target }}: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}
 
   compile:
     v4l2loopback-build:

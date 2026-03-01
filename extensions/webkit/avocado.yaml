@@ -8,12 +8,12 @@ supported_targets:
   - jetson-agx-orin-devkit
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 extensions:
   avocado-ext-webkit:
-    version: '{{ avocado.distro.version }}'
+    version: 2024.1.0
     release: r0
     summary: WPE WebKit browser and display utilities
     description: WPE WebKit browser and display utilities
@@ -44,4 +44,4 @@ extensions:
       overlay: overlays/reterminal-dm
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}

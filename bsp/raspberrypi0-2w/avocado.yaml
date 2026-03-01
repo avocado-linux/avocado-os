@@ -3,12 +3,12 @@ supported_targets:
   - raspberrypi0-2w
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 extensions:
   avocado-bsp-raspberrypi0-2w:
-    version: '{{ avocado.distro.version }}'
+    version: 2024.1.0
     release: r0
     summary: Board support for the Raspberry Pi Zero 2 W
     description: Board support for the Raspberry Pi Zero 2 W
@@ -70,4 +70,4 @@ extensions:
       kernel-module-zsmalloc: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}
