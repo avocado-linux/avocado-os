@@ -3,8 +3,8 @@ supported_targets:
   - qemux86-64
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 ##
 ## Runtimes
@@ -19,7 +19,7 @@ runtimes:
       - config-dev
       - app
     packages:
-      avocado-runtime: '{{ avocado.distro.version }}'
+      avocado-runtime: '*'
 
     # Cross-compile Linux 6.12.69 from source via the SDK.
     # The compile step runs kernel-compile.sh (which builds bzImage),
@@ -63,7 +63,7 @@ extensions:
 ##
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
 
   container_args:
     - --network=host
@@ -75,6 +75,6 @@ sdk:
         libelf1: '*'
 
   packages:
-    avocado-sdk-toolchain: '{{ avocado.distro.version }}'
+    avocado-sdk-toolchain: '*'
     nativesdk-bc: '*'
     nativesdk-libelf1: '*'
