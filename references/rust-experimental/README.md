@@ -117,15 +117,6 @@ The `sdk.compile.example-rust-app.packages` section adds `libstd-rs` and `libstd
 | `packages.example-rust-app` | Declares the compiled package with compile and install scripts |
 | `sdk.packages` | Cross-compilation toolchain packages installed in the SDK container |
 
-### Rust vs React on Embedded
-
-| Aspect | Rust | React |
-|--------|------|-------|
-| Device dependencies | None — single static binary | Node.js runtime, node_modules |
-| Install script | 2 lines (copy binary) | Copy dist/, node_modules/, server.js |
-| Binary size | ~1 MB | ~50 MB+ (with Node.js) |
-| Runtime overhead | Minimal | V8 engine + garbage collector |
-
 ## What's Next
 
 This reference produces a standalone binary that logs to the journal. Natural next steps:
