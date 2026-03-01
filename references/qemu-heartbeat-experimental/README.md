@@ -117,4 +117,6 @@ All config changes happen on the host in the overlay directory — never edit fi
 
 ## What's Next
 
-This heartbeat service logs vitals locally. A natural next step is publishing these vitals over MQTT to the Avocado Connect platform, turning the device into a connected, observable endpoint.
+This heartbeat service logs vitals locally. Natural next steps:
+- Add configuration via `/etc/heartbeat.conf` (interval, log format)
+- Extend the stats collected (disk usage, network traffic, temperature)
