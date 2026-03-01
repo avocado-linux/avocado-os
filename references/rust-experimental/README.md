@@ -129,6 +129,6 @@ The `sdk.compile.example-rust-app.packages` section adds `libstd-rs` and `libstd
 ## What's Next
 
 This reference produces a standalone binary that logs to the journal. Natural next steps:
-- Add MQTT publishing to send vitals to Avocado Connect
 - Use `serde_json` for structured serialization
 - Add configuration via `/etc/ref-rust.conf`
+- Extend the stats collected (disk usage, network traffic, temperature)

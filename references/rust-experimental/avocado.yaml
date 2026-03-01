@@ -71,7 +71,7 @@ sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
 
   container_args:
-    - --network=host
+    - -p 2222:2222
     - --privileged
     - -v /dev:/dev
     - -v /sys:/sys
