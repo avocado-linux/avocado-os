@@ -1,0 +1,87 @@
+supported_targets: '*'
+
+distro:
+  version: 0.1.0
+  channel: apollo-edge
+
+runtimes:
+  dev:
+    packages:
+      avocado-runtime: '{{ avocado.distro.version }}'
+    extensions:
+      - example-rust
+      - config-dev
+      - avocado-ext-dev
+      - avocado-ext-sshd-dev
+      - avocado-bsp-{{ avocado.target }}
+
+extensions:
+  avocado-ext-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-sshd-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: '*'
+
+  config-dev:
+    version: 0.1.0
+
+    users:
+      root:
+        password: ''
+
+  example-rust:
+    version: 0.1.0
+
+    overlay: overlay
+
+    enable_services:
+      - ref-rust.service
+
+    on_merge:
+      - systemctl restart --no-block ref-rust.service
+
+    on_unmerge:
+      - systemctl stop ref-rust.service
+
+    packages:
+      example-rust-app:
+        compile: example-rust-app
+        install: rust-install.sh
+
+    sdk:
+      packages:
+        nativesdk-binutils: '*'
+        nativesdk-cargo: '*'
+        nativesdk-gcc: '*'
+        nativesdk-glibc-dev: '*'
+        nativesdk-libgcc-dev: '*'
+        nativesdk-rust: '*'
+        packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+
+  container_args:
+    - -p 2222:2222
+    - --privileged
+    - -v /dev:/dev
+    - -v /sys:/sys
+
+  compile:
+    example-rust-app:
+      compile: rust-compile.sh
+      packages:
+        libstd-rs: '*'
+        libstd-rs-dev: '*'
+
+  packages:
+    avocado-sdk-toolchain: '*'
