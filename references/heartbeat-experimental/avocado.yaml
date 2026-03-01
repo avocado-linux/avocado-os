@@ -67,7 +67,7 @@ sdk:
 
   container_args:
     - --privileged
-    - --network=host
+    - -p 2222:2222
     - -v /dev:/dev
     - -v /sys:/sys
 
