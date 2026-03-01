@@ -44,4 +44,4 @@ extensions:
       kernel-module-snd-soc-wm8962: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}

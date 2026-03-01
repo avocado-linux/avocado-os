@@ -1,13 +1,13 @@
 supported_targets: '*'
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 runtimes:
   dev:
     packages:
-      avocado-runtime: '{{ avocado.distro.version }}'
+      avocado-runtime: '*'
     extensions:
       - example-reactjs
       - config-dev
@@ -62,7 +62,7 @@ extensions:
         nativesdk-ca-certificates: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
 
   container_args:
     - --privileged
@@ -76,4 +76,4 @@ sdk:
       clean: reactjs-clean.sh
 
   packages:
-    avocado-sdk-toolchain: '{{ avocado.distro.version }}'
+    avocado-sdk-toolchain: '*'

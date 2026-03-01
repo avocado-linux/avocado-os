@@ -28,4 +28,4 @@ extensions:
         nativesdk-openssh-ssh: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}

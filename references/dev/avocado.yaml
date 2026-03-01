@@ -1,13 +1,13 @@
 supported_targets: '*'
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 runtimes:
   dev:
     packages:
-      avocado-runtime: '{{ avocado.distro.version }}'
+      avocado-runtime: '*'
     extensions:
       - app
       - config-dev
@@ -45,7 +45,7 @@ extensions:
         password: ''
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
   container_args:
     - --privileged
     - --network=host
@@ -53,4 +53,4 @@ sdk:
     - -v /sys:/sys
 
   packages:
-    avocado-sdk-toolchain: '{{ avocado.distro.version }}'
+    avocado-sdk-toolchain: '*'

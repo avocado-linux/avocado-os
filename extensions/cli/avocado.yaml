@@ -36,7 +36,7 @@ extensions:
         packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
 
   compile:
     avocado-cli-compile:

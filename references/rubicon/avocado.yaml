@@ -4,15 +4,15 @@ supported_targets:
 
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 runtimes:
   dev:
     stone_include_paths:
       - stone/{{ avocado.target }}
     packages:
-      avocado-runtime: '{{ avocado.distro.version }}'
+      avocado-runtime: '*'
     extensions:
       - rubicon
       - config-dev
@@ -105,7 +105,7 @@ extensions:
         password: ''
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
   container_args:
     - --privileged
     - --network=host
@@ -114,4 +114,4 @@ sdk:
     - --add-host=rubicon.local:10.55.0.1
 
   packages:
-    avocado-sdk-toolchain: '{{ avocado.distro.version }}'
+    avocado-sdk-toolchain: '*'
