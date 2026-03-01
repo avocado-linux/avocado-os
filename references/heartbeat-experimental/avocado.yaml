@@ -1,0 +1,75 @@
+default_target: "qemux86-64"
+
+supported_targets: '*'
+
+distro:
+  channel: apollo-edge
+  version: 0.1.0
+
+runtimes:
+  dev:
+    extensions:
+      - avocado-ext-dev
+      - avocado-ext-sshd-dev
+      - avocado-bsp-{{ avocado.target }}
+      - config
+      - app
+      - heartbeat
+    packages:
+      avocado-runtime: "{{ avocado.distro.version }}"
+
+extensions:
+  avocado-ext-dev:
+    source:
+      type: package
+      version: "*"
+
+  avocado-ext-sshd-dev:
+    source:
+      type: package
+      version: "*"
+
+  avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: "*"
+
+  app:
+    types:
+      - sysext
+      - confext
+    version: "0.1.0"
+
+  config:
+    types:
+      - confext
+    version: "0.1.0"
+    users:
+      root:
+        password: ""
+
+  heartbeat:
+    types:
+      - sysext
+      - confext
+    version: "0.1.0"
+    summary: "Device heartbeat monitor"
+    overlay: heartbeat/overlay
+    enable_services:
+      - heartbeat.service
+    on_merge:
+      - systemctl restart --no-block heartbeat.service
+    on_unmerge:
+      - systemctl stop heartbeat.service
+
+sdk:
+  image: "docker.io/avocadolinux/sdk:{{ config.distro.channel }}"
+
+  container_args:
+    - --privileged
+    - -p 2222:2222
+    - -v /dev:/dev
+    - -v /sys:/sys
+
+  packages:
+    avocado-sdk-toolchain: "{{ config.distro.version }}"
