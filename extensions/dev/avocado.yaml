@@ -1,12 +1,12 @@
 supported_targets: '*'
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 extensions:
   avocado-ext-dev:
-    version: '{{ avocado.distro.version }}'
+    version: 2024.1.0
     release: r0
     summary: Avocado development tools
     description: Avocado development tools
@@ -29,4 +29,4 @@ extensions:
         nativesdk-rsync: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}

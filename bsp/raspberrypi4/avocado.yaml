@@ -3,12 +3,12 @@ supported_targets:
   - raspberrypi4
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 extensions:
   avocado-bsp-raspberrypi4:
-    version: '{{ avocado.distro.version }}'
+    version: 2024.1.0
     release: r0
     summary: Board support for the Raspberry Pi 4
     description: Board support for the Raspberry Pi 4
@@ -68,4 +68,4 @@ extensions:
       kernel-module-zsmalloc: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}
