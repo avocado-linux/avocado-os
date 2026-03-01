@@ -139,5 +139,5 @@ All stats are read directly from `/proc` and `/sys` — no external dependencies
 
 This reference produces a working web dashboard. Natural next steps:
 - Add WebSocket for push-based updates instead of polling
-- Add MQTT publishing to send vitals to Avocado Connect
 - Add device configuration UI (hostname, network, services)
+- Extend the stats collected (disk usage, network traffic, temperature)
