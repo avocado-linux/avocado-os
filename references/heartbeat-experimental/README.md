@@ -1,4 +1,4 @@
-# QEMU Heartbeat Reference Runtime
+# Heartbeat Reference Runtime (Experimental)
 
 A tutorial runtime that demonstrates how to build a custom Avocado OS extension. The running example is a **device heartbeat service** — a systemd service that collects system vitals (uptime, memory, load) and logs them as structured JSON to the journal.
 
@@ -12,7 +12,7 @@ This is the "hello world" for embedded extension development on Avocado OS.
 ## Build and Run
 
 ```bash
-cd runtimes-dev/qemu-heartbeat-ref
+cd os/references/heartbeat-experimental
 
 # Install SDK, extensions, and runtime dependencies (one-time setup)
 avocado install -f
@@ -71,7 +71,7 @@ You'll see output like:
 ## Project Structure
 
 ```
-qemu-heartbeat-ref/
+heartbeat-experimental/
 ├── README.md            # This file
 ├── avocado.yaml         # Runtime config — defines extensions, packages, SDK
 └── heartbeat/           # The heartbeat extension
