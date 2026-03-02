@@ -4,7 +4,7 @@ set -e # Exit immediately if a command exits with a non-zero status.
 
 # Default configuration
 DEFAULT_REPO_DIR="/tmp/avocado-dev-repo"
-DEFAULT_DISTRO_CODENAME="latest/apollo/edge"
+DEFAULT_DISTRO_CODENAME="2024/edge"
 DEFAULT_RELEASE_ID="dev-$(date -u '+%Y%m%d-%H%M%S')"
 
 # Function to show usage
@@ -27,7 +27,7 @@ Options:
 
 Examples:
     $0 qemux86-64
-    $0 -r /opt/avocado-repo -d latest/apollo/edge -i my-dev-build qemux86-64
+    $0 -r /opt/avocado-repo -d 2024/edge -i my-dev-build qemux86-64
     $0 --repo-dir /opt/avocado-repo --release-id stable-build raspberrypi4
 
 This script:

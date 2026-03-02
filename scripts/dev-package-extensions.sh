@@ -4,7 +4,10 @@ set -e # Exit immediately if a command exits with a non-zero status.
 
 # Default configuration
 DEFAULT_REPO_DIR="/tmp/avocado-dev-repo"
-DEFAULT_DISTRO_CODENAME="latest/apollo/edge"
+DEFAULT_DISTRO_CODENAME="2024/edge"
+DEFAULT_CONTAINER_NAME="avocado-dev-repo"
+DEFAULT_NETWORK_NAME="avocado-dev-network"
+DEFAULT_REPO_URL=""
 DEFAULT_RELEASE_DIR=""  # Empty means auto-detect latest
 DEFAULT_SKIP_CLEANUP=false
 
@@ -21,6 +24,9 @@ Required:
 Options:
     -r, --repo-dir DIR      Repository directory (default: $DEFAULT_REPO_DIR)
     -d, --distro CODENAME   Distribution codename (default: $DEFAULT_DISTRO_CODENAME)
+    -u, --repo-url URL      Repository URL (default: http://<container-name>)
+    -n, --container-name NAME   Repository container name (default: $DEFAULT_CONTAINER_NAME)
+    --network NETWORK       Docker network name (default: $DEFAULT_NETWORK_NAME)
     --release-dir DIR       Specific release directory name (default: auto-detect latest)
     --skip-cleanup          Skip cleaning up extension build artifacts after packaging
     --all                   Package all extensions that support the target
@@ -324,13 +330,25 @@ package_extension() {
         rm -rf "$output_dir"
     fi
     
+    # Set up environment for avocado CLI
+    export AVOCADO_SDK_REPO_RELEASE="$DISTRO_CODENAME"
+    if [ -n "$REPO_URL" ]; then
+        export AVOCADO_SDK_REPO_URL="$REPO_URL"
+    fi
+
+    # Build container args for networking
+    local container_args=()
+    if [ -n "$NETWORK_NAME" ]; then
+        container_args+=(--container-arg "--network=$NETWORK_NAME")
+    fi
+
     echo "  Cleaning extension environment before packaging..."
     if ! avocado ext clean -e "$package_name" --target "$target"; then
         echo "  ⚠ Extension clean had issues, continuing..."
     fi
-    
+
     echo "  Packaging extension with avocado ext package..."
-    if ! avocado ext package -e "$package_name" --target "$target" --out-dir "$output_dir"; then
+    if ! avocado ext package -e "$package_name" --target "$target" --out-dir "$output_dir" "${container_args[@]}"; then
         echo "  ✗ Failed to package extension" >&2
         cd - > /dev/null
         return 1
@@ -483,6 +501,9 @@ update_extension_metadata() {
 # Parse command line arguments
 REPO_DIR="$DEFAULT_REPO_DIR"
 DISTRO_CODENAME="$DEFAULT_DISTRO_CODENAME"
+REPO_URL="$DEFAULT_REPO_URL"
+CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
+NETWORK_NAME="$DEFAULT_NETWORK_NAME"
 RELEASE_DIR="$DEFAULT_RELEASE_DIR"
 SKIP_CLEANUP="$DEFAULT_SKIP_CLEANUP"
 TARGET=""
@@ -502,6 +523,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         -d|--distro)
             DISTRO_CODENAME="$2"
+            shift 2
+            ;;
+        -u|--repo-url)
+            REPO_URL="$2"
+            shift 2
+            ;;
+        -n|--container-name)
+            CONTAINER_NAME="$2"
+            shift 2
+            ;;
+        --network)
+            NETWORK_NAME="$2"
             shift 2
             ;;
         --release-dir)
@@ -579,6 +612,12 @@ echo "Target: $TARGET"
 echo "Repository directory: $REPO_DIR"
 echo "Distribution codename: $DISTRO_CODENAME"
 echo "Release directory: $RELEASE_DIR"
+if [ -n "$REPO_URL" ]; then
+    echo "Repository URL: $REPO_URL"
+fi
+if [ -n "$NETWORK_NAME" ]; then
+    echo "Docker network: $NETWORK_NAME"
+fi
 echo "Skip cleanup: $SKIP_CLEANUP"
 echo ""
 
