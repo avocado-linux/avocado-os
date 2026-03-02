@@ -1,13 +1,13 @@
 supported_targets: '*'
 
 distro:
-  version: 0.1.0
-  channel: apollo-edge
+  release: 2024
+  channel: edge
 
 runtimes:
   dev:
     packages:
-      avocado-runtime: '{{ avocado.distro.version }}'
+      avocado-runtime: '*'
     extensions:
       - example-rust
       - config-dev
@@ -47,7 +47,7 @@ extensions:
       - ref-rust.service
 
     on_merge:
-      - systemctl restart --no-block ref-rust.service
+      - systemctl start --no-block ref-rust.service
 
     on_unmerge:
       - systemctl stop ref-rust.service
@@ -68,10 +68,10 @@ extensions:
         packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: '*'
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.channel }}
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
 
   container_args:
-    - -p 2222:2222
+    - --network=host
     - --privileged
     - -v /dev:/dev
     - -v /sys:/sys

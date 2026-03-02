@@ -3,8 +3,8 @@ default_target: "qemux86-64"
 supported_targets: '*'
 
 distro:
-  channel: apollo-edge
-  version: 0.1.0
+  release: 2024
+  channel: edge
 
 runtimes:
   dev:
@@ -16,7 +16,7 @@ runtimes:
       - app
       - heartbeat
     packages:
-      avocado-runtime: "{{ avocado.distro.version }}"
+      avocado-runtime: '*'
 
 extensions:
   avocado-ext-dev:
@@ -58,18 +58,18 @@ extensions:
     enable_services:
       - heartbeat.service
     on_merge:
-      - systemctl restart --no-block heartbeat.service
+      - systemctl start --no-block heartbeat.service
     on_unmerge:
       - systemctl stop heartbeat.service
 
 sdk:
-  image: "docker.io/avocadolinux/sdk:{{ config.distro.channel }}"
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
 
   container_args:
+    - --network=host
     - --privileged
-    - -p 2222:2222
     - -v /dev:/dev
     - -v /sys:/sys
 
   packages:
-    avocado-sdk-toolchain: "{{ config.distro.version }}"
+    avocado-sdk-toolchain: '*'
