@@ -67,7 +67,6 @@ extensions:
       kernel-module-videobuf2-vmalloc: '*'
       kernel-module-videodev: '*'
       kernel-module-zram: '*'
-      kernel-module-zsmalloc: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}

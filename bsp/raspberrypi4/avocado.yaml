@@ -26,6 +26,8 @@ extensions:
       - udevadm trigger --type=devices --action=add --settle
 
     packages:
+      bluez-firmware-rpidistro-bcm4345c0-hcd: '*'
+      linux-firmware-rpidistro-bcm43455: '*'
       fwup: '*'
       kernel-module-bcm2835-codec: '*'
       kernel-module-bcm2835-isp: '*'
@@ -33,6 +35,7 @@ extensions:
       kernel-module-bcm2835-v4l2: '*'
       kernel-module-bluetooth: '*'
       kernel-module-brcmfmac: '*'
+      kernel-module-brcmfmac-wcc: '*'
       kernel-module-brcmutil: '*'
       kernel-module-btbcm: '*'
       kernel-module-cfg80211: '*'
@@ -50,7 +53,7 @@ extensions:
       kernel-module-raspberrypi-gpiomem: '*'
       kernel-module-raspberrypi-hwmon: '*'
       kernel-module-rfkill: '*'
-      kernel-module-rpivid-hevc: '*'
+      kernel-module-rpi-hevc-dec: '*'
       kernel-module-sch-fq-codel: '*'
       kernel-module-snd-bcm2835: '*'
       kernel-module-uio: '*'
@@ -65,7 +68,6 @@ extensions:
       kernel-module-videobuf2-vmalloc: '*'
       kernel-module-videodev: '*'
       kernel-module-zram: '*'
-      kernel-module-zsmalloc: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
