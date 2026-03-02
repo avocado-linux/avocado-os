@@ -40,6 +40,7 @@ extensions:
       kernel-module-ecc: '*'
       kernel-module-raspberrypi-hwmon: '*'
       kernel-module-brcmfmac: '*'
+      kernel-module-brcmfmac-wcc: '*'
       kernel-module-aes-ce-blk: '*'
       kernel-module-rpi-hevc-dec: '*'
       kernel-module-brcmutil: '*'

@@ -13,14 +13,14 @@ runtimes:
     packages:
       avocado-runtime: '*'
     extensions:
-      #- rubicon
+      - rubicon
       - config-dev
-      #- avocado-ext-cockpit
-      #- avocado-ext-docker
+      - avocado-ext-cockpit
+      - avocado-ext-docker
       - avocado-ext-dev
       - avocado-ext-sshd-dev
-      #- avocado-ext-cli
-      #- avocado-bsp-{{ avocado.target }}
+      - avocado-ext-cli
+      - avocado-bsp-{{ avocado.target }}
 
 extensions:
   avocado-ext-cockpit:
