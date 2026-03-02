@@ -18,7 +18,7 @@ extensions:
       - sshd.socket
 
     on_merge:
-      - systemctl restart --no-block sshd.socket
+      - systemctl start --no-block sshd.socket
 
     packages:
       openssh: '*'

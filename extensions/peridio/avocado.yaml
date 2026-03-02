@@ -20,7 +20,7 @@ extensions:
       - peridiod.service
 
     on_merge:
-      - systemctl restart --no-block peridiod.service
+      - systemctl start --no-block peridiod.service
 
     packages:
       peridiod: '*'

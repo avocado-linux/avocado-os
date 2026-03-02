@@ -21,7 +21,7 @@ extensions:
       - NetworkManager.service
 
     on_merge:
-      - systemctl restart --no-block cockpit.socket
+      - systemctl start --no-block cockpit.socket
       - systemctl start --no-block NetworkManager.service
 
     packages:
@@ -40,6 +40,7 @@ extensions:
       cockpit-users: '*'
       cockpit-ws: '*'
       coreutils: '*'
+      networkmanager: '*'
       sscg: '*'
 
 sdk:

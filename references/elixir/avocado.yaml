@@ -53,8 +53,8 @@ extensions:
       - ref-elixir.service
 
     on_merge:
-      - systemctl restart --no-block ref-elixir.service
-      - systemctl restart --no-block cog.service
+      - systemctl start --no-block ref-elixir.service
+      - systemctl start --no-block cog.service
 
     packages:
       example-elixir-app:
