@@ -47,7 +47,7 @@ extensions:
       - ref-reactjs.service
 
     on_merge:
-      - systemctl restart --no-block ref-reactjs.service
+      - systemctl start --no-block ref-reactjs.service
 
     packages:
       example-reactjs-app:

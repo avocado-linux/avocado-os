@@ -25,7 +25,7 @@ extensions:
       - cog.service
 
     on_merge:
-      - systemctl restart --no-block cog.service
+      - systemctl start --no-block cog.service
 
     packages:
       ca-certificates: '*'

@@ -2,7 +2,6 @@ supported_targets:
   - raspberrypi4
   - raspberrypi5
 
-
 distro:
   release: 2024
   channel: edge
@@ -14,14 +13,14 @@ runtimes:
     packages:
       avocado-runtime: '*'
     extensions:
-      - rubicon
+      #- rubicon
       - config-dev
-      - avocado-ext-cockpit
-      - avocado-ext-docker
+      #- avocado-ext-cockpit
+      #- avocado-ext-docker
       - avocado-ext-dev
       - avocado-ext-sshd-dev
-      - avocado-ext-cli
-      - avocado-bsp-{{ avocado.target }}
+      #- avocado-ext-cli
+      #- avocado-bsp-{{ avocado.target }}
 
 extensions:
   avocado-ext-cockpit:
@@ -71,14 +70,14 @@ extensions:
       - wpa_supplicant@wlan0.service
 
     on_merge:
-      - systemctl restart --no-block rubicon-usb-gadget.service
-      - systemctl restart --no-block rubicon-usb-network.service
-      - systemctl restart --no-block rubicon-ca-certificates.service
-      - systemctl restart --no-block serial-getty@ttyGS0.service
-      - systemctl restart --no-block dnsmasq.service
-      - systemctl restart --no-block avahi-daemon.service
-      - systemctl restart --no-block wpa_supplicant@wlan0.service
-      - systemctl restart --no-block docker.service
+      - systemctl start --no-block rubicon-usb-gadget.service
+      - systemctl start --no-block rubicon-usb-network.service
+      - systemctl start --no-block rubicon-ca-certificates.service
+      - systemctl start --no-block serial-getty@ttyGS0.service
+      - systemctl start --no-block dnsmasq.service
+      - systemctl start --no-block avahi-daemon.service
+      - systemctl start --no-block wpa_supplicant@wlan0.service
+      - systemctl start --no-block docker.service
       - networkctl reload
 
     on_unmerge:
