@@ -5,22 +5,51 @@
 # The SDK entrypoint sources the OE environment, providing:
 #   TARGET_PREFIX, ARCH, OECORE_NATIVE_SYSROOT, etc.
 #
-# Output: linux-6.12.69/arch/x86/boot/bzImage
+# The kernel source is extracted directly into $AVOCADO_BUILD_DIR (inside the
+# SDK container's case-sensitive filesystem) to avoid extraction failures on
+# macOS case-insensitive filesystems. The build runs in-place there.
+#
+# The tarball is downloaded to the source directory (host filesystem) so it
+# survives `sdk clean` and is not re-downloaded on subsequent builds.
+#
+# Output: $AVOCADO_BUILD_DIR/arch/x86/boot/bzImage
 #
 set -e
 
 KERNEL_SRC="linux-6.12.69"
+KERNEL_VERSION="6.12.69"
+KERNEL_TARBALL="${KERNEL_SRC}.tar.xz"
+KERNEL_URL="https://cdn.kernel.org/pub/linux/kernel/v6.x/${KERNEL_TARBALL}"
 
 echo "================================================================"
-echo "Compiling Linux kernel 6.12.69 for qemux86-64"
+echo "Compiling Linux kernel ${KERNEL_VERSION} for qemux86-64"
 echo "================================================================"
 
-if [ ! -d "${KERNEL_SRC}" ]; then
-  echo "[ERROR] Kernel source directory '${KERNEL_SRC}' not found."
+# ---------------------------------------------------------------------------
+# Validate and prepare $AVOCADO_BUILD_DIR
+# ---------------------------------------------------------------------------
+if [ -z "${AVOCADO_BUILD_DIR}" ]; then
+  echo "[ERROR] AVOCADO_BUILD_DIR is not set." >&2
   exit 1
 fi
+mkdir -p "${AVOCADO_BUILD_DIR}"
 
-cd "${KERNEL_SRC}"
+# ---------------------------------------------------------------------------
+# Download tarball to source dir; extract into $AVOCADO_BUILD_DIR
+# ---------------------------------------------------------------------------
+# --strip-components=1 makes $AVOCADO_BUILD_DIR the kernel source root, so
+# the build runs in-place and bzImage lands at the expected path.
+if [ ! -f "${KERNEL_TARBALL}" ]; then
+  echo "Downloading ${KERNEL_URL}..."
+  curl -fL --retry 3 -o "${KERNEL_TARBALL}" "${KERNEL_URL}"
+fi
+
+if [ ! -f "${AVOCADO_BUILD_DIR}/Makefile" ]; then
+  echo "Extracting ${KERNEL_TARBALL} into ${AVOCADO_BUILD_DIR}..."
+  tar -xf "${KERNEL_TARBALL}" --strip-components=1 -C "${AVOCADO_BUILD_DIR}"
+fi
+
+cd "${AVOCADO_BUILD_DIR}"
 
 # ---------------------------------------------------------------------------
 # Set up cross-compile variables from the SDK environment

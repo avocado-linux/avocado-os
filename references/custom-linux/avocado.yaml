@@ -71,8 +71,19 @@ sdk:
   compile:
     kernel:
       compile: kernel-compile.sh
+      clean: kernel-clean.sh
       packages:
+        glibc-dev: '*'
         libelf1: '*'
+
+      package:
+        install: kernel-package-install.sh
+        version: "6.12.69"
+        name: kernel-image-custom
+        license: "GPL-2.0-only"
+        summary: "Custom Linux kernel 6.12.69 for qemux86-64"
+        files:
+          - /boot/*
 
   packages:
     avocado-sdk-toolchain: '*'

@@ -10,8 +10,11 @@
 #
 set -e
 
-KERNEL_SRC="linux-6.12.69"
-BZIMAGE="${KERNEL_SRC}/arch/x86/boot/bzImage"
+if [ -z "${AVOCADO_BUILD_DIR}" ]; then
+  echo "[ERROR] AVOCADO_BUILD_DIR is not set." >&2
+  exit 1
+fi
+BZIMAGE="${AVOCADO_BUILD_DIR}/arch/x86/boot/bzImage"
 
 echo "================================================================"
 echo "Installing kernel into runtime build directory"

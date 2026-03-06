@@ -230,6 +230,39 @@ When `avocado build` encounters a runtime with a `kernel.compile` section, it:
 3. Proceeds with normal runtime assembly (extension installation, var part
    creation, image creation).
 
+## Packaging the Kernel as an RPM
+
+The `sdk.compile.kernel` section includes a `package` block so the compiled
+kernel can be published as an RPM to a private package feed:
+
+```bash
+# Compile the kernel first
+avocado sdk compile kernel
+
+# Package it into an RPM
+avocado sdk package kernel --out-dir ./rpms
+# Output: ./rpms/kernel-image-custom-6.12.69-1.x86_64.rpm
+```
+
+The `kernel-package-install.sh` script stages the `bzImage` into `$DESTDIR`:
+
+```
+$DESTDIR/
+└── boot/
+    └── vmlinuz-6.12.69
+```
+
+The resulting RPM installs `/boot/vmlinuz-6.12.69` and can be referenced in
+`avocado.yaml` via a runtime `kernel.package` block once published:
+
+```yaml
+runtimes:
+  dev:
+    kernel:
+      package: kernel-image-custom
+      version: '6.12.69'
+```
+
 The build stamp system includes the `kernel` configuration in its hash, so
 changes to the `kernel` section automatically trigger a rebuild.
 
