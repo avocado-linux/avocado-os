@@ -1,0 +1,59 @@
+supported_targets: '*'
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-ext-tunnels:
+    version: 2024.1.0
+    release: r0
+    summary: Avocado Connect tunnels agent
+    description: Avocado Connect tunnels agent
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    overlay: overlay
+
+    enable_services:
+      - avocado-rat.service
+
+    on_merge:
+      - systemctl start --no-block avocado-rat.service
+
+    on_unmerge:
+      - systemctl stop avocado-rat.service
+
+    packages:
+      avocado-rat:
+        compile: avocado-rat
+        install: rat-install.sh
+      wireguard-tools: '*'
+      iproute2: '*'
+      iptables: '*'
+      iproute2-ss: '*'
+      kernel-module-wireguard: '*'
+
+    sdk:
+      packages:
+        nativesdk-binutils: '*'
+        nativesdk-cargo: '*'
+        nativesdk-gcc: '*'
+        nativesdk-glibc-dev: '*'
+        nativesdk-libgcc-dev: '*'
+        nativesdk-rust: '*'
+        packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
+
+  compile:
+    avocado-rat:
+      compile: rat-compile.sh
+      clean: rat-clean.sh
+      packages:
+        libstd-rs: '*'
+        libstd-rs-dev: '*'
+  packages:
+    avocado-sdk-toolchain: '*'
