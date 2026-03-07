@@ -1,0 +1,17 @@
+[Unit]
+Description=Avocado Connect Remote Access Tunnel Manager
+After=network.target
+Wants=network.target
+
+[Service]
+ExecStartPre=/bin/sh -c 'mkdir -p /var/lib/avocado-rat'
+ExecStart=/usr/bin/avocado-rat run
+Environment=AVOCADO_RAT_CONFIG=/etc/avocado-rat/config.toml
+Environment=RUST_LOG=info
+Restart=always
+RestartSec=5
+SyslogIdentifier=avocado-rat
+AmbientCapabilities=CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target

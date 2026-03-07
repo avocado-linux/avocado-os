@@ -1,0 +1,16 @@
+[Unit]
+Description=Avocado Connect Device Daemon
+After=network.target
+Wants=network.target
+
+[Service]
+ExecStartPre=/bin/sh -c 'mkdir -p /var/lib/avocado-conn'
+ExecStart=/usr/bin/avocado-conn run
+Environment=AVOCADO_CONN_CONFIG=/etc/avocado-conn/config.toml
+Environment=RUST_LOG=info
+Restart=always
+RestartSec=5
+SyslogIdentifier=avocado-conn
+
+[Install]
+WantedBy=multi-user.target

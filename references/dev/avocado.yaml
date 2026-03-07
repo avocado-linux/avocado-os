@@ -9,13 +9,25 @@ runtimes:
     packages:
       avocado-runtime: '*'
     extensions:
-      - app
       - config-dev
+      - app
+      - avocado-ext-connect
+      - avocado-ext-tunnels
       - avocado-ext-dev
       - avocado-ext-sshd-dev
       - avocado-bsp-{{ avocado.target }}
 
 extensions:
+  avocado-ext-connect:
+    source:
+      type: path
+      path: ../../extensions/connect
+
+  avocado-ext-tunnels:
+    source:
+      type: path
+      path: ../../extensions/tunnels
+
   avocado-ext-dev:
     source:
       type: package
@@ -32,13 +44,15 @@ extensions:
       version: '*'
 
   app:
-    version: 0.1.0
+    version: 0.2.0
 
     packages:
       i2c-tools: '*'
 
   config-dev:
     version: 0.1.0
+
+    overlay: overlay
 
     users:
       root:

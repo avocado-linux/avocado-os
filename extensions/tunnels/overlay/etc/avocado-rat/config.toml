@@ -1,0 +1,8 @@
+data_dir = "/var/lib/avocado-rat"
+socket_path = "/tmp/avocado-rat.sock"
+
+[timers]
+status_check_secs = 3
+stale_threshold_secs = 30
+interface_up_timeout_secs = 10
+default_ttl_secs = 600
