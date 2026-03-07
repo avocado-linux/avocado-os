@@ -1,0 +1,17 @@
+data_dir = "/var/lib/avocado-conn"
+
+[intervals]
+keepalive_secs = 30
+
+[mqtt]
+# host.docker.internal resolves to macOS host IP via QEMU slirp DNS.
+# EMQX is exposed on NodePort 30003 in the local k3d cluster.
+host = "host.docker.internal"
+port = 30003
+# Replace with credentials from your claimed test device:
+#   username = device UUID (from claim response)
+#   password = raw claim token (before hashing)
+#   client_id = "device-<uuid>"
+username = "DEVICE_UUID"
+password = "DEVICE_RAW_TOKEN"
+client_id = "device-DEVICE_UUID"

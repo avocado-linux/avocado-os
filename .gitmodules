@@ -12,3 +12,9 @@
 	path = extensions/cli/avocado-cli
 	url = git@github.com:avocado-linux/avocado-cli
 	branch = main
+[submodule "extensions/connect/avocado-conn"]
+	path = extensions/connect/avocado-conn
+	url = git@github.com:avocado-linux/avocado-conn.git
+[submodule "extensions/tunnels/avocado-rat"]
+	path = extensions/tunnels/avocado-rat
+	url = git@github.com:avocado-linux/avocado-rat.git

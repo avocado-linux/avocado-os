@@ -1,0 +1,54 @@
+supported_targets: '*'
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-ext-connect:
+    version: 2024.1.0
+    release: r0
+    summary: Avocado Connect daemon
+    description: Avocado Connect daemon
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    overlay: overlay
+
+    enable_services:
+      - avocado-conn.service
+
+    on_merge:
+      - systemctl start --no-block avocado-conn.service
+
+    on_unmerge:
+      - systemctl stop avocado-conn.service
+
+    packages:
+      avocado-conn:
+        compile: avocado-conn
+        install: con-install.sh
+
+    sdk:
+      packages:
+        nativesdk-binutils: '*'
+        nativesdk-cargo: '*'
+        nativesdk-gcc: '*'
+        nativesdk-glibc-dev: '*'
+        nativesdk-libgcc-dev: '*'
+        nativesdk-rust: '*'
+        packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
+
+  compile:
+    avocado-conn:
+      compile: con-compile.sh
+      clean: con-clean.sh
+      packages:
+        libstd-rs: '*'
+        libstd-rs-dev: '*'
+  packages:
+    avocado-sdk-toolchain: '*'
