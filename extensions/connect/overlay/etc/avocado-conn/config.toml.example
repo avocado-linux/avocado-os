@@ -1,17 +1,66 @@
-data_dir = "/var/lib/avocado-conn"
+# Avocado Connect device daemon configuration
+#
+# There are two ways to provision a device:
+#
+# 1. Self-provisioning (recommended): Set a claim_token and device_id_source.
+#    On first boot the daemon calls the Connect API to claim the device,
+#    receives MQTT credentials, and persists them to data_dir.
+#
+# 2. Manual provisioning: Omit claim_token and provide static MQTT
+#    credentials in the [mqtt] section below.
+
+# Persistent storage for credentials after claim (required)
+data_dir = "/var/lib/avocado/connect"
+
+# Connect API endpoint
+api_url = "https://connect.example.com"
+
+# ---------------------------------------------------------------------------
+# Self-provisioning (option 1)
+# ---------------------------------------------------------------------------
+
+# Claim token obtained from the web UI
+# claim_token = "YOUR_CLAIM_TOKEN"
+
+# How to derive the hardware fingerprint sent during claim.
+#
+# Built-in providers (compiled via Cargo feature flags):
+#   "dmi"                - /sys/class/dmi/id/product_uuid (x86/QEMU)
+#   "devicetree-serial"  - /sys/firmware/devicetree/base/serial-number (ARM DT)
+#   "rpi-serial"         - /proc/cpuinfo Serial (Raspberry Pi)
+#   "imx-uid"            - /sys/bus/soc/devices/soc0/soc_uid (NXP i.MX)
+#   "nic-mac"            - first permanent NIC MAC address (universal)
+#
+# External providers (always available):
+#   "file:/path"             - read contents of a file
+#   "uboot-env:varname"      - read U-Boot environment variable
+#   "exec:/path [args...]"   - run a script/binary, use stdout
+#
+# Required when claim_token is set.
+# device_id_source = "dmi"
+
+# ---------------------------------------------------------------------------
+# Intervals
+# ---------------------------------------------------------------------------
 
 [intervals]
 keepalive_secs = 30
 
-[mqtt]
-# host.docker.internal resolves to macOS host IP via QEMU slirp DNS.
-# EMQX is exposed on NodePort 30003 in the local k3d cluster.
-host = "host.docker.internal"
-port = 30003
-# Replace with credentials from your claimed test device:
-#   username = device UUID (from claim response)
-#   password = raw claim token (before hashing)
-#   client_id = "device-<uuid>"
-username = "DEVICE_UUID"
-password = "DEVICE_RAW_TOKEN"
-client_id = "device-DEVICE_UUID"
+# ---------------------------------------------------------------------------
+# Tunnel (optional)
+# ---------------------------------------------------------------------------
+
+# [tunnel]
+# rat_socket_path = "/tmp/avocado-rat.sock"
+
+# ---------------------------------------------------------------------------
+# Manual MQTT provisioning (option 2)
+# ---------------------------------------------------------------------------
+# Only needed if NOT using claim_token self-provisioning.
+
+# [mqtt]
+# host = "mqtt.example.com"
+# port = 1883
+# username = "DEVICE_UUID"
+# password = "DEVICE_JWT"
+# client_id = "device-DEVICE_UUID"

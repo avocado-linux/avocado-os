@@ -4,7 +4,7 @@ After=network.target
 Wants=network.target
 
 [Service]
-ExecStartPre=/bin/sh -c 'mkdir -p /var/lib/avocado-conn'
+ExecStartPre=/bin/mkdir -p /var/lib/avocado/connect
 ExecStart=/usr/bin/avocado-conn run
 Environment=AVOCADO_CONN_CONFIG=/etc/avocado-conn/config.toml
 Environment=RUST_LOG=info
