@@ -13,7 +13,12 @@ extensions:
     license: Apache-2.0
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
-
+    package_files:
+      - avocado-conn
+      - overlay
+      - avocado.yaml
+      - conn-*.sh
+      
     overlay: overlay
 
     enable_services:
