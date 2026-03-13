@@ -1,0 +1,6 @@
+data_dir = "/var/lib/avocado/connect"
+claim_token = "<YOUR_CLAIM_TOKEN>"
+device_id_source = "nic-mac"
+
+[intervals]
+keepalive_secs = 30
