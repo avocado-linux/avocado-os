@@ -17,7 +17,7 @@ extensions:
       - avocado-conn
       - overlay
       - avocado.yaml
-      - conn-*.sh
+      - con-*.sh
       
     overlay: overlay
 
