@@ -72,7 +72,7 @@ extensions:
         packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: "*"
 
 sdk:
-  image: "docker.io/avocadolinux/sdk:{{ config.distro.release }}-{{ config.distro.channel }}"
+  image: "docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}"
 
   container_args:
     - --privileged

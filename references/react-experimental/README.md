@@ -14,6 +14,9 @@ This showcases a full-stack web application on embedded Linux: React + Vite fron
 ```bash
 cd os/references/react-experimental
 
+# Default target is qemux86-64 (set in avocado.yaml). To override:
+# export AVOCADO_TARGET=raspberrypi5
+
 # Install SDK (includes Node.js toolchain), extensions, and runtime
 avocado install -f
 

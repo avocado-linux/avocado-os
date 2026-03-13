@@ -14,6 +14,9 @@ This showcases Rust's advantage on embedded: no runtime, no interpreter, no depe
 ```bash
 cd os/references/rust-experimental
 
+# Default target is qemux86-64 (set in avocado.yaml). To override:
+# export AVOCADO_TARGET=raspberrypi5
+
 # Install SDK (includes Rust toolchain), extensions, and runtime
 avocado install -f
 
