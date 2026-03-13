@@ -1,6 +1,8 @@
+cli_requirement: ">=0.26.0"
+
 default_target: "qemux86-64"
 
-supported_targets: '*'
+supported_targets: "*"
 
 distro:
   release: 2024
@@ -16,7 +18,7 @@ runtimes:
       - app
       - heartbeat
     packages:
-      avocado-runtime: '*'
+      avocado-runtime: "*"
 
 extensions:
   avocado-ext-dev:
@@ -63,13 +65,13 @@ extensions:
       - systemctl stop heartbeat.service
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
+  image: "docker.io/avocadolinux/sdk:{{ config.distro.release }}-{{ config.distro.channel }}"
 
   container_args:
-    - --network=host
     - --privileged
+    - --network=host
     - -v /dev:/dev
     - -v /sys:/sys
 
   packages:
-    avocado-sdk-toolchain: '*'
+    avocado-sdk-toolchain: "*"

@@ -1,4 +1,8 @@
-supported_targets: '*'
+cli_requirement: ">=0.26.0"
+
+default_target: "qemux86-64"
+
+supported_targets: "*"
 
 distro:
   release: 2024
@@ -7,7 +11,7 @@ distro:
 runtimes:
   dev:
     packages:
-      avocado-runtime: '*'
+      avocado-runtime: "*"
     extensions:
       - example-rust
       - config-dev
@@ -19,24 +23,24 @@ extensions:
   avocado-ext-dev:
     source:
       type: package
-      version: '*'
+      version: "*"
 
   avocado-ext-sshd-dev:
     source:
       type: package
-      version: '*'
+      version: "*"
 
   avocado-bsp-{{ avocado.target }}:
     source:
       type: package
-      version: '*'
+      version: "*"
 
   config-dev:
     version: 0.1.0
 
     users:
       root:
-        password: ''
+        password: ""
 
   example-rust:
     version: 0.1.0
@@ -59,20 +63,20 @@ extensions:
 
     sdk:
       packages:
-        nativesdk-binutils: '*'
-        nativesdk-cargo: '*'
-        nativesdk-gcc: '*'
-        nativesdk-glibc-dev: '*'
-        nativesdk-libgcc-dev: '*'
-        nativesdk-rust: '*'
-        packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: '*'
+        nativesdk-binutils: "*"
+        nativesdk-cargo: "*"
+        nativesdk-gcc: "*"
+        nativesdk-glibc-dev: "*"
+        nativesdk-libgcc-dev: "*"
+        nativesdk-rust: "*"
+        packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: "*"
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
+  image: "docker.io/avocadolinux/sdk:{{ config.distro.release }}-{{ config.distro.channel }}"
 
   container_args:
-    - --network=host
     - --privileged
+    - --network=host
     - -v /dev:/dev
     - -v /sys:/sys
 
@@ -80,8 +84,8 @@ sdk:
     example-rust-app:
       compile: rust-compile.sh
       packages:
-        libstd-rs: '*'
-        libstd-rs-dev: '*'
+        libstd-rs: "*"
+        libstd-rs-dev: "*"
 
   packages:
-    avocado-sdk-toolchain: '*'
+    avocado-sdk-toolchain: "*"

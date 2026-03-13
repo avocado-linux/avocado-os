@@ -1,4 +1,8 @@
-supported_targets: '*'
+cli_requirement: ">=0.26.0"
+
+default_target: "qemux86-64"
+
+supported_targets: "*"
 
 distro:
   release: 2024
@@ -7,7 +11,7 @@ distro:
 runtimes:
   dev:
     packages:
-      avocado-runtime: '*'
+      avocado-runtime: "*"
     extensions:
       - example-reactjs
       - config-dev
@@ -19,24 +23,24 @@ extensions:
   avocado-ext-dev:
     source:
       type: package
-      version: '*'
+      version: "*"
 
   avocado-ext-sshd-dev:
     source:
       type: package
-      version: '*'
+      version: "*"
 
   avocado-bsp-{{ avocado.target }}:
     source:
       type: package
-      version: '*'
+      version: "*"
 
   config-dev:
     version: 0.1.0
 
     users:
       root:
-        password: ''
+        password: ""
 
   example-reactjs:
     version: 0.1.0
@@ -56,16 +60,16 @@ extensions:
       example-reactjs-app:
         compile: example-reactjs-app
         install: reactjs-install.sh
-      nodejs: '*'
+      nodejs: "*"
 
     sdk:
       packages:
-        nativesdk-nodejs: '*'
-        nativesdk-nodejs-npm: '*'
-        nativesdk-ca-certificates: '*'
+        nativesdk-nodejs: "*"
+        nativesdk-nodejs-npm: "*"
+        nativesdk-ca-certificates: "*"
 
 sdk:
-  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
+  image: "docker.io/avocadolinux/sdk:{{ config.distro.release }}-{{ config.distro.channel }}"
 
   container_args:
     - --privileged
@@ -79,4 +83,4 @@ sdk:
       clean: reactjs-clean.sh
 
   packages:
-    avocado-sdk-toolchain: '*'
+    avocado-sdk-toolchain: "*"

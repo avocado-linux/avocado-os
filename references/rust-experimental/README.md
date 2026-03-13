@@ -15,22 +15,22 @@ This showcases Rust's advantage on embedded: no runtime, no interpreter, no depe
 cd os/references/rust-experimental
 
 # Install SDK (includes Rust toolchain), extensions, and runtime
-avocado install -f -t qemux86-64
+avocado install -f
 
 # Build the Rust app (compiles via cargo inside the SDK container) and assemble the image
-avocado build -t qemux86-64
+avocado build
 
 # Provision the bootable disk image
-avocado provision -f -r dev -t qemux86-64
+avocado provision -f -r dev
 
 # Boot QEMU interactively
-avocado sdk run -iE -t qemux86-64 vm dev
+avocado sdk run -iE vm dev
 ```
 
 To SSH in from another terminal:
 
 ```bash
-avocado sdk run -iE -t qemux86-64 vm dev --host-fwd "2222-:22"
+avocado sdk run -iE vm dev --host-fwd "2222-:22"
 
 # Then from another terminal:
 ssh -o StrictHostKeyChecking=no -p 2222 root@localhost
@@ -66,7 +66,7 @@ All edits happen on the host — never on the device.
 2. Rebuild and reprovision:
 
 ```bash
-avocado build -t qemux86-64 -e example-rust && avocado provision -f -r dev -t qemux86-64
+avocado build -e example-rust && avocado provision -f -r dev
 ```
 
 3. Boot the new image and observe the changes via `journalctl -u ref-rust -f`

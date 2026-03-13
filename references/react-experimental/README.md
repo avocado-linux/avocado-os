@@ -15,16 +15,16 @@ This showcases a full-stack web application on embedded Linux: React + Vite fron
 cd os/references/react-experimental
 
 # Install SDK (includes Node.js toolchain), extensions, and runtime
-avocado install -f -t qemux86-64
+avocado install -f
 
 # Build the React app (compiles via npm inside the SDK container) and assemble the image
-avocado build -t qemux86-64
+avocado build
 
 # Provision the bootable disk image
-avocado provision -f -r dev -t qemux86-64
+avocado provision -f -r dev
 
 # Boot QEMU with port forwarding (SSH on 2222, dashboard on 4000)
-avocado sdk run -iE -t qemux86-64 vm dev --host-fwd "2222-:22" --host-fwd "4000-:4000"
+avocado sdk run -iE vm dev --host-fwd "2222-:22" --host-fwd "4000-:4000"
 ```
 
 To SSH in from another terminal:
@@ -70,7 +70,7 @@ All edits happen on the host — never on the device.
 2. Rebuild and reprovision:
 
 ```bash
-avocado build -t qemux86-64 -e example-reactjs && avocado provision -f -r dev -t qemux86-64
+avocado build -e example-reactjs && avocado provision -f -r dev
 ```
 
 3. Boot the new image and open `http://localhost:4000` to see the changes
