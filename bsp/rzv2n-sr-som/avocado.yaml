@@ -1,0 +1,48 @@
+default_target: rzv2n-sr-som
+supported_targets:
+  - rzv2n-sr-som
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-bsp-rzv2n-sr-som:
+    version: 2024.1.0
+    release: r0
+    summary: Board support for the SolidRun RZ/V2N SoM
+    description: Board support for the SolidRun RZ/V2N SoM on HummingBoard IIOT
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+      - sysext
+      - confext
+
+    on_merge:
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+
+    packages:
+      kernel-module-backlight: '*'
+      kernel-module-brcmfmac: '*'
+      kernel-module-brcmutil: '*'
+      kernel-module-btbcm: '*'
+      kernel-module-cfg80211: '*'
+      kernel-module-gpio-backlight: '*'
+      kernel-module-hci-uart: '*'
+      kernel-module-ilitek-ts-i2c: '*'
+      kernel-module-imx334: '*'
+      kernel-module-imx678: '*'
+      kernel-module-leds-lp55xx-common: '*'
+      kernel-module-leds-lp5562: '*'
+      kernel-module-mmngrbuf: '*'
+      kernel-module-panel-ronbo-rb070d30: '*'
+      kernel-module-mmngr: '*'
+      kernel-module-vspm: '*'
+      kernel-module-vspmif: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
