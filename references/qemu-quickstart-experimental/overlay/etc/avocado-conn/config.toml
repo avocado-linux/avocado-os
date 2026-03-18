@@ -1,0 +1,18 @@
+# Avocado Connect — device config (claim-on-first-boot)
+#
+# On first boot the daemon claims the device using the token below,
+# receives credentials, and persists them. Subsequent boots reuse
+# saved credentials automatically.
+
+# Persistent storage for credentials after claim
+data_dir = "/var/lib/avocado/connect"
+
+# Claim token — generate one via the web UI or API, then paste here.
+claim_token = "<YOUR_CLAIM_TOKEN>"
+
+# How to derive the hardware fingerprint sent during claim.
+# nic-mac uses the first permanent NIC MAC address.
+device_id_source = "nic-mac"
+
+[intervals]
+keepalive_secs = 30

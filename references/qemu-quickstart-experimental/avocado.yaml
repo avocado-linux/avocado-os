@@ -1,0 +1,89 @@
+default_target: "qemux86-64"
+
+supported_targets:
+  - qemux86-64
+
+##
+## Distribution
+##
+
+distro:
+  release: 2024
+  channel: edge
+
+##
+## Runtimes
+##
+
+runtimes:
+  dev:
+    extensions:
+      - avocado-ext-dev
+      - avocado-ext-sshd-dev
+      - avocado-bsp-{{ avocado.target }}
+      - avocado-ext-connect
+      - avocado-ext-tunnels
+      - avocado-ext-cockpit
+      - config
+    packages:
+      avocado-runtime: "*"
+
+##
+## Extensions
+##
+
+extensions:
+  avocado-ext-dev:
+    source:
+      type: package
+      version: "*"
+
+  avocado-ext-sshd-dev:
+    source:
+      type: package
+      version: "*"
+
+  avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: "*"
+
+  avocado-ext-connect:
+    source:
+      type: package
+      version: "*"
+
+  avocado-ext-tunnels:
+    source:
+      type: package
+      version: "*"
+
+  avocado-ext-cockpit:
+    source:
+      type: package
+      version: "*"
+
+  config:
+    types:
+      - confext
+    version: "0.1.0"
+    overlay: overlay
+    users:
+      root:
+        password: ""
+
+##
+## SDK
+##
+
+sdk:
+  image: "docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}"
+
+  container_args:
+    - --privileged
+    - --network=host
+    - -v /dev:/dev
+    - -v /sys:/sys
+
+  packages:
+    avocado-sdk-toolchain: "*"
