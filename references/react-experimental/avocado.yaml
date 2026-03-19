@@ -1,3 +1,5 @@
+default_target: "qemux86-64"
+
 supported_targets: '*'
 
 distro:
