@@ -1,0 +1,13 @@
+[Unit]
+Description=jtop - Jetson Stats Monitor Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/jtop --service
+Restart=on-failure
+RestartSec=5
+SyslogIdentifier=jtop
+
+[Install]
+WantedBy=multi-user.target
