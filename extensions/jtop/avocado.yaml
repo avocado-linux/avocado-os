@@ -1,0 +1,59 @@
+supported_targets:
+  - jetson-orin-nano-devkit
+  - jetson-agx-orin-devkit
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-ext-jtop:
+    version: 2024.1.0
+    release: r0
+    summary: Jetson system monitoring via jtop (jetson-stats)
+    description: Jetson system monitoring via jtop (jetson-stats)
+    license: AGPL-3.0
+    url: https://github.com/rbonghi/jetson_stats
+    vendor: Avocado Linux <info@avocadolinux.org>
+    package_files:
+      - overlay
+      - avocado.yaml
+      - jtop-*.sh
+
+    overlay: overlay
+
+    enable_services:
+      - jtop.service
+
+    on_merge:
+      - systemctl start --no-block jtop.service
+
+    on_unmerge:
+      - systemctl stop jtop.service
+
+    packages:
+      jetson-stats:
+        compile: jetson-stats
+        install: jtop-install.sh
+      python3: '*'
+
+    sdk:
+      packages:
+        nativesdk-python3: '*'
+        nativesdk-python3-pip: '*'
+        nativesdk-python3-setuptools: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
+
+  compile:
+    jetson-stats:
+      compile: jtop-compile.sh
+      clean: jtop-clean.sh
+      packages:
+        python3: '*'
+        python3-pip: '*'
+        python3-setuptools: '*'
+
+  packages:
+    avocado-sdk-toolchain: '*'
