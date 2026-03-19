@@ -1,6 +1,7 @@
 supported_targets:
   - jetson-orin-nano-devkit
   - jetson-agx-orin-devkit
+  - icam-540
 
 distro:
   release: 2024
