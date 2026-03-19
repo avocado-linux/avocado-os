@@ -47,7 +47,7 @@ extensions:
       - ref-reactjs.service
 
     on_merge:
-      - systemctl start --no-block ref-reactjs.service
+      - systemctl restart --no-block ref-reactjs.service
 
     on_unmerge:
       - systemctl stop ref-reactjs.service

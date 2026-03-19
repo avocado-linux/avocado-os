@@ -58,7 +58,7 @@ extensions:
     enable_services:
       - heartbeat.service
     on_merge:
-      - systemctl start --no-block heartbeat.service
+      - systemctl restart --no-block heartbeat.service
     on_unmerge:
       - systemctl stop heartbeat.service
 
