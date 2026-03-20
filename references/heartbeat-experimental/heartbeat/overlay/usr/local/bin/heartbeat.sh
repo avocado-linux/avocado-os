@@ -12,8 +12,14 @@ while true; do
   load_1m=$(awk '{print $1}' /proc/loadavg)
   ts=$(date +%s)
 
-  printf '{"uptime":%d,"mem_free_kb":%d,"mem_total_kb":%d,"load_1m":"%s","ts":%d}\n' \
-    "$uptime_secs" "$mem_free_kb" "$mem_total_kb" "$load_1m" "$ts"
+  json="{"
+  json="${json}\"uptime\":${uptime_secs},"
+  json="${json}\"mem_free_kb\":${mem_free_kb},"
+  json="${json}\"mem_total_kb\":${mem_total_kb},"
+  json="${json}\"load_1m\":\"${load_1m}\","
+  json="${json}\"ts\":${ts}"
+  json="${json}}"
+  echo "$json"
 
   sleep "$INTERVAL"
 done
