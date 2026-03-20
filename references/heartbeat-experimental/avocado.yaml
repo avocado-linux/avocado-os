@@ -12,6 +12,8 @@ runtimes:
       - avocado-ext-dev
       - avocado-ext-sshd-dev
       - avocado-bsp-{{ avocado.target }}
+      - avocado-ext-connect
+      - avocado-ext-tunnels
       - config
       - app
       - heartbeat
@@ -34,6 +36,16 @@ extensions:
       type: package
       version: "*"
 
+  avocado-ext-connect:
+    source:
+      type: package
+      version: "*"
+
+  avocado-ext-tunnels:
+    source:
+      type: package
+      version: "*"
+
   app:
     types:
       - sysext
@@ -44,6 +56,7 @@ extensions:
     types:
       - confext
     version: "0.1.0"
+    overlay: overlay
     users:
       root:
         password: ""
