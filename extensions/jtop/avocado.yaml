@@ -41,8 +41,7 @@ extensions:
     sdk:
       packages:
         nativesdk-python3: '*'
-        nativesdk-python3-pip: '*'
-        nativesdk-python3-setuptools: '*'
+        nativesdk-uv: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
@@ -53,8 +52,6 @@ sdk:
       clean: jtop-clean.sh
       packages:
         python3: '*'
-        python3-pip: '*'
-        python3-setuptools: '*'
 
   packages:
     avocado-sdk-toolchain: '*'
