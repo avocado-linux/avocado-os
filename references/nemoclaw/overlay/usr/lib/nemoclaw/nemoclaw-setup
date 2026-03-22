@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+echo "NemoClaw: Starting initial setup..."
+
+# Ensure persistent directories exist (tmpfiles.d should handle this,
+# but verify in case service starts before tmpfiles completes)
+mkdir -p /var/lib/nemoclaw/state
+mkdir -p /var/lib/nemoclaw/blueprints
+mkdir -p /var/log/nemoclaw
+
+# Create Docker network for NemoClaw if it doesn't exist
+if ! docker network inspect nemoclaw >/dev/null 2>&1; then
+    echo "NemoClaw: Creating Docker network..."
+    docker network create nemoclaw
+fi
+
+# Pull the gateway container image
+echo "NemoClaw: Pulling gateway image ${NEMOCLAW_IMAGE}..."
+docker pull "${NEMOCLAW_IMAGE}"
+
+echo "NemoClaw: Setup complete."

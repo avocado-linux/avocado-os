@@ -1,0 +1,14 @@
+[Unit]
+Description=NemoClaw Initial Setup
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/etc/nemoclaw/gateway.env
+ExecStart=/usr/lib/nemoclaw/nemoclaw-setup
+
+[Install]
+WantedBy=multi-user.target

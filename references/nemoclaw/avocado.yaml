@@ -1,0 +1,114 @@
+supported_targets:
+  - jetson-orin-nano-devkit
+  - jetson-agx-orin-devkit
+
+distro:
+  release: 2024
+  channel: edge
+
+runtimes:
+  dev:
+    packages:
+      avocado-runtime: '*'
+    extensions:
+      - nemoclaw
+      - nvidia-docker
+      - config-dev
+      - avocado-ext-dev
+      - avocado-ext-sshd-dev
+      - avocado-ext-cli
+      - avocado-bsp-{{ avocado.target }}
+
+extensions:
+  avocado-ext-docker:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-sshd-dev:
+    source:
+      type: package
+      version: '*'
+
+  avocado-ext-cli:
+    source:
+      type: package
+      version: '*'
+
+  avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: '*'
+
+  nvidia-docker:
+    version: 0.1.0
+
+    enable_services:
+    - docker.service
+
+    on_merge:
+    - systemctl restart --no-block docker.service
+
+    on_unmerge:
+    - systemctl stop docker.service
+
+    packages:
+      ca-certificates: "*"
+      iptables-modules: "*"
+
+      kernel-module-ip-tables: "*"
+      kernel-module-ip6table-filter: "*"
+      kernel-module-ip6table-mangle: "*"
+      kernel-module-ip6table-nat: "*"
+      kernel-module-iptable-filter: "*"
+      kernel-module-iptable-mangle: "*"
+      kernel-module-iptable-nat: "*"
+      kernel-module-iptable-raw: "*"
+      kernel-module-nf-conntrack-netlink: "*"
+      kernel-module-nf-nat: "*"
+      kernel-module-xt-addrtype: "*"
+      kernel-module-xt-conntrack: "*"
+      kernel-module-xt-masquerade: "*"
+      nvidia-docker: "*"
+
+  nemoclaw:
+    version: 0.1.0
+    overlay: overlay
+
+    enable_services:
+      - nemoclaw-setup.service
+      - nemoclaw-gateway.service
+
+    on_merge:
+      - systemctl start --no-block nemoclaw-setup.service
+      - systemctl start --no-block nemoclaw-gateway.service
+
+    on_unmerge:
+      - systemctl stop nemoclaw-gateway.service
+      - systemctl stop nemoclaw-setup.service
+
+    packages:
+      curl: '*'
+      iptables: '*'
+
+  config-dev:
+    version: 0.1.0
+    users:
+      root:
+        password: ''
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
+  container_args:
+    - --privileged
+    - --network=host
+    - -v /dev:/dev
+    - -v /sys:/sys
+
+  packages:
+    avocado-sdk-toolchain: '*'
