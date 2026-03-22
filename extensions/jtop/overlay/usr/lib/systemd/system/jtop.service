@@ -4,7 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/jtop --service
+Environment="JTOP_SERVICE=True"
+ExecStart=/usr/bin/jtop --force
 Restart=on-failure
 RestartSec=5
 SyslogIdentifier=jtop
