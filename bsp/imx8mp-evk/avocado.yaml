@@ -22,6 +22,59 @@ extensions:
       - udevadm trigger --type=devices --action=add --settle
 
     packages:
+      # --- Crypto / Security (CAAM) ---
+      kernel-module-caam: '*'
+      kernel-module-caam-jr: '*'
+      kernel-module-caamalg-desc: '*'
+      kernel-module-caamhash-desc: '*'
+      kernel-module-caamkeyblob-desc: '*'
+      kernel-module-authenc: '*'
+      kernel-module-crypto-engine: '*'
+      kernel-module-error: '*'
+      kernel-module-libdes: '*'
+      kernel-module-secvio: '*'
+      kernel-module-fsl-jr-uio: '*'
+      kernel-module-crct10dif-ce: '*'
+      kernel-module-polyval-ce: '*'
+      kernel-module-polyval-generic: '*'
+      # --- Audio / Sound ---
+      kernel-module-snd-soc-fsl-sai: '*'
+      kernel-module-snd-soc-fsl-xcvr: '*'
+      kernel-module-snd-soc-fsl-micfil: '*'
+      kernel-module-snd-soc-fsl-easrc: '*'
+      kernel-module-snd-soc-fsl-asrc: '*'
+      kernel-module-snd-soc-fsl-aud2htx: '*'
+      kernel-module-snd-soc-fsl-utils: '*'
+      kernel-module-snd-soc-fsl-asoc-card: '*'
+      kernel-module-snd-soc-imx-audmux: '*'
+      kernel-module-snd-soc-imx-hdmi: '*'
+      kernel-module-snd-soc-imx-card: '*'
+      kernel-module-snd-soc-wm8960: '*'
+      kernel-module-imx-pcm-dma: '*'
+      # --- Display ---
+      kernel-module-dw-hdmi-cec: '*'
+      # --- Media / Camera ---
+      kernel-module-imx8-media-dev: '*'
+      # --- CAN bus ---
+      kernel-module-flexcan: '*'
+      kernel-module-can-dev: '*'
+      # --- Bluetooth ---
+      kernel-module-btnxpuart: '*'
+      # --- DSP ---
+      kernel-module-imx-dsp-rproc: '*'
+      # --- Filesystems / Block ---
+      kernel-module-fuse: '*'
+      kernel-module-dm-mod: '*'
+      # --- NFS (required by avocado-hitl / nfs-utils) ---
+      kernel-module-nfsd: '*'
+      # --- Compression / zram ---
+      kernel-module-zram: '*'
+      kernel-module-zsmalloc: '*'
+      kernel-module-lz4: '*'
+      kernel-module-lz4-compress: '*'
+      # --- Firmware ---
+      linux-firmware-imx-sdma-imx7d: '*'
+      wireless-regdb-static: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
