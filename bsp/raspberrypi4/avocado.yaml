@@ -27,7 +27,6 @@ extensions:
 
     packages:
       bluez-firmware-rpidistro-bcm4345c0-hcd: '*'
-      linux-firmware-rpidistro-bcm43455: '*'
       fwup: '*'
       kernel-module-bcm2835-codec: '*'
       kernel-module-bcm2835-isp: '*'
@@ -45,6 +44,9 @@ extensions:
       kernel-module-fuse: '*'
       kernel-module-gpu-sched: '*'
       kernel-module-hci-uart: '*'
+      kernel-module-i2c-dev: '*'
+      kernel-module-i2c-mux: '*'
+      kernel-module-i2c-mux-pinctrl: '*'
       kernel-module-ipv6: '*'
       kernel-module-libaes: '*'
       kernel-module-lz4: '*'
@@ -54,6 +56,7 @@ extensions:
       kernel-module-raspberrypi-hwmon: '*'
       kernel-module-rfkill: '*'
       kernel-module-rpi-hevc-dec: '*'
+      kernel-module-rtc-pcf85063: '*'
       kernel-module-sch-fq-codel: '*'
       kernel-module-snd-bcm2835: '*'
       kernel-module-uio: '*'
@@ -68,6 +71,7 @@ extensions:
       kernel-module-videobuf2-vmalloc: '*'
       kernel-module-videodev: '*'
       kernel-module-zram: '*'
+      linux-firmware-rpidistro-bcm43455: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
