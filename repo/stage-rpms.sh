@@ -2,6 +2,12 @@
 
 set -e # Exit immediately if a command exits with a non-zero status.
 
+# Force line-buffered stdout so progress is visible in container logs
+if command -v stdbuf &>/dev/null && [ -z "$_STAGE_RPMS_UNBUFFERED" ]; then
+    export _STAGE_RPMS_UNBUFFERED=1
+    exec stdbuf -oL "$0" "$@"
+fi
+
 # Main script
 if [ $# -ne 3 ]; then
     echo "Usage: $0 <source-deploy-directory> <target-deploy-directory> <releasever>"
@@ -50,7 +56,7 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
 
     # Sync RPMs from source to target using rsync with checksum comparison
     echo "Syncing files from ${source_dir} to ${target_dir}"
-    rsync -avc "${source_dir}/" "${target_dir}/"
+    rsync -avc --info=progress2 "${source_dir}/" "${target_dir}/"
 
 done < "${MAP_FILE}"
 
