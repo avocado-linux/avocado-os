@@ -54,9 +54,11 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
     # Create target directory structure
     mkdir -p "${target_dir}"
 
-    # Sync RPMs from source to target using rsync with checksum comparison
-    echo "Syncing files from ${source_dir} to ${target_dir}"
-    rsync -avc --info=progress2 "${source_dir}/" "${target_dir}/"
+    # Stream files via tar pipe — avoids per-file NFS round-trips
+    file_count=$(find "${source_dir}" -type f | wc -l)
+    echo "Staging ${file_count} files from ${source_dir} to ${target_dir}"
+    tar cf - -C "${source_dir}" . | tar xf - -C "${target_dir}"
+    echo "Done: ${source_dir} -> ${target_dir}"
 
 done < "${MAP_FILE}"
 
