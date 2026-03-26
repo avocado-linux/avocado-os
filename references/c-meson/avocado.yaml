@@ -1,0 +1,99 @@
+cli_requirement: ">=0.26.0"
+
+default_target: "raspberrypi5"
+
+supported_targets:
+  - raspberrypi5
+
+##
+## Distribution
+##
+
+distro:
+  release: 2024
+  channel: edge
+
+##
+## Runtimes
+##
+
+runtimes:
+  dev:
+    extensions:
+      - avocado-ext-dev
+      - avocado-ext-sshd-dev
+      - avocado-bsp-{{ avocado.target }}
+      - config
+      - app
+    packages:
+      avocado-runtime: "*"
+
+##
+## Extensions
+##
+
+extensions:
+  avocado-ext-dev:
+    source:
+      type: package
+      version: "*"
+
+  avocado-ext-sshd-dev:
+    source:
+      type: package
+      version: "*"
+
+  avocado-bsp-{{ avocado.target }}:
+    source:
+      type: package
+      version: "*"
+
+  app:
+    types:
+      - sysext
+      - confext
+    version: "0.1.0"
+    summary: "GPIO toggle using libgpiod, built with meson"
+    overlay: app/overlay
+    packages:
+      app:
+        compile: app
+        install: app-install.sh
+      libgpiod: "*"
+    enable_services:
+      - app.service
+    on_merge:
+      - systemctl restart --no-block app.service
+    on_unmerge:
+      - systemctl stop app.service
+
+  config:
+    types:
+      - confext
+    version: "0.1.0"
+    users:
+      root:
+        password: ""
+
+##
+## SDK
+##
+
+sdk:
+  image: "docker.io/avocadolinux/sdk:{{ config.distro.release }}-{{ config.distro.channel }}"
+
+  container_args:
+    - --privileged
+    - --network=host
+    - -v /dev:/dev
+    - -v /sys:/sys
+
+  compile:
+    app:
+      compile: app-compile.sh
+      clean: app-clean.sh
+      packages:
+        libgpiod-dev: "*"
+
+  packages:
+    avocado-sdk-toolchain: "*"
