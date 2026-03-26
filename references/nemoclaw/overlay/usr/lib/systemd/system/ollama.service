@@ -5,9 +5,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+ExecStartPre=/bin/sh -c 'cat /usr/share/ca-certificates/mozilla/*.crt > /etc/ssl/certs/ca-certificates.crt'
 ExecStart=/usr/bin/ollama serve
+Environment=HOME=/var/lib/ollama
 Environment=OLLAMA_MODELS=/var/lib/ollama/models
 Environment=OLLAMA_HOST=0.0.0.0:11434
+Environment=SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 Restart=on-failure
 RestartSec=5
 

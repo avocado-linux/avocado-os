@@ -17,7 +17,11 @@ fi
 mkdir -p "$AVOCADO_BUILD_EXT_SYSROOT/usr/lib/nemoclaw"
 cp -a "$AVOCADO_BUILD_DIR/NemoClaw/." "$AVOCADO_BUILD_EXT_SYSROOT/usr/lib/nemoclaw/"
 
-# Symlink the CLI binary into PATH
-ln -sf /usr/lib/nemoclaw/node_modules/.bin/nemoclaw "$AVOCADO_BUILD_EXT_SYSROOT/usr/bin/nemoclaw"
+# Create a wrapper script for the CLI
+cat > "$AVOCADO_BUILD_EXT_SYSROOT/usr/bin/nemoclaw" << 'WRAPPER'
+#!/bin/sh
+exec /usr/bin/node /usr/lib/nemoclaw/bin/nemoclaw.js "$@"
+WRAPPER
+chmod 0755 "$AVOCADO_BUILD_EXT_SYSROOT/usr/bin/nemoclaw"
 
 echo "NemoClaw CLI and Ollama installed successfully"

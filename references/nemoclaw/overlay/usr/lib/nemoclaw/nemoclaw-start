@@ -4,8 +4,10 @@ set -e
 NEMOCLAW_HOME=/var/lib/nemoclaw
 export PATH="/usr/lib/nemoclaw/node_modules/.bin:$PATH"
 export NODE_PATH="/usr/lib/nemoclaw/node_modules"
+export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
-# If not yet onboarded, run onboard with Ollama as provider
+# If not yet onboarded, run non-interactive onboard
+# NemoClaw auto-detects local Ollama in non-interactive mode
 if [ ! -f "$NEMOCLAW_HOME/.onboarded" ]; then
     echo "NemoClaw: Running first-time onboard..."
 
@@ -16,13 +18,9 @@ if [ ! -f "$NEMOCLAW_HOME/.onboarded" ]; then
         sleep 2
     done
 
-    # Pull default model if not present
-    if ! ollama list | grep -q nemotron; then
-        echo "NemoClaw: Pulling nemotron-3-nano model (this may take a while)..."
-        ollama pull nemotron-3-nano:30b
-    fi
-
-    nemoclaw onboard --provider ollama
+    export NEMOCLAW_NON_INTERACTIVE=1
+    export NEMOCLAW_PROVIDER=ollama
+    nemoclaw onboard --non-interactive
     touch "$NEMOCLAW_HOME/.onboarded"
 fi
 

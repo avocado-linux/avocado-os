@@ -6,6 +6,7 @@ Wants=ollama.service network-online.target
 
 [Service]
 Type=simple
+Environment=HOME=/var/lib/nemoclaw
 WorkingDirectory=/var/lib/nemoclaw
 ExecStart=/usr/lib/nemoclaw/nemoclaw-start
 Restart=on-failure

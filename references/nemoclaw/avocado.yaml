@@ -80,13 +80,18 @@ extensions:
       - systemctl stop nemoclaw.service
       - systemctl stop ollama.service
 
+    modprobe:
+      - vxlan
+
     packages:
       nemoclaw-cli:
         compile: nemoclaw-cli
         install: install.sh
       nodejs: '*'
       nodejs-npm: '*'
+      coreutils: '*'
       curl: '*'
+      kernel-module-vxlan: '*'
 
     sdk:
       packages:
