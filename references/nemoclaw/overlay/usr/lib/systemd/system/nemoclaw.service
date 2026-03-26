@@ -1,0 +1,15 @@
+[Unit]
+Description=NemoClaw AI Agent Runtime
+After=ollama.service docker.service network-online.target
+Requires=docker.service
+Wants=ollama.service network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/lib/nemoclaw
+ExecStart=/usr/lib/nemoclaw/nemoclaw-start
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

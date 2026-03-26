@@ -1,8 +1,8 @@
 # NemoClaw Reference
 
-This reference deploys [NVIDIA NemoClaw](https://github.com/NVIDIA/NemoClaw) on Avocado OS with GPU-accelerated AI agent execution on Jetson hardware.
+This reference deploys [NVIDIA NemoClaw](https://github.com/NVIDIA/NemoClaw) on Avocado OS with local GPU-accelerated AI agent execution on Jetson hardware using Ollama for inference.
 
-NemoClaw is NVIDIA's secure AI agent runtime built on OpenClaw. It provides containerized agent execution with embedded K3s orchestration, network egress control, filesystem isolation, and GPU-accelerated inference routing.
+NemoClaw is NVIDIA's secure AI agent runtime built on OpenClaw. It provides containerized agent execution with embedded K3s orchestration, network egress control, filesystem isolation, and inference routing.
 
 ## Supported Targets
 
@@ -11,13 +11,11 @@ NemoClaw is NVIDIA's secure AI agent runtime built on OpenClaw. It provides cont
 
 ## Architecture
 
-The reference uses a fully containerized approach:
+- **NemoClaw CLI** — Pre-installed Node.js application that orchestrates agent sandboxes via Docker
+- **Ollama** — Local inference server with GPU acceleration, serves models like `nemotron-3-nano:30b`
+- **Docker** — Container runtime for NemoClaw sandbox environments (provided by `nvidia-docker` extension)
 
-- **Host**: Runs Docker with NVIDIA Container Toolkit (provided by BSP)
-- **Gateway Container**: NemoClaw gateway with embedded K3s, Node.js, and Python
-- **Sandbox Containers**: Agent execution environments orchestrated by the gateway
-
-No host-level K3s, Node.js, or Python installation is required.
+The NemoClaw CLI is cross-compiled at build time via npm in the SDK container. Ollama and Node.js are included as distro packages.
 
 ## Data Persistence
 
@@ -25,47 +23,58 @@ All mutable state is stored on the `/var` partition (R/W):
 
 | Path | Purpose |
 |---|---|
-| `/var/lib/nemoclaw/state/` | OpenClaw state (sessions, agents, credentials, config) |
-| `/var/lib/nemoclaw/blueprints/` | NemoClaw blueprint storage |
+| `/var/lib/nemoclaw/` | NemoClaw working directory (onboard state, sessions, agents) |
+| `/var/lib/ollama/models/` | Downloaded LLM model weights |
 | `/var/lib/docker/` | Docker images, containers, volumes |
-| `/var/log/nemoclaw/` | Log directory |
 
-## Configuration
+## First Boot
 
-Edit `/etc/nemoclaw/gateway.env` to configure:
+On first boot, `nemoclaw.service` will:
 
-- `NEMOCLAW_IMAGE` — Gateway container image (default: `nvcr.io/nvidia/nemoclaw-gateway:latest`)
-- `NEMOCLAW_API_PORT` — Gateway API port (default: `3000`)
+1. Wait for Ollama to be ready
+2. Pull the `nemotron-3-nano:30b` model (~30 GB download)
+3. Run `nemoclaw onboard` with Ollama as the inference provider
+4. Start the NemoClaw agent runtime
+
+Subsequent boots skip the onboard step (state persists in `/var/lib/nemoclaw/.onboarded`).
 
 ## Services
 
-- `nemoclaw-setup.service` — One-shot service that pulls the gateway image and creates the Docker network on first boot
-- `nemoclaw-gateway.service` — Runs the NemoClaw gateway container with GPU passthrough
+| Service | Type | Purpose |
+|---|---|---|
+| `ollama.service` | long-running | Local inference server on port 11434 |
+| `nemoclaw.service` | long-running | NemoClaw agent runtime |
+| `docker.service` | long-running | Container runtime for sandboxes |
 
 ## Viewing Logs
 
 ```sh
-journalctl -u nemoclaw-gateway -f
-journalctl -u nemoclaw-setup
+journalctl -u ollama -f
+journalctl -u nemoclaw -f
 ```
 
-## Air-Gapped Deployments
+## Interacting with NemoClaw
 
-By default, `nemoclaw-setup.service` pulls the gateway container image on first boot, which requires internet access. For air-gapped deployments, pre-load the image:
-
-### Save the image on a networked machine
+Once the first-boot setup completes:
 
 ```sh
-docker pull nvcr.io/nvidia/nemoclaw-gateway:latest
-docker save nvcr.io/nvidia/nemoclaw-gateway:latest | gzip > nemoclaw-gateway.tar.gz
+# Check status
+nemoclaw status
+
+# Connect to an agent
+nemoclaw <agent-name> connect
+
+# View logs
+nemoclaw <agent-name> logs --follow
 ```
 
-### Load on the target device
+## Dependencies
 
-Transfer `nemoclaw-gateway.tar.gz` to the device (e.g., via USB), then:
+This reference requires the following packages to be available in the Avocado package feed:
 
-```sh
-gunzip -c nemoclaw-gateway.tar.gz | docker load
-```
+- `nodejs` (22+) — available
+- `nodejs-npm` — available
+- `nvidia-docker` — available
+- `curl`, `git` — available
 
-The setup service will skip the pull if the image is already present.
+Ollama and the NemoClaw CLI are downloaded and bundled into the extension at build time (no distro recipe needed).

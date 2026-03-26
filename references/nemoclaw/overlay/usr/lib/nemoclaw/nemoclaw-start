@@ -1,0 +1,30 @@
+#!/bin/sh
+set -e
+
+NEMOCLAW_HOME=/var/lib/nemoclaw
+export PATH="/usr/lib/nemoclaw/node_modules/.bin:$PATH"
+export NODE_PATH="/usr/lib/nemoclaw/node_modules"
+
+# If not yet onboarded, run onboard with Ollama as provider
+if [ ! -f "$NEMOCLAW_HOME/.onboarded" ]; then
+    echo "NemoClaw: Running first-time onboard..."
+
+    # Wait for Ollama to be ready
+    for i in $(seq 1 30); do
+        if ollama list >/dev/null 2>&1; then break; fi
+        echo "NemoClaw: Waiting for Ollama to be ready ($i/30)..."
+        sleep 2
+    done
+
+    # Pull default model if not present
+    if ! ollama list | grep -q nemotron; then
+        echo "NemoClaw: Pulling nemotron-3-nano model (this may take a while)..."
+        ollama pull nemotron-3-nano:30b
+    fi
+
+    nemoclaw onboard --provider ollama
+    touch "$NEMOCLAW_HOME/.onboarded"
+fi
+
+# Start the NemoClaw agent
+exec nemoclaw start

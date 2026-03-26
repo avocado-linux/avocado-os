@@ -16,26 +16,15 @@ runtimes:
       - config-dev
       - avocado-ext-dev
       - avocado-ext-sshd-dev
-      - avocado-ext-cli
       - avocado-bsp-{{ avocado.target }}
 
 extensions:
-  avocado-ext-docker:
-    source:
-      type: package
-      version: '*'
-
   avocado-ext-dev:
     source:
       type: package
       version: '*'
 
   avocado-ext-sshd-dev:
-    source:
-      type: package
-      version: '*'
-
-  avocado-ext-cli:
     source:
       type: package
       version: '*'
@@ -49,52 +38,62 @@ extensions:
     version: 0.1.0
 
     enable_services:
-    - docker.service
+      - docker.service
 
     on_merge:
-    - systemctl restart --no-block docker.service
+      - systemctl restart --no-block docker.service
 
     on_unmerge:
-    - systemctl stop docker.service
+      - systemctl stop docker.service
 
     packages:
-      ca-certificates: "*"
-      iptables-modules: "*"
-
-      kernel-module-ip-tables: "*"
-      kernel-module-ip6table-filter: "*"
-      kernel-module-ip6table-mangle: "*"
-      kernel-module-ip6table-nat: "*"
-      kernel-module-iptable-filter: "*"
-      kernel-module-iptable-mangle: "*"
-      kernel-module-iptable-nat: "*"
-      kernel-module-iptable-raw: "*"
-      kernel-module-nf-conntrack-netlink: "*"
-      kernel-module-nf-nat: "*"
-      kernel-module-xt-addrtype: "*"
-      kernel-module-xt-conntrack: "*"
-      kernel-module-xt-masquerade: "*"
-      nvidia-docker: "*"
+      ca-certificates: '*'
+      iptables-modules: '*'
+      kernel-module-ip-tables: '*'
+      kernel-module-ip6table-filter: '*'
+      kernel-module-ip6table-mangle: '*'
+      kernel-module-ip6table-nat: '*'
+      kernel-module-iptable-filter: '*'
+      kernel-module-iptable-mangle: '*'
+      kernel-module-iptable-nat: '*'
+      kernel-module-iptable-raw: '*'
+      kernel-module-nf-conntrack-netlink: '*'
+      kernel-module-nf-nat: '*'
+      kernel-module-xt-addrtype: '*'
+      kernel-module-xt-conntrack: '*'
+      kernel-module-xt-masquerade: '*'
+      nvidia-docker: '*'
 
   nemoclaw:
     version: 0.1.0
     overlay: overlay
 
     enable_services:
-      - nemoclaw-setup.service
-      - nemoclaw-gateway.service
+      - ollama.service
+      - nemoclaw.service
 
     on_merge:
-      - systemctl start --no-block nemoclaw-setup.service
-      - systemctl start --no-block nemoclaw-gateway.service
+      - systemctl start --no-block ollama.service
+      - systemctl start --no-block nemoclaw.service
 
     on_unmerge:
-      - systemctl stop nemoclaw-gateway.service
-      - systemctl stop nemoclaw-setup.service
+      - systemctl stop nemoclaw.service
+      - systemctl stop ollama.service
 
     packages:
+      nemoclaw-cli:
+        compile: nemoclaw-cli
+        install: install.sh
+      nodejs: '*'
+      nodejs-npm: '*'
       curl: '*'
-      iptables: '*'
+
+    sdk:
+      packages:
+        nativesdk-nodejs: '*'
+        nativesdk-nodejs-npm: '*'
+        nativesdk-ca-certificates: '*'
+        nativesdk-zstd: '*'
 
   config-dev:
     version: 0.1.0
@@ -109,6 +108,11 @@ sdk:
     - --network=host
     - -v /dev:/dev
     - -v /sys:/sys
+
+  compile:
+    nemoclaw-cli:
+      compile: compile.sh
+      clean: clean.sh
 
   packages:
     avocado-sdk-toolchain: '*'
