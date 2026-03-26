@@ -1,0 +1,12 @@
+[Unit]
+Description=GPIO Toggle
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/gpio-toggle
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

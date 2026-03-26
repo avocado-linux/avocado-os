@@ -1,0 +1,4 @@
+.avocado
+.avocado-state
+app/packages
+*.DS_Store
