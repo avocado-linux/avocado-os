@@ -1,0 +1,4 @@
+app/src/build/
+.avocado/
+.avocado-state
+.DS_Store
