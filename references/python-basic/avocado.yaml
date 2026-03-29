@@ -1,10 +1,9 @@
 cli_requirement: ">=0.26.0"
 
-default_target: "qemuarm64"
+default_target: "*"
 
 # Add additional supported targets or use "*" for all targets
-supported_targets:
-  - qemuarm64
+supported_targets: "*"
 
 ##
 ## Distribution
