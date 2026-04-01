@@ -16,10 +16,15 @@ extensions:
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
 
+    modprobe:
+      - moal
+
     on_merge:
       - udevadm control --reload
       - udevadm trigger --type=subsystems --action=add --settle
       - udevadm trigger --type=devices --action=add --settle
+
+    overlay: overlay
 
     packages:
       # --- Crypto / Security (CAAM) ---
@@ -58,8 +63,22 @@ extensions:
       # --- CAN bus ---
       kernel-module-flexcan: '*'
       kernel-module-can-dev: '*'
+      # --- WiFi (NXP 88W8997 / AW-CM276MA) ---
+      kernel-module-nxp-wlan: '*'
+      kernel-module-rfkill: '*'
+      # --- WiFi (common USB dongles) ---
+      kernel-module-rtw88-usb: '*'
+      kernel-module-rtw88-8822bu: '*'
+      kernel-module-rtw88-8822cu: '*'
+      kernel-module-rtw88-8821cu: '*'
+      kernel-module-rt2800usb: '*'
+      kernel-module-mt7601u: '*'
+      kernel-module-ath9k-htc: '*'
       # --- Bluetooth ---
       kernel-module-btnxpuart: '*'
+      kernel-module-btusb: '*'
+      kernel-module-btrtl: '*'
+      kernel-module-ath3k: '*'
       # --- DSP ---
       kernel-module-imx-dsp-rproc: '*'
       # --- Filesystems / Block ---
@@ -74,6 +93,8 @@ extensions:
       kernel-module-lz4-compress: '*'
       # --- Firmware ---
       linux-firmware-imx-sdma-imx7d: '*'
+      firmware-nxp-wifi-nxp8997-sdio: '*'
+      firmware-nxp-wifi-nxp8997-pcie: '*'
       wireless-regdb-static: '*'
 
 sdk:
