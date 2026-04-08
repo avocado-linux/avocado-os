@@ -1,0 +1,21 @@
+[Unit]
+Description=Cog Webkit Launcher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=-/etc/default/cog-avocado
+
+Environment=COG_URL=https://avocadolinux.org
+Environment=XDG_RUNTIME_DIR=/run/user/0
+Environment=HOME=/tmp
+
+ExecStartPre=/bin/sh -c "mkdir -p /run/user/0"
+ExecStartPre=/bin/sh -c "cat /usr/share/ca-certificates/mozilla/*.crt > /etc/ssl/certs/ca-certificates.crt"
+
+ExecStart=/usr/bin/cog --platform-params='renderer=gles' ${COG_URL}
+
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
