@@ -37,6 +37,8 @@ extensions:
       wpebackend-fdo: '*'
       wpewebkit: '*'
 
+    overlay: overlays/base
+
     reterminal:
       overlay: overlays/reterminal
 
