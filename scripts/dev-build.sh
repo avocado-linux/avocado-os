@@ -372,6 +372,12 @@ fi
 # Start repository server only if building extensions (not needed for packaging only)
 REPO_STARTED=false
 if [ "$BUILD_EXT" = true ] && [ "$NO_EXTENSIONS" = false ]; then
+    # Ensure Docker network exists for build containers to reach the repo server
+    if ! docker network ls --filter "name=^${NETWORK_NAME}$" --format "{{.Name}}" | grep -q "^${NETWORK_NAME}$"; then
+        log "Creating Docker network: $NETWORK_NAME"
+        docker network create "$NETWORK_NAME"
+    fi
+
     log "=== Starting Repository Server ==="
     if ! start_repo_server; then
         log "ERROR: Failed to start repository server"
