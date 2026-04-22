@@ -9,9 +9,19 @@ if command -v stdbuf &>/dev/null && [ -z "$_STAGE_RPMS_UNBUFFERED" ]; then
 fi
 
 # Main script
+METADATA_ONLY=0
+if [ "${1:-}" = "--metadata-only" ]; then
+    METADATA_ONLY=1
+    shift
+fi
+
 if [ $# -ne 3 ]; then
-    echo "Usage: $0 <source-deploy-directory> <target-deploy-directory> <releasever>"
+    echo "Usage: $0 [--metadata-only] <source-deploy-directory> <target-deploy-directory> <releasever>"
     echo "Example: $0 /path/to/build/tmp/deploy/rpm /path/to/target/repo latest/apollo/edge"
+    echo ""
+    echo "  --metadata-only  Validate the map and per-entry source dirs, but skip"
+    echo "                   the bulk tar-pipe of RPMs. Use when RPMs are uploaded"
+    echo "                   directly from the build (avocado-pulp-upload bbclass)."
     exit 1
 fi
 
@@ -48,6 +58,12 @@ while IFS='=' read -r key value || [ -n "$key" ]; do
 
     if [ ! -d "${source_dir}" ]; then
         echo "Warning: Source directory ${source_dir} not found for key '${key}'. Skipping." >&2
+        continue
+    fi
+
+    if [ "${METADATA_ONLY}" = "1" ]; then
+        file_count=$(find "${source_dir}" -type f | wc -l)
+        echo "Metadata-only: skipping tar-pipe of ${file_count} files from ${source_dir}"
         continue
     fi
 
