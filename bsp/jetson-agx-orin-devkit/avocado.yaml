@@ -26,6 +26,12 @@ extensions:
       - udevadm trigger --type=devices --action=add --settle
       - nvbootctrl verify
 
+    # Common packages: same name in both kernel feeds (linux-yocto 6.6 and
+    # linux-jammy-nvidia-tegra 5.15). avocado-cli auto-suffixes kernel-family
+    # names with -${KERNEL_VERSION} at install time; the nv-kernel-module-*
+    # RPMs (from nvidia-kernel-oot) Provide both prefixed and unprefixed
+    # variants so unqualified `kernel-module-*` references resolve to the
+    # versioned NVIDIA OOT package.
     packages:
       kernel-module-at24: '*'
       kernel-module-cec: '*'
@@ -89,6 +95,34 @@ extensions:
       linux-firmware-rtl8168: '*'
       swupdate: '*'
       tegra-redundant-boot-base: '*'
+
+    # 5.15 (linux-jammy-nvidia-tegra) uses NVIDIA's downstream Realtek shim
+    # for the M.2 wifi card; mainline rtw88 isn't built for this kernel.
+    # Mirrors meta-tegra/conf/machine/include/devkit-wifi.inc:NVIDIA_WIFI which
+    # avocado-pkg-rootfs doesn't pick up automatically (devkit-wifi.inc routes
+    # via MACHINE_EXTRA_RRECOMMENDS, not MACHINE_ESSENTIAL_EXTRA_RDEPENDS).
+    #
+    # The L4T rtl8822ce driver expects firmware at top-level /lib/firmware
+    # (rtl8822_setting.bin, rtl8822cu_fw, rtl8822cu_config) which only
+    # tegra-firmware-rtl8822 ships. linux-firmware-rtl8822 ships rtl_bt/* and
+    # rtw88/* — wrong path/format for the L4T driver.
+    kernel-5.15.*:
+      packages:
+        nv-kernel-module-rtl8822ce: '*'
+        tegra-firmware-rtl8822: '*'
+
+    # 6.6 (linux-yocto) uses the upstream rtw88 driver family for the 8822CE,
+    # and ships drm-display-helper as a separate module (5.15 statically links
+    # the helpers into drm.ko). linux-firmware-rtl8822 ships rtl_bt/* and
+    # rtw88/* firmware blobs at the paths the upstream drivers expect.
+    kernel-6.6.*:
+      packages:
+        kernel-module-drm-display-helper: '*'
+        kernel-module-rtw88-8822c: '*'
+        kernel-module-rtw88-8822ce: '*'
+        kernel-module-rtw88-core: '*'
+        kernel-module-rtw88-pci: '*'
+        linux-firmware-rtl8822: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}

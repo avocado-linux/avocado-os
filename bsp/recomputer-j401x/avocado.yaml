@@ -1,20 +1,17 @@
-default_target: jetson-orin-nano-devkit
+default_target: recomputer-j401x
 supported_targets:
-  - jetson-orin-nano-devkit
+  - recomputer-j401x
 
 distro:
   release: 2024
   channel: edge
 
-initramfs:
-  filesystem: cpio.gz
-
 extensions:
-  avocado-bsp-jetson-orin-nano-devkit:
+  avocado-bsp-recomputer-j401x:
     version: 2024.1.0
     release: r0
-    summary: Board support for the Nvidia Jetson Orin Nano devkit
-    description: Board support for the Nvidia Jetson Orin Nano devkit
+    summary: Board support for the SeeedStudio Recomputer J401x
+    description: Board support for the SeeedStudio Recomputer J401x (Orin NX based)
     license: Apache-2.0
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
@@ -29,10 +26,17 @@ extensions:
       - udevadm trigger --type=devices --action=add --settle
       - nvbootctrl verify
 
-    # Common packages: same name in both kernel feeds (linux-yocto 6.6 and
-    # linux-jammy-nvidia-tegra 5.15). avocado-cli auto-suffixes kernel-family
-    # names with -${KERNEL_VERSION} at install time, so dnf resolves these to
-    # the resolver-pinned kernel rather than NVR-tie-breaking.
+    # Common packages: same name in both kernel feeds (linux-yocto 6.6 default
+    # and linux-jammy-nvidia-tegra 5.15 alt). avocado-cli auto-suffixes
+    # kernel-family names with -${KERNEL_VERSION} at install time; the
+    # nv-kernel-module-* RPMs (from nvidia-kernel-oot) Provide both prefixed
+    # and unprefixed variants so unqualified `kernel-module-*` references
+    # resolve to the versioned NVIDIA OOT package.
+    #
+    # Mirrors bsp/jetson-orin-nano-devkit/avocado.yaml package set —
+    # recomputer-j401x is Orin NX hardware, same SoC family as Orin Nano,
+    # so the SoC-level driver list applies. Per-platform divergence
+    # (cameras, peripheral GPIOs, sensor frontends) gets added as audits land.
     packages:
       kernel-module-at24: '*'
       kernel-module-bnep: '*'
@@ -148,11 +152,11 @@ extensions:
       swupdate: '*'
       tegra-redundant-boot-base: '*'
 
-    # 5.15 (linux-jammy-nvidia-tegra) uses NVIDIA's downstream Realtek shim for
-    # the 8822CE wifi; mainline rtw88 isn't built for this kernel. Mirrors
-    # meta-tegra/conf/machine/include/devkit-wifi.inc:NVIDIA_WIFI which avocado-
-    # pkg-rootfs doesn't pick up automatically (devkit-wifi.inc routes via
-    # MACHINE_EXTRA_RRECOMMENDS, not MACHINE_ESSENTIAL_EXTRA_RDEPENDS).
+    # 5.15 (linux-jammy-nvidia-tegra) uses NVIDIA's downstream Realtek shim
+    # for the M.2 wifi card; mainline rtw88 isn't built for this kernel.
+    # Mirrors meta-tegra/conf/machine/include/devkit-wifi.inc:NVIDIA_WIFI which
+    # avocado-pkg-rootfs doesn't pick up automatically (devkit-wifi.inc routes
+    # via MACHINE_EXTRA_RRECOMMENDS, not MACHINE_ESSENTIAL_EXTRA_RDEPENDS).
     #
     # The L4T rtl8822ce driver expects firmware at top-level /lib/firmware
     # (rtl8822_setting.bin, rtl8822cu_fw, rtl8822cu_config) which only
@@ -163,10 +167,11 @@ extensions:
         nv-kernel-module-rtl8822ce: '*'
         tegra-firmware-rtl8822: '*'
 
-    # 6.6 (linux-yocto) uses the upstream rtw88 driver family for the 8822CE,
-    # and ships drm-display-helper as a separate module (5.15 statically links
-    # the helpers into drm.ko). linux-firmware-rtl8822 ships rtl_bt/* and
-    # rtw88/* firmware blobs at the paths the upstream drivers expect.
+    # 6.6 (linux-yocto, default for recomputer-j401x) uses the upstream rtw88
+    # driver family for the 8822CE, and ships drm-display-helper as a separate
+    # module (5.15 statically links the helpers into drm.ko).
+    # linux-firmware-rtl8822 ships rtl_bt/* and rtw88/* firmware blobs at the
+    # paths the upstream drivers expect.
     kernel-6.6.*:
       packages:
         kernel-module-drm-display-helper: '*'
