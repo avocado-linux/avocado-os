@@ -55,7 +55,6 @@ extensions:
       kernel-module-raspberrypi-gpiomem: '*'
       kernel-module-raspberrypi-hwmon: '*'
       kernel-module-rfkill: '*'
-      kernel-module-rpi-hevc-dec: '*'
       kernel-module-rtc-pcf85063: '*'
       kernel-module-sch-fq-codel: '*'
       kernel-module-snd-bcm2835: '*'
@@ -72,6 +71,18 @@ extensions:
       kernel-module-videodev: '*'
       kernel-module-zram: '*'
       linux-firmware-rpidistro-bcm43455: '*'
+
+    # 6.6 (linux-raspberrypi 6.6) ships the HEVC decoder under the older
+    # rpivid-hevc name.
+    kernel-6.6.*:
+      packages:
+        kernel-module-rpivid-hevc: '*'
+
+    # 6.12 (linux-raspberrypi 6.12) renamed the HEVC decoder driver upstream
+    # to rpi-hevc-dec.
+    kernel-6.12.*:
+      packages:
+        kernel-module-rpi-hevc-dec: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}

@@ -25,6 +25,9 @@ extensions:
       - udevadm trigger --type=subsystems --action=add --settle
       - udevadm trigger --type=devices --action=add --settle
 
+    # Common packages: same name in both kernel feeds (linux-raspberrypi 6.6 and
+     # 6.12). avocado-cli auto-suffixes kernel-module names with -${KERNEL_VERSION}
+     # at install time, so dnf resolves these to the resolver-pinned kernel.
     packages:
       bluez-firmware-rpidistro-bcm4345c0-hcd: '*'
       bluez-firmware-rpidistro-bcm4345c5-hcd: '*'
@@ -42,7 +45,6 @@ extensions:
       kernel-module-brcmfmac: '*'
       kernel-module-brcmfmac-wcc: '*'
       kernel-module-aes-ce-blk: '*'
-      kernel-module-rpi-hevc-dec: '*'
       kernel-module-brcmutil: '*'
       kernel-module-aes-ce-cipher: '*'
       kernel-module-v4l2-mem2mem: '*'
@@ -58,7 +60,6 @@ extensions:
       kernel-module-sha1-ce: '*'
       kernel-module-videobuf2-v4l2: '*'
       kernel-module-cfg80211: '*'
-      kernel-module-sha1-generic: '*'
       kernel-module-rfkill: '*'
       kernel-module-videodev: '*'
       kernel-module-v3d: '*'
@@ -69,7 +70,6 @@ extensions:
       kernel-module-raspberrypi-gpiomem: '*'
       kernel-module-gpu-sched: '*'
       kernel-module-rp1-adc: '*'
-      kernel-module-drm-shmem-helper: '*'
       kernel-module-rp1-mailbox: '*'
       kernel-module-mc: '*'
       kernel-module-gpio-keys: '*'
@@ -84,6 +84,23 @@ extensions:
       kernel-module-zram: '*'
       kernel-module-lz4-compress: '*'
       kernel-module-ipv6: '*'
+
+    # 6.6 (linux-raspberrypi 6.6) builds sha1-generic and drm-gem-shmem-helper
+    # statically (CONFIG_CRYPTO_SHA1=y, CONFIG_DRM_GEM_SHMEM_HELPER=y), so
+    # neither ships as a loadable module. The HEVC decoder uses the older
+    # rpivid-hevc name on this branch.
+    kernel-6.6.*:
+      packages:
+        kernel-module-rpivid-hevc: '*'
+
+    # 6.12 (linux-raspberrypi 6.12) ships sha1-generic and drm-shmem-helper as
+    # loadable modules. The HEVC decoder driver was renamed upstream to
+    # rpi-hevc-dec.
+    kernel-6.12.*:
+      packages:
+        kernel-module-rpi-hevc-dec: '*'
+        kernel-module-sha1-generic: '*'
+        kernel-module-drm-shmem-helper: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
