@@ -1,0 +1,66 @@
+default_target: grinn-astra-1680-sbc
+supported_targets:
+  - grinn-astra-1680-sbc
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-bsp-grinn-astra-1680-sbc:
+    version: 2024.1.0
+    release: r0
+    summary: Board support for Grinn Astra 1680 SBC
+    description: Board support for Grinn Astra 1680 SBC
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    on_merge:
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+
+    packages:
+      # --- Camera / ISP / Video pipeline (Synaptics VS) ---
+      kernel-module-vvcam-video: '*'
+      kernel-module-vvcam-isp-subdev: '*'
+      kernel-module-vvcam-isp: '*'
+      kernel-module-vvcam-vb: '*'
+      kernel-module-isp: '*'
+      kernel-module-isp-be: '*'
+      kernel-module-isp-dma-heap: '*'
+      kernel-module-scaler: '*'
+      kernel-module-vpu: '*'
+      kernel-module-mc: '*'
+      kernel-module-videodev: '*'
+      kernel-module-videobuf2-v4l2: '*'
+      kernel-module-videobuf2-common: '*'
+      kernel-module-videobuf2-memops: '*'
+      kernel-module-v4l2-fwnode: '*'
+      kernel-module-v4l2-async: '*'
+      kernel-module-v4l2-mem2mem: '*'
+      # --- GPU / DRM ---
+      kernel-module-pvrsrvkm: '*'
+      kernel-module-syna-drm: '*'
+      kernel-module-drm-ttm-helper: '*'
+      kernel-module-ttm: '*'
+      # --- Audio (Synaptics Berlin) ---
+      kernel-module-snd-soc-berlin-asoc: '*'
+      kernel-module-snd-soc-berlin-pcm: '*'
+      kernel-module-snd-soc-berlin-hdmi-indai: '*'
+      kernel-module-snd-soc-berlin-hdmi-outdai: '*'
+      # --- Display panels ---
+      kernel-module-panel-waveshare-dsi: '*'
+      kernel-module-rpi-panel-attiny-regulator: '*'
+      # --- Platform infrastructure (Synaptics Berlin) ---
+      kernel-module-irq-berlin-dhub: '*'
+      kernel-module-berlin-bm: '*'
+      # --- Bluetooth ---
+      kernel-module-bluetooth-rfkill: '*'
+      # --- Compression / zram ---
+      kernel-module-zram: '*'
+      kernel-module-zsmalloc: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
