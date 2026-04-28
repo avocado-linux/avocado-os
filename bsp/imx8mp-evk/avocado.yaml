@@ -64,7 +64,8 @@ extensions:
       kernel-module-flexcan: '*'
       kernel-module-can-dev: '*'
       # --- WiFi (NXP 88W8997 / AW-CM276MA) ---
-      kernel-module-nxp-wlan: '*'
+      kernel-module-moal: '*'
+      kernel-module-mlan: '*'
       kernel-module-rfkill: '*'
       # --- WiFi (common USB dongles) ---
       kernel-module-rtw88-usb: '*'
@@ -81,6 +82,8 @@ extensions:
       kernel-module-ath3k: '*'
       # --- DSP ---
       kernel-module-imx-dsp-rproc: '*'
+      # --- GPU / NPU (Vivante GC7000UL + VIP9000) ---
+      kernel-module-galcore: '*'
       # --- Filesystems / Block ---
       kernel-module-fuse: '*'
       kernel-module-dm-mod: '*'
