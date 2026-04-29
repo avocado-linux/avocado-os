@@ -4,7 +4,7 @@ set -e # Exit immediately if a command exits with a non-zero status.
 
 # Default configuration
 DEFAULT_REPO_DIR="/tmp/avocado-dev-repo"
-DEFAULT_DISTRO_CODENAME="2024/edge"
+DEFAULT_DISTRO_CODENAME="2026/edge"
 DEFAULT_CONTAINER_NAME="avocado-dev-repo"
 DEFAULT_NETWORK_NAME="avocado-dev-network"
 DEFAULT_REPO_URL="http://$DEFAULT_CONTAINER_NAME"
