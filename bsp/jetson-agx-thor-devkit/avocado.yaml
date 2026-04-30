@@ -1,0 +1,88 @@
+default_target: jetson-agx-thor-devkit
+supported_targets:
+  - jetson-agx-thor-devkit
+
+distro:
+  release: 2024
+  channel: edge
+
+initramfs:
+  filesystem: cpio.gz
+
+extensions:
+  avocado-bsp-jetson-agx-thor-devkit:
+    version: 2024.1.0
+    release: r0
+    summary: Board support for the Nvidia Jetson AGX Thor devkit
+    description: Board support for the Nvidia Jetson AGX Thor devkit
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+      - sysext
+      - confext
+
+    on_merge:
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+      - nvbootctrl verify
+
+    # Backported from a running Thor devkit's lsmod plus the modules listed
+    # in jetson-agx-thor-devkit.conf MACHINE_EXTRA_R{DEPENDS,RECOMMENDS}.
+    # NVIDIA OOT modules use the unprefixed kernel-module-* spelling and
+    # resolve via the nv-kernel-module-* RPROVIDES aliases. avocado-cli
+    # auto-suffixes with -${KERNEL_VERSION} at install time so dnf pins to
+    # the resolver-selected kernel rather than NVR-tie-breaking.
+    packages:
+      kernel-module-crypto-engine: '*'
+      kernel-module-host1x: '*'
+      kernel-module-host1x-fence: '*'
+      kernel-module-host1x-nvhost: '*'
+      kernel-module-ina238: '*'
+      kernel-module-ina3221: '*'
+      kernel-module-ipv6: '*'
+      kernel-module-ivc-cdev: '*'
+      kernel-module-lm90: '*'
+      kernel-module-lz4: '*'
+      kernel-module-lz4-compress: '*'
+      kernel-module-nv-gpu-static-pg: '*'
+      kernel-module-nvethernet: '*'
+      kernel-module-nvhost-pva: '*'
+      kernel-module-nvhwpm: '*'
+      kernel-module-nvidia-vrs-pseq: '*'
+      kernel-module-nvmap: '*'
+      kernel-module-nvme: '*'
+      kernel-module-nvme-core: '*'
+      kernel-module-nvpmodel-clk-cap: '*'
+      kernel-module-nvpps: '*'
+      kernel-module-nvsciipc: '*'
+      kernel-module-nvvrs-pseq-rtc: '*'
+      kernel-module-pcie-tegra264: '*'
+      kernel-module-pwm-fan: '*'
+      kernel-module-pwm-tegra: '*'
+      kernel-module-pwm-tegra-tachometer: '*'
+      kernel-module-r8126: '*'
+      kernel-module-ramoops: '*'
+      kernel-module-realtek: '*'
+      kernel-module-sch-fq-codel: '*'
+      kernel-module-spi-tegra114: '*'
+      kernel-module-tegra-bpmp-bwmgr: '*'
+      kernel-module-tegra-bpmp-thermal: '*'
+      kernel-module-tegra-cactmon-mc-all: '*'
+      kernel-module-tegra-se: '*'
+      kernel-module-tegra-se-kds: '*'
+      kernel-module-tegra-xudc: '*'
+      kernel-module-tegra234-oc-event: '*'
+      kernel-module-tegra23x-psc: '*'
+      kernel-module-thermal-trip-event: '*'
+      kernel-module-tsecriscv: '*'
+      kernel-module-zram: '*'
+      kernel-module-zsmalloc: '*'
+      linux-firmware-rtl8168: '*'
+      swupdate: '*'
+      tegra-redundant-boot-base: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}

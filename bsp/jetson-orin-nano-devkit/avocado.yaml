@@ -54,7 +54,6 @@ extensions:
       kernel-module-fusb301: '*'
       kernel-module-fuse: '*'
       kernel-module-governor-pod-scaling: '*'
-      kernel-module-governor-userspace: '*'
       nv-kernel-module-host1x: '*'
       kernel-module-host1x-fence: '*'
       kernel-module-host1x-nvhost: '*'
@@ -77,7 +76,6 @@ extensions:
       kernel-module-nvhost-capture: '*'
       kernel-module-nvhost-isp5: '*'
       kernel-module-nvhost-nvcsi: '*'
-      kernel-module-nvhost-nvcsi-t194: '*'
       kernel-module-nvhost-vi5: '*'
       kernel-module-nvhwpm: '*'
       kernel-module-nvidia: '*'
@@ -107,7 +105,6 @@ extensions:
       kernel-module-snd-soc-audio-graph-card: '*'
       kernel-module-snd-soc-simple-card-utils: '*'
       kernel-module-snd-soc-tegra-audio-graph-card: '*'
-      kernel-module-snd-soc-tegra-machine-driver: '*'
       kernel-module-snd-soc-tegra-pcm: '*'
       kernel-module-snd-soc-tegra-utils: '*'
       kernel-module-snd-soc-tegra186-arad: '*'
@@ -182,6 +179,9 @@ extensions:
     # rtw88/* — wrong path/format for the L4T driver.
     kernel-5.15.*:
       packages:
+        kernel-module-governor-userspace: '*'
+        kernel-module-nvhost-nvcsi-t194: '*'
+        kernel-module-snd-soc-tegra-machine-driver: '*'
         nv-kernel-module-rtl8822ce: '*'
         tegra-firmware-rtl8822: '*'
 
@@ -192,11 +192,25 @@ extensions:
     kernel-6.6.*:
       packages:
         kernel-module-drm-display-helper: '*'
+        kernel-module-governor-userspace: '*'
+        kernel-module-nvhost-nvcsi-t194: '*'
         kernel-module-rtw88-8822c: '*'
         kernel-module-rtw88-8822ce: '*'
         kernel-module-rtw88-core: '*'
         kernel-module-rtw88-pci: '*'
+        kernel-module-snd-soc-tegra-machine-driver: '*'
         linux-firmware-rtl8822: '*'
+
+    # 6.8 (linux-noble-nvidia-tegra, L4T r39+) ships the NVIDIA OOT modules as
+    # nv-kernel-module-* with RPROVIDES aliases for the legacy kernel-module-*
+    # names, so most of the common list resolves transparently. Three modules
+    # were dropped/renamed/built-in in this kernel and have no alias:
+    #   - governor-userspace (now CONFIG=y in noble)
+    #   - nvhost-nvcsi-t194 (T194/Xavier-only; not relevant to Tegra234)
+    #   - snd-soc-tegra-machine-driver (renamed/removed in noble OOT)
+    # Hence they live under the older kernel blocks above, not common.
+    kernel-6.8.*:
+      packages: {}
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
