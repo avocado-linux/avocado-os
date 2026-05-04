@@ -1,0 +1,31 @@
+default_target: orangepi-5-plus
+supported_targets:
+  - orangepi-5-plus
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-bsp-orangepi-5-plus:
+    version: 2024.1.0
+    release: r0
+    summary: Board support for the Orange Pi 5 Plus (RK3588)
+    description: Board support for the Orange Pi 5 Plus (RK3588 SBC, mainline kernel)
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+      - sysext
+      - confext
+
+    on_merge:
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+
+    # Initial set is intentionally minimal -- only kernel-modules that are
+    # certain to exist in the linux-yocto-dev feed. Iterate after the first
+    # build informs which RK3588 drivers are actually built as modules.
+    packages: {}
