@@ -16,36 +16,216 @@ extensions:
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
 
+    # Services the BSP layer takes responsibility for. Enabled at merge
+    # (so they auto-start on subsequent boots) and started/stopped on the
+    # current boot via on_merge/on_unmerge so the user doesn't need to
+    # reboot to see the BSP take effect.
+    #
+    # Intentionally NOT in this list:
+    #   - bt.service        — Broadcom BSA daemon is opt-in (proprietary).
+    #                         Users enable manually if they choose BSA over BlueZ.
+    enable_services:
+      - rubikpi-thermal.service
+      - wifi.service
+      - pipewire-pulse.socket
+
     on_merge:
       - udevadm control --reload
       - udevadm trigger --type=subsystems --action=add --settle
       - udevadm trigger --type=devices --action=add --settle
+      - systemctl start --no-block rubikpi-thermal.service
+      - systemctl start --no-block wifi.service
+      - systemctl start --no-block pipewire-pulse.socket
+
+    on_unmerge:
+      - systemctl stop --no-block pipewire-pulse.socket
+      - systemctl stop --no-block wifi.service
+      - systemctl stop --no-block rubikpi-thermal.service
 
     packages:
-      # Storage stack (UFS + PHY + SDHCI), USB DWC3, EMAC, etc. are =y in
-      # upstream qcom_defconfig — they're in the kernel Image itself, not
-      # separate kernel-module-* packages, so they aren't listed here.
-      # --- Wi-Fi / Bluetooth (ath11k + btusb, =m in qcom_defconfig) ---
-      kernel-module-ath11k: '*'
-      kernel-module-ath11k-pci: '*'
-      kernel-module-btusb: '*'
-      kernel-module-rfkill: '*'
-      # --- Filesystems / Block (=m) ---
+      # Pinned to the lsmod set captured on a successful first boot. Storage
+      # (UFS+SDHCI), USB controllers, and EMAC are =y in upstream qcom_defconfig
+      # so they're in the kernel Image directly and don't appear here.
+
+      # --- USB networking (CDC, Renesas USB3 hub) ---
+      kernel-module-cdc-ether: '*'
+      kernel-module-cdc-ncm: '*'
+      kernel-module-mii: '*'
+      kernel-module-usbnet: '*'
+      kernel-module-xhci-pci: '*'
+      kernel-module-xhci-pci-renesas: '*'
+      kernel-module-usb-f-qdss: '*'
+
+      # --- Coresight / STM trace fabric ---
+      kernel-module-coresight: '*'
+      kernel-module-coresight-cti: '*'
+      kernel-module-coresight-csr: '*'
+      kernel-module-coresight-dummy: '*'
+      kernel-module-coresight-funnel: '*'
+      kernel-module-coresight-remote-etm: '*'
+      kernel-module-coresight-replicator: '*'
+      kernel-module-coresight-stm: '*'
+      kernel-module-coresight-tgu: '*'
+      kernel-module-coresight-tmc: '*'
+      kernel-module-coresight-tpda: '*'
+      kernel-module-coresight-tpdm: '*'
+      kernel-module-stm-console: '*'
+      kernel-module-stm-core: '*'
+      kernel-module-stm-ftrace: '*'
+      kernel-module-stm-heartbeat: '*'
+      kernel-module-stm-p-ost: '*'
+
+      # --- Display / GPU (msm DRM driver) ---
+      kernel-module-display-connector: '*'
+      kernel-module-drm: '*'
+      kernel-module-drm-display-helper: '*'
+      kernel-module-drm-dp-aux-bus: '*'
+      kernel-module-drm-kms-helper: '*'
+      kernel-module-gpu-sched: '*'
+      kernel-module-llcc-qcom: '*'
+      kernel-module-msm-display: '*'
+      kernel-module-ocmem: '*'
+
+      # --- USB-C / Type-C / pmic-glink ---
+      kernel-module-gpio-sbu-mux: '*'
+      kernel-module-pmic-glink: '*'
+      kernel-module-pmic-glink-altmode: '*'
+      kernel-module-typec: '*'
+      kernel-module-typec-ucsi: '*'
+      kernel-module-ucsi-glink: '*'
+
+      # --- Power management / PMIC ---
+      kernel-module-nvmem-qcom-spmi-sdam: '*'
+      kernel-module-qcom-battmgr: '*'
+      kernel-module-qcom-edac: '*'
+      kernel-module-qcom-pon: '*'
+      kernel-module-qcom-spmi-adc-tm5: '*'
+      kernel-module-qmi-cooling: '*'
+      kernel-module-rtc-pm8xxx: '*'
+
+      # --- Audio (qcm6490 sound card + SoundWire + ASoC helpers) ---
+      kernel-module-snd-soc-qcm6490: '*'
+      kernel-module-snd-soc-qcom-common: '*'
+      kernel-module-snd-soc-qcom-sdw: '*'
+      kernel-module-snd-soc-simple-card-utils: '*'
+
+      # --- Remoteproc / Q6 DSP loader ---
+      kernel-module-mdt-loader: '*'
+      kernel-module-qcom-pil-info: '*'
+      kernel-module-qcom-q6v5: '*'
+      kernel-module-qcom-q6v5-pas: '*'
+      kernel-module-qcom-rproc-minidump: '*'
+      kernel-module-qcom-sysmon: '*'
+
+      # --- IPC: qrtr / GLINK / IPA ---
+      kernel-module-ipa: '*'
+      kernel-module-qcom-common: '*'
+      kernel-module-qcom-glink-smem: '*'
+      kernel-module-qrtr: '*'
+
+      # --- Pinctrl (LPASS LPI for audio) ---
+      kernel-module-pinctrl-lpass-lpi: '*'
+      kernel-module-pinctrl-sc7280-lpass-lpi: '*'
+
+      # --- PHYs (USB/PCIe combo, ethernet PHY) ---
+      kernel-module-at803x: '*'
+      kernel-module-phy-qcom-qmp-combo: '*'
+      kernel-module-qcom-phy-lib: '*'
+
+      # --- Crypto ---
+      kernel-module-authenc: '*'
+      kernel-module-libdes: '*'
+      kernel-module-qcom-rng: '*'
+      kernel-module-qcrypto: '*'
+
+      # --- Interconnect / SPI / SoC info ---
+      kernel-module-gpi: '*'
+      kernel-module-icc-bwmon: '*'
+      kernel-module-icc-osm-l3: '*'
+      kernel-module-qcom-eud: '*'
+      kernel-module-qcom-stats: '*'
+      kernel-module-socinfo: '*'
+      kernel-module-spi-geni-qcom: '*'
+      kernel-module-spidev: '*'
+
+      # --- Filesystems / Block / Compression ---
       kernel-module-fuse: '*'
-      kernel-module-dm-mod: '*'
-      # --- Compression / zram (=m) ---
+      kernel-module-lz4: '*'
+      kernel-module-lz4-compress: '*'
       kernel-module-zram: '*'
+      kernel-module-zsmalloc: '*'
+
+      # --- Wi-Fi (Broadcom BCM43456 / BCM4345/9 SDIO via mainline brcmfmac) ---
+      kernel-module-cfg80211: '*'
+      kernel-module-mac80211: '*'
+      kernel-module-brcmutil: '*'
+      kernel-module-brcmfmac: '*'
+      # Vendor sub-driver for the Cypress WCC family (BCM4345/9). Without
+      # this, brcmfmac core fails `brcmf_fwvid_attach` and never registers
+      # wlan0 even after firmware loads.
+      kernel-module-brcmfmac-wcc: '*'
+
+      # --- Misc ---
+      kernel-module-ipv6: '*'
+      kernel-module-pwm-fan: '*'
+
       # --- Firmware (Qualcomm SoC) ---
-      linux-firmware-qcom-qcm6490-audio: '*'
-      linux-firmware-qcom-qcm6490-compute: '*'
-      linux-firmware-qcom-qcm6490-qupv3fw: '*'
-      linux-firmware-qcom-qcm6490-wifi: '*'
-      linux-firmware-qcom-adreno-a660: '*'
+      # IMPORTANT: only ship the `-updates` package for IPA. The other
+      # `-updates` packages (audio, compute, wifi, qupv3fw) put `.mdt + .bNN`
+      # firmware into /lib/firmware/updates/ which causes drivers
+      # (snd_soc_qcm6490, fastrpc, etc.) to actively boot the ADSP / CDSP.
+      # The generic qcm6490 audio firmware crashes on the rubikpi3 board
+      # variant inside `charger_process` (see err_qdi.c:1122) which dangles
+      # the qcom,apr rpmsg endpoint and panics the kernel via gpr_send_pkt.
+      #
+      # Until we have rubikpi3-specific `.mdt + .bNN` audio/compute firmware
+      # (the existing rubikpi3-specific package only ships `.mbn`), these
+      # remoteprocs are happier left `offline`. The kernel falls back to the
+      # `.mbn` form when something explicitly starts them.
+      linux-firmware-qcom-qcm6490-adreno: '*'              # GPU firmware (a660_zap.mbn)
+      linux-firmware-qcom-qcm6490-audio: '*'               # ADSP (adsp.mbn + jsons)
+      linux-firmware-qcom-qcm6490-compute: '*'             # CDSP (cdsp.mbn + jsons)
+      linux-firmware-qcom-qcm6490-ipa: '*'                 # IPA fw (ipa_fws.mbn fallback)
+      linux-firmware-qcom-qcm6490-ipafw-updates: '*'       # IPA fw (ipa_fws.mdt + .bNN) — kernel IPA driver requires this form
+      linux-firmware-qcom-qcm6490-qupv3fw: '*'             # QUP serial-engine fw
+      linux-firmware-qcom-qcm6490-wifi: '*'                # WPSS Wi-Fi/BT subsystem fw (wpss.mbn)
+      linux-firmware-qcom-qcm6490-verinfo: '*'             # version info blob (Ver_Info.txt)
+      linux-firmware-qcom-qcs6490-thundercomm-rubikpi3-audio: '*'  # RUBIK Pi 3-specific audio tuning (.mbn variant)
       wireless-regdb-static: '*'
+
       # --- Firmware (RUBIK Pi 3 onboard peripherals) ---
       # Broadcom BCM43456 Wi-Fi/BT, LT9611UXC HDMI bridge,
       # AW882xx audio amp, Renesas USB hub, SD-UART 8987.
       firmware-rubikpi3: '*'
+
+      # `linux-firmware-bcm43455` is pulled transitively as an RDEPENDS of
+      # firmware-rubikpi3 — we need its `brcmfmac43455-sdio.clm_blob` as the
+      # symlink target for `brcmfmac43456-sdio.clm_blob` (BCM4345/9 silicon
+      # has no upstream CLM blob; the closely-related 43455 family blob
+      # works in practice).
+
+      # --- Audio (HDMI-default routing via pipewire-PAL plugin) ---
+      qcom-pw-pal-plugin: '*'
+
+      # --- Wi-Fi (systemd-networkd DHCP profile + wpa_supplicant launcher) ---
+      rubikpi-wifi: '*'                         # /etc/systemd/network/00-wireless-dhcp.network
+      rubikpi3-init-services-wifi: '*'          # wifi.sh + wifi.service (auto-enabled)
+      wpa-supplicant: '*'
+
+      # --- Bluetooth (Broadcom BSA stack — proprietary daemon, NOT BlueZ) ---
+      # bt.service is shipped DISABLED — BSA pulls a closed-source daemon. Users
+      # opt in via `systemctl enable bt.service`. Switch to BlueZ via a separate
+      # extension if a fully-open stack is preferred.
+      rubikpi-bt-staticdev: '*'                 # bsa_server + BCM4345C5 .hcd
+      rubikpi3-init-services-bt: '*'            # bt.sh + bt.service
+
+      # --- Thermal (PWM fan controller for RUBIK Pi 3 active cooling) ---
+      rubikpi3-thermal: '*'
+
+      # --- GPIO (WiringPi-compatible userspace library + `gpio` CLI + Python) ---
+      wiringrp: '*'
+      wiringrp-gpio: '*'
+      wiringrp-python: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
