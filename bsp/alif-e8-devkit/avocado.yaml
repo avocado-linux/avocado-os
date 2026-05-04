@@ -1,0 +1,34 @@
+default_target: alif-e8-devkit
+supported_targets:
+  - alif-e8-devkit
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-bsp-alif-e8-devkit:
+    version: 2024.1.0
+    release: r0
+    summary: Board support for the Alif Ensemble E8 DevKit
+    description: Board support for the Alif Ensemble E8 DevKit
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+      - sysext
+      - confext
+
+    on_merge:
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+
+    packages:
+      # Bring-up: ship every kernel module via the kernel-modules meta-package.
+      # Trim down to the lsmod set once the board boots cleanly.
+      kernel-modules: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
