@@ -1,0 +1,51 @@
+default_target: rubikpi3
+supported_targets:
+  - rubikpi3
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-bsp-rubikpi3:
+    version: 2024.1.0
+    release: r0
+    summary: Board support for the Thundercomm RUBIK Pi 3 (QCS6490)
+    description: Board support for the Thundercomm RUBIK Pi 3 (QCS6490)
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    on_merge:
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+
+    packages:
+      # Storage stack (UFS + PHY + SDHCI), USB DWC3, EMAC, etc. are =y in
+      # upstream qcom_defconfig — they're in the kernel Image itself, not
+      # separate kernel-module-* packages, so they aren't listed here.
+      # --- Wi-Fi / Bluetooth (ath11k + btusb, =m in qcom_defconfig) ---
+      kernel-module-ath11k: '*'
+      kernel-module-ath11k-pci: '*'
+      kernel-module-btusb: '*'
+      kernel-module-rfkill: '*'
+      # --- Filesystems / Block (=m) ---
+      kernel-module-fuse: '*'
+      kernel-module-dm-mod: '*'
+      # --- Compression / zram (=m) ---
+      kernel-module-zram: '*'
+      # --- Firmware (Qualcomm SoC) ---
+      linux-firmware-qcom-qcm6490-audio: '*'
+      linux-firmware-qcom-qcm6490-compute: '*'
+      linux-firmware-qcom-qcm6490-qupv3fw: '*'
+      linux-firmware-qcom-qcm6490-wifi: '*'
+      linux-firmware-qcom-adreno-a660: '*'
+      wireless-regdb-static: '*'
+      # --- Firmware (RUBIK Pi 3 onboard peripherals) ---
+      # Broadcom BCM43456 Wi-Fi/BT, LT9611UXC HDMI bridge,
+      # AW882xx audio amp, Renesas USB hub, SD-UART 8987.
+      firmware-rubikpi3: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
