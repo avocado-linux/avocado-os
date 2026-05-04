@@ -1,17 +1,21 @@
-default_target: jetson-agx-orin-devkit
+default_target: jetson-orin-nx
 supported_targets:
-  - jetson-agx-orin-devkit
+  - jetson-orin-nx
 
 distro:
   release: 2024
   channel: edge
 
 extensions:
-  avocado-bsp-jetson-agx-orin-devkit:
+  avocado-bsp-jetson-orin-nx:
     version: 2024.1.0
     release: r0
-    summary: Board support for the Nvidia Jetson AGX Orin devkit
-    description: Board support for the Nvidia Jetson AGX Orin devkit
+    summary: Generic board support for Nvidia Jetson Orin NX SOM
+    description: |
+      Default Orin NX BSP — covers the comprehensive P3768/P3767 BSP output
+      shipped by the jetson-orin-nx MACHINE. Carrier-specific extensions
+      (e.g. avocado-bsp-icam-540) layer on top via stone/carrier-bsp/
+      to retarget DTB / BPMP / pinmux / ODMDATA at provision time.
     license: Apache-2.0
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
@@ -20,12 +24,11 @@ extensions:
       - sysext
       - confext
 
-    # Carrier overlay files for tegraflash live under stone/. The DevKit
-    # stone manifest declares `tegraflash_carrier_bsp: "carrier-bsp"`;
-    # avocado-cli composes this entry into the runtime's effective
-    # AVOCADO_STONE_INCLUDE_PATHS, scoped to this extension's location
-    # (so for consumers that fetch this BSP as a remote extension, stone
-    # finds the carrier files at $AVOCADO_PREFIX/includes/avocado-bsp-jetson-agx-orin-devkit/stone/).
+    # Carrier overlay files for tegraflash live under stone/. The
+    # stone-jetson-orin-nx.json manifest declares
+    # `tegraflash_carrier_bsp: "carrier-bsp"`; avocado-cli composes the
+    # path below into the runtime's effective AVOCADO_STONE_INCLUDE_PATHS,
+    # scoped to this extension's location.
     stone_include_paths:
       - stone
 
@@ -38,25 +41,28 @@ extensions:
       - udevadm trigger --type=devices --action=add --settle
       - nvbootctrl verify
 
-    # Common packages: same name in both kernel feeds (linux-yocto 6.6 and
-    # linux-jammy-nvidia-tegra 5.15). avocado-cli auto-suffixes kernel-family
-    # names with -${KERNEL_VERSION} at install time; the nv-kernel-module-*
-    # RPMs (from nvidia-kernel-oot) Provide both prefixed and unprefixed
-    # variants so unqualified `kernel-module-*` references resolve to the
-    # versioned NVIDIA OOT package.
+    # Common Orin NX kernel modules. Same set used by avocado-bsp-icam-540
+    # since both consume orin-nx.inc from meta-tegra. Carrier-specific
+    # extensions (icam-540, etc.) extend this list with their own modules.
     packages:
       kernel-module-at24: '*'
       kernel-module-cec: '*'
       kernel-module-crct10dif-ce: '*'
+      kernel-module-drm-dp-aux-bus: '*'
       kernel-module-fusb301: '*'
+      kernel-module-ghash-ce: '*'
       kernel-module-governor-pod-scaling: '*'
       kernel-module-governor-userspace: '*'
+      kernel-module-gpio-keys: '*'
       kernel-module-host1x: '*'
       kernel-module-host1x-fence: '*'
+      kernel-module-host1x-nvhost: '*'
       kernel-module-ina3221: '*'
       kernel-module-mc-hwpm: '*'
       kernel-module-mc-utils: '*'
       kernel-module-nvgpu: '*'
+      kernel-module-nvhost-nvdla: '*'
+      kernel-module-nvhost-pva: '*'
       kernel-module-nvhwpm: '*'
       kernel-module-nvidia-vrs-pseq: '*'
       kernel-module-nvmap: '*'
@@ -70,6 +76,12 @@ extensions:
       kernel-module-pwm-fan: '*'
       kernel-module-pwm-tegra: '*'
       kernel-module-pwm-tegra-tachometer: '*'
+      kernel-module-r8169: '*'
+      kernel-module-realtek: '*'
+      kernel-module-sch-fq-codel: '*'
+      kernel-module-sha1-ce: '*'
+      kernel-module-sha2-ce: '*'
+      kernel-module-sha256-arm64: '*'
       kernel-module-snd-hda-codec: '*'
       kernel-module-snd-hda-codec-hdmi: '*'
       kernel-module-snd-hda-core: '*'
@@ -104,29 +116,19 @@ extensions:
       kernel-module-tegra234-aon: '*'
       kernel-module-tegra234-oc-event: '*'
       kernel-module-thermal-trip-event: '*'
-      linux-firmware-rtl8168: '*'
+      libgpiod-tools: '*'
       swupdate: '*'
       tegra-redundant-boot-base: '*'
 
     # 5.15 (linux-jammy-nvidia-tegra) uses NVIDIA's downstream Realtek shim
     # for the M.2 wifi card; mainline rtw88 isn't built for this kernel.
-    # Mirrors meta-tegra/conf/machine/include/devkit-wifi.inc:NVIDIA_WIFI which
-    # avocado-pkg-rootfs doesn't pick up automatically (devkit-wifi.inc routes
-    # via MACHINE_EXTRA_RRECOMMENDS, not MACHINE_ESSENTIAL_EXTRA_RDEPENDS).
-    #
-    # The L4T rtl8822ce driver expects firmware at top-level /lib/firmware
-    # (rtl8822_setting.bin, rtl8822cu_fw, rtl8822cu_config) which only
-    # tegra-firmware-rtl8822 ships. linux-firmware-rtl8822 ships rtl_bt/* and
-    # rtw88/* — wrong path/format for the L4T driver.
     kernel-5.15.*:
       packages:
         nv-kernel-module-rtl8822ce: '*'
         tegra-firmware-rtl8822: '*'
 
-    # 6.6 (linux-yocto) uses the upstream rtw88 driver family for the 8822CE,
-    # and ships drm-display-helper as a separate module (5.15 statically links
-    # the helpers into drm.ko). linux-firmware-rtl8822 ships rtl_bt/* and
-    # rtw88/* firmware blobs at the paths the upstream drivers expect.
+    # 6.6 (linux-yocto, default for jetson-orin-nx) uses the upstream rtw88
+    # driver family for the 8822CE.
     kernel-6.6.*:
       packages:
         kernel-module-drm-display-helper: '*'

@@ -1,6 +1,6 @@
-default_target: icam-540
+default_target: jetson-orin-nx
 supported_targets:
-  - icam-540
+  - jetson-orin-nx
 
 distro:
   release: 2024
@@ -10,8 +10,12 @@ extensions:
   avocado-bsp-icam-540:
     version: 2024.1.0
     release: r0
-    summary: Board support for the Advantech ICAM 540
-    description: Board support for the Advantech ICAM 540
+    summary: Board support for the Advantech ICAM-540 (carrier extension on jetson-orin-nx)
+    description: |
+      Layered carrier support for the Advantech ICAM-540 on top of the
+      generic jetson-orin-nx target. Reproduces what the legacy
+      avocado-icam-540 MACHINE bakes today (DTB / BPMP DTB / BPMP firmware /
+      pinmux selection) via the carrier-bsp overlay and carrier.env.
     license: Apache-2.0
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
@@ -19,6 +23,25 @@ extensions:
     types:
       - sysext
       - confext
+
+    package_files:
+      - overlay
+      - stone
+      - avocado.yaml
+
+    # Carrier overlay files for the ICAM-540 live under stone/. Symlinks
+    # there point at the canonical bytes in the distro's recipes-kernel
+    # and recipes-bsp trees, so there is one source of truth. avocado-cli
+    # composes the path below into the runtime's effective
+    # AVOCADO_STONE_INCLUDE_PATHS, scoped to this extension's location.
+    stone_include_paths:
+      - stone
+
+    # Confext overlay — ships /etc/hostname so the device identifies as
+    # `icam-540` on the carrier instead of inheriting the SOM's
+    # MACHINE-derived `avocado-jetson-orin-nx` default. Path is relative
+    # to this extension's src_dir (avocado-os/bsp/icam-540/).
+    overlay: overlay
 
     modprobe:
       - gpio-pca953x
@@ -110,7 +133,6 @@ extensions:
       kernel-module-tegra234-oc-event: '*'
       kernel-module-thermal-trip-event: '*'
       libgpiod-tools: '*'
-      swupdate: '*'
       tegra-redundant-boot-base: '*'
 
     # 5.15 (linux-jammy-nvidia-tegra) uses NVIDIA's downstream Realtek shim

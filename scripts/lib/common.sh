@@ -120,10 +120,20 @@ avocado_parse_yaml_supported_targets() {
     fi
 }
 
-# Function to discover extensions and their supported targets
+# Function to discover extensions and their supported targets.
+#
+# Walks both extensions/*/ and bsp/*/. BSPs are returned with a "bsp-"
+# prefix on the extension name so callers can distinguish the two
+# (`avocado-bsp-<name>` vs `avocado-ext-<name>` package naming, separate
+# repo subdirs, etc.). All extensions whose `supported_targets` contains
+# the chosen target are eligible to build — the SOM-target + carrier-BSP
+# pattern (e.g. both `bsp/jetson-orin-nx/` and `bsp/icam-540/` listing
+# `jetson-orin-nx`) is supported by virtue of the filter being a
+# membership check, not a one-to-one mapping.
 avocado_discover_extensions() {
     local extensions_info=()
-    
+
+    # Discover regular extensions.
     for ext_dir in extensions/*/; do
         if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.yaml" ]; then
             local extension=$(basename "$ext_dir")
@@ -131,7 +141,19 @@ avocado_discover_extensions() {
             extensions_info+=("$extension:$supported_targets")
         fi
     done
-    
+
+    # Discover BSP extensions. Each is exposed as `bsp-<name>` so callers
+    # can unambiguously route to bsp/<name>/avocado.yaml and the
+    # `avocado-bsp-<name>` package.
+    for bsp_dir in bsp/*/; do
+        if [ -d "$bsp_dir" ] && [ -f "$bsp_dir/avocado.yaml" ]; then
+            local bsp_name=$(basename "$bsp_dir")
+            local extension="bsp-$bsp_name"
+            local supported_targets=$(avocado_parse_yaml_supported_targets "$bsp_dir/avocado.yaml")
+            extensions_info+=("$extension:$supported_targets")
+        fi
+    done
+
     printf '%s\n' "${extensions_info[@]}"
 }
 
