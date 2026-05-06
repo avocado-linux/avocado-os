@@ -31,6 +31,7 @@ extensions:
 
     modprobe:
       - nvme
+      - nvethernet
 
     on_merge:
       - udevadm control --reload
@@ -56,6 +57,15 @@ extensions:
       kernel-module-ina3221: '*'
       kernel-module-mc-hwpm: '*'
       kernel-module-mc-utils: '*'
+      # Ethernet stack — onboard 1GbE on the P3737 carrier goes through the
+      # Tegra234 MGBE controller (NVIDIA OOT nvethernet driver, resolved
+      # via nv-kernel-module-nvethernet's `Provides: kernel-module-nvethernet`)
+      # with a Realtek RTL8211F PHY (kernel-module-realtek). r8169 covers any
+      # discrete PCIe Realtek NIC; stmmac is the alt-kernel (5.15) MAC path.
+      kernel-module-nvethernet: '*'
+      kernel-module-realtek: '*'
+      kernel-module-r8169: '*'
+      kernel-module-stmmac: '*'
       kernel-module-nvgpu: '*'
       kernel-module-nvhwpm: '*'
       kernel-module-nvidia-vrs-pseq: '*'
