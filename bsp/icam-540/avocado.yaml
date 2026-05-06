@@ -47,6 +47,7 @@ extensions:
       - gpio-pca953x
 
     on_merge:
+      - hostname -F /etc/hostname
       - gpioset -t 500,500,0 -c 2 5=0
       - udevadm control --reload
       - udevadm trigger --type=subsystems --action=add --settle
