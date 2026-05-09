@@ -23,6 +23,15 @@ extensions:
       - sysext
       - confext
 
+    # Carrier overlay files for tegraflash live under stone/. The DevKit
+    # stone manifest declares `tegraflash_carrier_bsp: "carrier-bsp"`;
+    # avocado-cli composes this entry into the runtime's effective
+    # AVOCADO_STONE_INCLUDE_PATHS, scoped to this extension's location
+    # (so for consumers that fetch this BSP as a remote extension, stone
+    # finds the carrier files at $AVOCADO_PREFIX/includes/avocado-bsp-jetson-orin-nano-devkit/stone/).
+    stone_include_paths:
+      - stone
+
     on_merge:
       - udevadm control --reload
       - udevadm trigger --type=subsystems --action=add --settle
@@ -46,7 +55,7 @@ extensions:
       kernel-module-fuse: '*'
       kernel-module-governor-pod-scaling: '*'
       kernel-module-governor-userspace: '*'
-      kernel-module-host1x: '*'
+      nv-kernel-module-host1x: '*'
       kernel-module-host1x-fence: '*'
       kernel-module-host1x-nvhost: '*'
       kernel-module-hsp-mailbox-client: '*'
@@ -102,18 +111,18 @@ extensions:
       kernel-module-snd-soc-tegra-pcm: '*'
       kernel-module-snd-soc-tegra-utils: '*'
       kernel-module-snd-soc-tegra186-arad: '*'
-      kernel-module-snd-soc-tegra186-asrc: '*'
-      kernel-module-snd-soc-tegra186-dspk: '*'
-      kernel-module-snd-soc-tegra210-admaif: '*'
-      kernel-module-snd-soc-tegra210-adx: '*'
-      kernel-module-snd-soc-tegra210-ahub: '*'
-      kernel-module-snd-soc-tegra210-amx: '*'
-      kernel-module-snd-soc-tegra210-dmic: '*'
-      kernel-module-snd-soc-tegra210-i2s: '*'
-      kernel-module-snd-soc-tegra210-mixer: '*'
-      kernel-module-snd-soc-tegra210-mvc: '*'
-      kernel-module-snd-soc-tegra210-ope: '*'
-      kernel-module-snd-soc-tegra210-sfc: '*'
+      nv-kernel-module-snd-soc-tegra186-asrc: '*'
+      nv-kernel-module-snd-soc-tegra186-dspk: '*'
+      nv-kernel-module-snd-soc-tegra210-admaif: '*'
+      nv-kernel-module-snd-soc-tegra210-adx: '*'
+      nv-kernel-module-snd-soc-tegra210-ahub: '*'
+      nv-kernel-module-snd-soc-tegra210-amx: '*'
+      nv-kernel-module-snd-soc-tegra210-dmic: '*'
+      nv-kernel-module-snd-soc-tegra210-i2s: '*'
+      nv-kernel-module-snd-soc-tegra210-mixer: '*'
+      nv-kernel-module-snd-soc-tegra210-mvc: '*'
+      nv-kernel-module-snd-soc-tegra210-ope: '*'
+      nv-kernel-module-snd-soc-tegra210-sfc: '*'
       kernel-module-spi-tegra114: '*'
       kernel-module-spidev: '*'
       kernel-module-tegra-aconnect: '*'
@@ -123,7 +132,7 @@ extensions:
       kernel-module-tegra-camera-platform: '*'
       kernel-module-tegra-camera-rtcpu: '*'
       kernel-module-tegra-dce: '*'
-      kernel-module-tegra-drm: '*'
+      nv-kernel-module-tegra-drm: '*'
       kernel-module-tegra-wmark: '*'
       kernel-module-tegra-xudc: '*'
       kernel-module-tegra210-adma: '*'
@@ -147,6 +156,19 @@ extensions:
       wireless-regdb-static: '*'
       swupdate: '*'
       tegra-redundant-boot-base: '*'
+
+      # L4T GPU userspace + boot-time daemons. tegra-firmware-tegra234 (the
+      # ga10b kernel firmware blobs) is delivered via
+      # packagegroup-avocado-tegra-rootfs in the rootfs erofs base, *not*
+      # here, because the kernel firmware loader returns -40 (ELOOP) when
+      # reading firmware files through the sysext /usr overlay.
+      cuda-cudart: '*'
+      tegra-configs-udev: '*'
+      tegra-libraries-cuda: '*'
+      tegra-nvphs: '*'
+      tegra-nvpower: '*'
+      tegra-nvsciipc: '*'
+      tegra-nvstartup: '*'
 
     # 5.15 (linux-jammy-nvidia-tegra) uses NVIDIA's downstream Realtek shim for
     # the 8822CE wifi; mainline rtw88 isn't built for this kernel. Mirrors
