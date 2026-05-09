@@ -12,3 +12,9 @@
 [submodule "extensions/tunnels/avocado-rat"]
 	path = extensions/tunnels/avocado-rat
 	url = git@github.com:avocado-linux/avocado-rat.git
+[submodule "bsp/reterminal/seeed-linux-dtoverlays"]
+	path = bsp/reterminal/seeed-linux-dtoverlays
+	url = https://github.com/Seeed-Studio/seeed-linux-dtoverlays.git
+[submodule "bsp/reterminal-dm/seeed-linux-dtoverlays"]
+	path = bsp/reterminal-dm/seeed-linux-dtoverlays
+	url = https://github.com/Seeed-Studio/seeed-linux-dtoverlays.git
