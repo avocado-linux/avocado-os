@@ -1,0 +1,26 @@
+/dts-v1/;
+
+/*
+ * MB2 BCT misc override for the Advantech MIC-733-AO carrier (AO5A1/AO6A1).
+ *
+ * Stock NVIDIA tegra234-mb2-bct-misc-p3701-0000.dts only includes
+ * tegra234-mb2-bct-common.dtsi, which directs MB2 to read 256 bytes of
+ * CVB (carrier) EEPROM data from I2C0 slave 0xac. The MIC-733-AO carrier
+ * has no EEPROM at that address, so MB2 aborts in "Prepare eeprom data":
+ *   E> I2C: slave not found in slaves.
+ *   E> I2C_DEV: Could not read 256 registers ... slave 0xac ...
+ *   C> Task 0x0 failed (err: 0x1f1e050d)
+ *
+ * This file re-includes the upstream common.dtsi and zeroes
+ * cvb_eeprom_read_size; cvm_eeprom_* (SOM EEPROM at 0xa0) is unchanged.
+ */
+
+#include "tegra234-mb2-bct-common.dtsi"
+
+/ {
+    mb2-misc {
+        eeprom {
+            cvb_eeprom_read_size = <0x0>;
+        };
+    };
+};

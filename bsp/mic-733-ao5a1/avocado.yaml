@@ -1,0 +1,206 @@
+default_target: jetson-agx-orin-devkit
+supported_targets:
+  - jetson-agx-orin-devkit
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-bsp-mic-733-ao5a1:
+    version: 2024.1.0
+    release: r0
+    summary: Board support for the Advantech MIC-733-AO5A1 (carrier extension on jetson-agx-orin)
+    description: |
+      Layered carrier support for the Advantech MIC-733-AO5A1 industrial
+      gateway — the 32GB SOM variant (P3701-0000) of the same MIC-733-AO
+      carrier the AO6A1 ships on (Jetson AGX Orin SOM, Advantech carrier
+      with 4× MGBE / mini-PCIe / M.2 / discrete DI/DO / RS-232/422/485).
+      Carrier hardware is identical to the AO6A1; only the AGX Orin
+      module capacity differs (32GB / sku 0000 on AO5A1, 64GB / sku 0005
+      on AO6A1), which the jetson-agx-orin-devkit.conf flash flow
+      selects from the SOM's EEPROM. CARRIER_FV_CHECK_BOARDID/
+      CHECK_BOARDSKU in carrier.env pin this extension to sku 0000, so
+      a 64GB module misloaded with the AO5A1 BSP fails fast at
+      tegraflash boardid check.
+
+      Files ship with an `-adv` suffix to make their carrier origin
+      explicit vs. the stock NVIDIA filenames the MACHINE bakes. The
+      sku-driven file uses the 0000 variant the conf selects for 32GB:
+        * tegra234-p3737-0000+p3701-0000-nv-adv.dtb (kernel DTB) —
+          carrier I/O nodes. pcie@141e0000 (C8) flipped to disabled —
+          the vendor DTB declares C8's 8 phys against `p2u_gbe_*` lanes
+          (GBE UPHY, which MB1 explicitly skips on this board:
+          `W> Skipping GBE UPHY config`). Walking those phys at boot
+          reads unpowered register blocks and tripped a fatal RAS UE
+          in BL31 at ADDR=0x3f600c0. The carrier doesn't expose C8.
+      The BPMP DTB is the unmodified upstream
+      tegra234-bpmp-3701-0000-3737-0000.dtb (selected by p3701.conf.common
+      for board_sku 0000); no carrier override.
+      The carrier-side files (pinmux / GPIO / pad-voltage / MB2 BCT)
+      are SOM-SKU independent — p3701.conf.common defaults all SKUs to
+      the -p3701-0000(-a04) family — so they match AO6A1 byte-for-byte:
+        * tegra234-mb1-bct-pinmux-p3701-0000-a04-adv.dtsi — DP_AUX_CH1→eth3
+        * tegra234-mb1-bct-gpio-p3701-0000-a04-adv.dtsi — boot GPIO defaults
+          (#included by the pinmux dtsi)
+        * tegra234-mb1-bct-padvoltage-p3701-0000-a04-adv.dtsi — for parity
+        * tegra234-mb2-bct-misc-p3701-0000-adv.dts — disables the CVB
+          (carrier) EEPROM read at I2C0/0xac. The MIC-733-AO carrier
+          has no EEPROM at that address, so the stock MB2 BCT busy-
+          spins in "Prepare eeprom data". Mirrors the same patch
+          Advantech ships in their vendor BSP common.dtsi.
+      CARRIER_FV_/CARRIER_ENV_ overrides in carrier.env redirect the
+      flash flow at the renamed files; everything else (BPMP firmware,
+      PMIC config, partition layout) inherits unchanged from the
+      jetson-agx-orin-devkit flash profile.
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+      - sysext
+      - confext
+
+    package_files:
+      - overlay
+      - stone
+      - avocado.yaml
+
+    # Carrier overlay files for the MIC-733-AO5A1 live under stone/.
+    # avocado-cli composes the path below into the runtime's effective
+    # AVOCADO_STONE_INCLUDE_PATHS, scoped to this extension's location
+    # (so for consumers that fetch this BSP as a remote extension, stone
+    # finds the carrier files at $AVOCADO_PREFIX/includes/avocado-bsp-mic-733-ao5a1/stone/).
+    stone_include_paths:
+      - stone
+
+    # Confext overlay — ships /etc/hostname so the device identifies as
+    # `mic-733-ao5a1` instead of inheriting the SOM's MACHINE-derived
+    # `avocado-jetson-agx-orin` default.
+    overlay: overlay
+
+    on_merge:
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+      - nvbootctrl verify
+
+    # Modeled on bsp/jetson-agx-orin-devkit/avocado.yaml's package list,
+    # which is the canonical AGX Orin SOM module set. Carrier-specific
+    # adjustments below: drop DevKit's onboard Realtek 1GbE bits
+    # (RTL8211F PHY / r8169 MAC / linux-firmware-rtl8168) and add
+    # kernel-module-ixgbe for the riser X550 dual-port 10GbE.
+    packages:
+      kernel-module-at24: '*'
+      kernel-module-cec: '*'
+      kernel-module-crct10dif-ce: '*'
+      kernel-module-fusb301: '*'
+      kernel-module-governor-pod-scaling: '*'
+      kernel-module-governor-userspace: '*'
+      nv-kernel-module-host1x: '*'
+      kernel-module-host1x-fence: '*'
+      kernel-module-host1x-nvhost: '*'
+      kernel-module-ina3221: '*'
+      kernel-module-mc-hwpm: '*'
+      kernel-module-mc-utils: '*'
+      # Ethernet
+      # - nvethernet: NVIDIA OOT MGBE driver for the 4× on-SoC MGBE ports
+      #   wired through the carrier (resolved via nv-kernel-module-nvethernet
+      #   `Provides: kernel-module-nvethernet`).
+      # - ixgbe: in-tree Intel driver for the X550 dual-port 10GbE on the
+      #   PCIe riser card (CONFIG_IXGBE=m in avocado-extra.cfg).
+      # - stmmac: alt-kernel (5.15) MAC path; harmless on 6.6.
+      kernel-module-nvethernet: '*'
+      kernel-module-ixgbe: '*'
+      kernel-module-stmmac: '*'
+      kernel-module-nvgpu: '*'
+      kernel-module-nvhwpm: '*'
+      kernel-module-nvidia: '*'
+      kernel-module-nvidia-drm: '*'
+      kernel-module-nvidia-modeset: '*'
+      kernel-module-nvidia-vrs-pseq: '*'
+      kernel-module-nvmap: '*'
+      kernel-module-nvme: '*'
+      kernel-module-nvme-core: '*'
+      kernel-module-nvpmodel-clk-cap: '*'
+      kernel-module-nvsciipc: '*'
+      kernel-module-nvvrs-pseq-rtc: '*'
+      kernel-module-pcie-tegra194: '*'
+      kernel-module-phy-tegra194-p2u: '*'
+      kernel-module-pwm-fan: '*'
+      kernel-module-pwm-tegra: '*'
+      kernel-module-pwm-tegra-tachometer: '*'
+      kernel-module-snd-hda-codec: '*'
+      kernel-module-snd-hda-codec-hdmi: '*'
+      kernel-module-snd-hda-core: '*'
+      kernel-module-snd-hda-tegra: '*'
+      kernel-module-snd-soc-audio-graph-card: '*'
+      kernel-module-snd-soc-simple-card-utils: '*'
+      kernel-module-snd-soc-tegra-audio-graph-card: '*'
+      kernel-module-snd-soc-tegra-pcm: '*'
+      kernel-module-snd-soc-tegra-utils: '*'
+      kernel-module-snd-soc-tegra186-arad: '*'
+      nv-kernel-module-snd-soc-tegra186-asrc: '*'
+      nv-kernel-module-snd-soc-tegra186-dspk: '*'
+      nv-kernel-module-snd-soc-tegra210-admaif: '*'
+      nv-kernel-module-snd-soc-tegra210-adx: '*'
+      nv-kernel-module-snd-soc-tegra210-ahub: '*'
+      nv-kernel-module-snd-soc-tegra210-amx: '*'
+      nv-kernel-module-snd-soc-tegra210-dmic: '*'
+      nv-kernel-module-snd-soc-tegra210-i2s: '*'
+      nv-kernel-module-snd-soc-tegra210-mixer: '*'
+      nv-kernel-module-snd-soc-tegra210-mvc: '*'
+      nv-kernel-module-snd-soc-tegra210-ope: '*'
+      nv-kernel-module-snd-soc-tegra210-sfc: '*'
+      kernel-module-spi-tegra114: '*'
+      kernel-module-spidev: '*'
+      kernel-module-tegra-aconnect: '*'
+      kernel-module-tegra-bpmp-thermal: '*'
+      kernel-module-tegra-cactmon-mc-all: '*'
+      kernel-module-tegra-dce: '*'
+      nv-kernel-module-tegra-drm: '*'
+      kernel-module-tegra-wmark: '*'
+      kernel-module-tegra-xudc: '*'
+      kernel-module-tegra210-adma: '*'
+      kernel-module-tegra234-aon: '*'
+      kernel-module-tegra234-oc-event: '*'
+      kernel-module-thermal-trip-event: '*'
+      kernel-module-tsecriscv: '*'
+      swupdate: '*'
+      tegra-redundant-boot-base: '*'
+
+      # L4T GPU userspace + boot-time daemons. tegra-firmware-tegra234 (the
+      # ga10b kernel firmware blobs) is delivered via
+      # packagegroup-avocado-tegra-rootfs in the rootfs erofs base, *not*
+      # here, because the kernel firmware loader returns -40 (ELOOP) when
+      # reading firmware files through the sysext /usr overlay.
+      cuda-cudart: '*'
+      tegra-configs-udev: '*'
+      tegra-libraries-cuda: '*'
+      tegra-nvphs: '*'
+      tegra-nvpower: '*'
+      tegra-nvsciipc: '*'
+      tegra-nvstartup: '*'
+
+    # 5.15 (linux-jammy-nvidia-tegra) uses NVIDIA's downstream Realtek shim
+    # for any M.2 wifi card; mainline rtw88 isn't built for this kernel.
+    # Mirrors bsp/jetson-agx-orin-devkit/avocado.yaml.
+    kernel-5.15.*:
+      packages:
+        nv-kernel-module-rtl8822ce: '*'
+        tegra-firmware-rtl8822: '*'
+
+    # 6.6 (linux-yocto, the default kernel) ships drm-display-helper
+    # as a separate module; on 5.15 those helpers are statically linked
+    # into drm.ko. Use the upstream rtw88 family for any 8822CE M.2 wifi.
+    kernel-6.6.*:
+      packages:
+        kernel-module-drm-display-helper: '*'
+        kernel-module-rtw88-8822c: '*'
+        kernel-module-rtw88-8822ce: '*'
+        kernel-module-rtw88-core: '*'
+        kernel-module-rtw88-pci: '*'
+        linux-firmware-rtl8822: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
