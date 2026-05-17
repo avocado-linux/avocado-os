@@ -45,6 +45,8 @@ extensions:
       kernel-module-syna-drm: '*'
       kernel-module-drm-ttm-helper: '*'
       kernel-module-ttm: '*'
+      synasdk-gpu-pvr: "*"
+      mesa-megadriver: "*"
       # --- Audio (Synaptics Berlin) ---
       kernel-module-snd-soc-berlin-asoc: '*'
       kernel-module-snd-soc-berlin-pcm: '*'
