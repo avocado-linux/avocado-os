@@ -19,32 +19,50 @@ fi
 var_dev=$(findmnt -no SOURCE /var)
 disk=/dev/$(lsblk -no PKNAME "$var_dev")
 part=$(printf '%s\n' "$var_dev" | grep -oE '[0-9]+$')
+ptable=$(lsblk -dno PTTYPE "$disk")
+echo "grow-var: $var_dev on $disk (partition $part, $ptable table)."
 
-# Relocate the backup GPT header to the true end of the disk. The
-# provisioned image's GPT is sized for the partition layout (.aos), so
-# on a larger eMMC there's unallocated trailing space and the backup
-# GPT sits in the middle.
-echo "grow-var: relocating backup GPT to end of $disk."
-sgdisk -e "$disk"
+case "$ptable" in
+gpt)
+    # Relocate the backup GPT header to the true end of the disk. The
+    # provisioned image's GPT is sized for the partition layout (.aos),
+    # so on a larger eMMC there's unallocated trailing space and the
+    # backup GPT sits in the middle.
+    echo "grow-var: relocating backup GPT to end of $disk."
+    sgdisk -e "$disk"
 
-# Capture the partition's existing identity so we can recreate it with
-# the same start sector and partuuid (the rootfs fstab pins partuuid
-# 4d21b016-…). Reading the start sector explicitly avoids any alignment
-# surprise that `sgdisk -n N:0:0` might introduce.
-varuuid=$(sgdisk -i "$part" "$disk" | awk -F': +' '/Partition unique GUID/ {print $2}')
-varstart=$(sgdisk -i "$part" "$disk" | awk -F': +' '/First sector/ {print $2}' | awk '{print $1}')
-echo "grow-var: var keeps start=$varstart partuuid=$varuuid"
+    # Capture the partition's existing identity so we can recreate it
+    # with the same start sector and partuuid (the rootfs fstab pins
+    # partuuid 4d21b016-…). Reading start explicitly avoids any
+    # alignment surprise that `sgdisk -n N:0:0` might introduce.
+    varuuid=$(sgdisk -i "$part" "$disk" | awk -F': +' '/Partition unique GUID/ {print $2}')
+    varstart=$(sgdisk -i "$part" "$disk" | awk -F': +' '/First sector/ {print $2}' | awk '{print $1}')
+    echo "grow-var: var keeps start=$varstart partuuid=$varuuid"
 
-# Resize via delete + recreate, in a single sgdisk invocation so the GPT
-# only sees one atomic write. sgdisk only edits the GPT (not partition
-# data), so no in-use prompt — unlike parted -s in this build.
-echo "grow-var: extending partition $part on $disk to end-of-disk."
-sgdisk -d "$part" \
-       -n "${part}:${varstart}:0" \
-       -t "${part}:8300" \
-       -u "${part}:${varuuid}" \
-       -c "${part}:var" \
-       "$disk"
+    # Resize via delete + recreate in a single sgdisk invocation so the
+    # GPT sees one atomic write. sgdisk only touches the table (not
+    # partition data), so no in-use prompt — unlike parted -s.
+    echo "grow-var: extending partition $part on $disk to end-of-disk."
+    sgdisk -d "$part" \
+           -n "${part}:${varstart}:0" \
+           -t "${part}:8300" \
+           -u "${part}:${varuuid}" \
+           -c "${part}:var" \
+           "$disk"
+    ;;
+dos)
+    # MBR: no backup table to relocate. sfdisk -N N with input "  , +"
+    # keeps the existing start sector and partition type, growing the
+    # size to fill remaining free space. --no-reread skips the in-use
+    # kernel re-read (we do it ourselves via partx below).
+    echo "grow-var: extending partition $part on $disk to end-of-disk."
+    printf '  , +\n' | sfdisk --no-reread --force -N "$part" "$disk"
+    ;;
+*)
+    echo "grow-var: unsupported partition table type '$ptable' on $disk." >&2
+    exit 1
+    ;;
+esac
 
 # Tell the kernel about the new size. --update --nr touches only this
 # partition (BLKPG ioctl path), which the kernel accepts on a mounted

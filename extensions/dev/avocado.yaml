@@ -29,17 +29,22 @@ extensions:
     packages:
       avocado-hitl: '*'
       rsync: '*'
-      # Used by /usr/bin/avocado-grow-var (shipped via the overlay):
-      # gptfdisk (sgdisk) does GPT manipulation — relocate the backup
-      # header and resize the partition entry; util-linux-partx tells
-      # the kernel about the new size via BLKPG; btrfs-tools (already
-      # in the base rootfs) grows the filesystem online;
-      # util-linux-{findmnt,lsblk} discover the var device, parent
-      # disk, and partition number regardless of target.
+      # Used by /usr/bin/avocado-grow-var (shipped via the overlay).
+      # The script branches on partition-table type:
+      #   - GPT (imx, x86-64, alif, stm, qemu, renesas, rockchip,
+      #     synaptics, nvidia, qcom): gptfdisk (sgdisk) relocates the
+      #     backup GPT header and rewrites the partition entry.
+      #   - MBR (raspberrypi family — fwup mbr layout): util-linux-sfdisk
+      #     grows the last partition in place.
+      # util-linux-partx then tells the kernel about the new size via
+      # BLKPG; btrfs-tools (already in the base rootfs) grows the
+      # filesystem online; util-linux-{findmnt,lsblk} discover the var
+      # device, parent disk, partition number, and table type.
       gptfdisk: '*'
       util-linux-findmnt: '*'
       util-linux-lsblk: '*'
       util-linux-partx: '*'
+      util-linux-sfdisk: '*'
 
     sdk:
       packages:
