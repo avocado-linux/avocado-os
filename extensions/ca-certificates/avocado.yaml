@@ -1,0 +1,31 @@
+supported_targets: '*'
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-ext-ca-certificates:
+    version: 2024.1.0
+    release: r0
+    summary: Trusted CA certificate bundle for system SSL
+    description: |
+      Installs the ca-certificates package and bakes the trusted CA bundle
+      into /etc/ssl/certs/ca-certificates.crt at extension build time, so
+      OpenSSL-using services don't need a runtime workaround to assemble
+      the bundle on first boot.
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    package_files:
+      - post_build.sh
+      - avocado.yaml
+
+    post_build: post_build.sh
+
+    packages:
+      ca-certificates: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
