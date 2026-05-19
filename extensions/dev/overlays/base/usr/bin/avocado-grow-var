@@ -1,0 +1,60 @@
+#!/bin/sh
+# Grow the /var partition to fill its parent disk, then expand the btrfs
+# filesystem inside it. Target-agnostic: discovers the var device, parent
+# disk, and partition number at runtime so the same script works for
+# mmcblk*, nvme*, sd*, etc.
+#
+# Guarded by /var/lib/avocado/.resized-var so it runs at most once per
+# install. Invoked by avocado-grow-var.service (oneshot) from the dev
+# extension.
+
+set -eu
+
+marker=/var/lib/avocado/.resized-var
+if [ -e "$marker" ]; then
+    echo "grow-var: marker $marker present, nothing to do."
+    exit 0
+fi
+
+var_dev=$(findmnt -no SOURCE /var)
+disk=/dev/$(lsblk -no PKNAME "$var_dev")
+part=$(printf '%s\n' "$var_dev" | grep -oE '[0-9]+$')
+
+# Relocate the backup GPT header to the true end of the disk. The
+# provisioned image's GPT is sized for the partition layout (.aos), so
+# on a larger eMMC there's unallocated trailing space and the backup
+# GPT sits in the middle.
+echo "grow-var: relocating backup GPT to end of $disk."
+sgdisk -e "$disk"
+
+# Capture the partition's existing identity so we can recreate it with
+# the same start sector and partuuid (the rootfs fstab pins partuuid
+# 4d21b016-…). Reading the start sector explicitly avoids any alignment
+# surprise that `sgdisk -n N:0:0` might introduce.
+varuuid=$(sgdisk -i "$part" "$disk" | awk -F': +' '/Partition unique GUID/ {print $2}')
+varstart=$(sgdisk -i "$part" "$disk" | awk -F': +' '/First sector/ {print $2}' | awk '{print $1}')
+echo "grow-var: var keeps start=$varstart partuuid=$varuuid"
+
+# Resize via delete + recreate, in a single sgdisk invocation so the GPT
+# only sees one atomic write. sgdisk only edits the GPT (not partition
+# data), so no in-use prompt — unlike parted -s in this build.
+echo "grow-var: extending partition $part on $disk to end-of-disk."
+sgdisk -d "$part" \
+       -n "${part}:${varstart}:0" \
+       -t "${part}:8300" \
+       -u "${part}:${varuuid}" \
+       -c "${part}:var" \
+       "$disk"
+
+# Tell the kernel about the new size. --update --nr touches only this
+# partition (BLKPG ioctl path), which the kernel accepts on a mounted
+# partition as long as the start sector and identity are unchanged.
+echo "grow-var: informing kernel of new size for partition $part."
+partx --update --nr "$part" "$disk"
+
+echo "grow-var: resizing btrfs on /var to max."
+btrfs filesystem resize max /var
+
+mkdir -p "$(dirname "$marker")"
+: > "$marker"
+echo "grow-var: complete."

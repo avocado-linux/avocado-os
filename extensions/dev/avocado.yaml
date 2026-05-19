@@ -14,12 +14,32 @@ extensions:
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
 
+    enable_services:
+      - avocado-grow-var.service
+
     on_merge:
-      - btrfs filesystem resize max /var
+      # Kick the one-shot resize right after the extension is merged so
+      # the user doesn't have to wait for the next boot. The service is
+      # guarded by /var/lib/avocado/.resized-var, so subsequent boots
+      # are no-ops.
+      - systemctl start --no-block avocado-grow-var.service
+
+    overlay: overlays/base
 
     packages:
       avocado-hitl: '*'
       rsync: '*'
+      # Used by /usr/bin/avocado-grow-var (shipped via the overlay):
+      # gptfdisk (sgdisk) does GPT manipulation — relocate the backup
+      # header and resize the partition entry; util-linux-partx tells
+      # the kernel about the new size via BLKPG; btrfs-tools (already
+      # in the base rootfs) grows the filesystem online;
+      # util-linux-{findmnt,lsblk} discover the var device, parent
+      # disk, and partition number regardless of target.
+      gptfdisk: '*'
+      util-linux-findmnt: '*'
+      util-linux-lsblk: '*'
+      util-linux-partx: '*'
 
     sdk:
       packages:
