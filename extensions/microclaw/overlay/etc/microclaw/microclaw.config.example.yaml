@@ -1,0 +1,55 @@
+# MicroClaw configuration template.
+#
+# This file is read-only (it lives on the Avocado rootfs). To activate
+# microclaw.service, copy this to /var/lib/microclaw/microclaw.config.yaml,
+# fill in your provider api_key, then `systemctl start microclaw`.
+#
+#   cp /etc/microclaw/microclaw.config.example.yaml \
+#      /var/lib/microclaw/microclaw.config.yaml
+#   chown microclaw:microclaw /var/lib/microclaw/microclaw.config.yaml
+#   chmod 600 /var/lib/microclaw/microclaw.config.yaml
+#   $EDITOR /var/lib/microclaw/microclaw.config.yaml   # set api_key
+#   systemctl start microclaw
+#
+# IMPORTANT: microclaw reads the provider key from the YAML `api_key:` field,
+# NOT from $ANTHROPIC_API_KEY. Only OpenAI has env-var support
+# (MICROCLAW_OPENAI_API_KEY / OPENAI_API_KEY). For Anthropic and other
+# providers, the key MUST be set here.
+
+data_dir: /var/lib/microclaw
+
+llm_provider: anthropic
+model: claude-sonnet-4-6
+api_key: "PUT-YOUR-KEY-HERE"
+
+# Web UI / HTTP API the desktop UI talks to.
+# Loopback (127.0.0.1) is the secure default — only accessible on-device.
+# Use 0.0.0.0 if you want LAN access, but rotate the default password first:
+# microclaw logs a temporary "helloworld" password on first start; change it
+# from the Web UI under Settings → Auth.
+web_host: 127.0.0.1
+web_port: 10961
+
+# Drop external MCP servers here. Same shape as Claude Desktop's mcpServers.
+mcp:
+  servers: {}
+
+# Tool-execution policy. With sandbox.mode unset (defaults to "off") the bash
+# tool runs directly on the host as the microclaw user. Setting the flag below
+# to `false` lets the agent run bash without prompting for approval on each
+# call -- appropriate for a dev/desktop VM where the AI is meant to be useful.
+# Flip to `true` (or omit) for any deployment where untrusted users can reach
+# the Web UI; pair that with rotating the default web password and binding
+# web_host back to 127.0.0.1.
+# Upstream docs: https://microclaw.ai/docs/configuration/
+high_risk_tool_user_confirmation_required: false
+
+# Optional: route bash tool calls through a podman/docker sandbox instead of
+# the host. Requires sandbox.image to be a container image present on-device
+# and a container runtime on $PATH. Leave unset for direct host execution.
+# sandbox:
+#   mode: all
+#   backend: podman
+#   image: docker.io/library/alpine:3.20
+#   no_network: false
+#   security_profile: hardened

@@ -1,0 +1,46 @@
+[Unit]
+Description=MicroClaw conversational AI assistant daemon
+Documentation=https://github.com/microclaw/microclaw
+After=network.target
+# Note: deliberately NOT Wants=network-online.target. The confext is
+# merged after multi-user.target, so any network-online wait is irrelevant
+# by then, and on dev images systemd-networkd-wait-online can sit
+# "activating" forever if no interface is networkd-managed -- which would
+# leave a `systemctl start microclaw` job queued indefinitely.
+#
+# Stay inert until the operator has run `microclaw setup` and produced a
+# config under /var. /etc/microclaw/microclaw.config.example.yaml is the
+# template; copy it to /var/lib/microclaw/microclaw.config.yaml and edit.
+ConditionPathExists=/var/lib/microclaw/microclaw.config.yaml
+
+[Service]
+Type=simple
+User=microclaw
+Group=microclaw
+WorkingDirectory=/var/lib/microclaw
+Environment=HOME=/var/lib/microclaw
+Environment=MICROCLAW_CONFIG=/var/lib/microclaw/microclaw.config.yaml
+# Optional env file. Only useful for OpenAI keys (MICROCLAW_OPENAI_API_KEY /
+# OPENAI_API_KEY); microclaw does NOT honor ANTHROPIC_API_KEY -- the
+# Anthropic key must live in microclaw.config.yaml's api_key field.
+# Leading '-' means systemd doesn't fail if the file is absent.
+EnvironmentFile=-/var/lib/microclaw/microclaw.env
+ExecStart=/usr/bin/microclaw --config /var/lib/microclaw/microclaw.config.yaml start
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+ReadWritePaths=/var/lib/microclaw
+
+[Install]
+WantedBy=multi-user.target
