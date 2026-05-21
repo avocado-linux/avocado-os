@@ -1,8 +1,13 @@
 #!/bin/sh
-# Grow the /var partition to fill its parent disk, then expand the btrfs
-# filesystem inside it. Target-agnostic: discovers the var device, parent
-# disk, and partition number at runtime so the same script works for
-# mmcblk*, nvme*, sd*, etc.
+# Grow the /var partition to fill its parent disk, then expand any
+# intermediate device-mapper layer and the btrfs filesystem inside it.
+# Target-agnostic: discovers the var device, parent disk, and partition
+# number at runtime so the same script works for mmcblk*, nvme*, sd*, etc.
+#
+# Supports plain btrfs-on-partition and LUKS-encrypted /var.  For LUKS the
+# sequence is: grow disk partition → inform kernel → cryptsetup resize →
+# btrfs resize.  Other dm setups are handled by resolving the underlying
+# block partition for the GPT/MBR work; the dm layer is left to the caller.
 #
 # Guarded by /var/lib/avocado/.resized-var so it runs at most once per
 # install. Invoked by avocado-grow-var.service (oneshot) from the dev
@@ -17,10 +22,19 @@ if [ -e "$marker" ]; then
 fi
 
 var_dev=$(findmnt -no SOURCE /var)
-disk=/dev/$(lsblk -no PKNAME "$var_dev")
-part=$(printf '%s\n' "$var_dev" | grep -oE '[0-9]+$')
+
+# Resolve through any device-mapper layer (e.g. LUKS) to the real block
+# partition.  lsblk -l lists all devices in the dependency tree of the given
+# device; selecting the first entry typed "part" gives the underlying
+# partition regardless of how many dm layers sit above it.
+blk_dev=$(lsblk -lno NAME,TYPE "$var_dev" 2>/dev/null \
+          | awk '$2 == "part" { print "/dev/" $1; exit }')
+: "${blk_dev:=$var_dev}"
+
+disk=/dev/$(lsblk -no PKNAME "$blk_dev")
+part=$(printf '%s\n' "$blk_dev" | grep -oE '[0-9]+$')
 ptable=$(lsblk -dno PTTYPE "$disk")
-echo "grow-var: $var_dev on $disk (partition $part, $ptable table)."
+echo "grow-var: $var_dev (via $blk_dev) on $disk (partition $part, $ptable table)."
 
 case "$ptable" in
 gpt)
@@ -69,6 +83,24 @@ esac
 # partition as long as the start sector and identity are unchanged.
 echo "grow-var: informing kernel of new size for partition $part."
 partx --update --nr "$part" "$disk"
+
+# If /var sits behind a device-mapper layer, resize it before resizing
+# the filesystem.  Currently handles crypto_LUKS; other dm types are
+# skipped with a warning (the filesystem resize below may still succeed
+# if the dm layer auto-expands or was pre-sized).
+if [ "$blk_dev" != "$var_dev" ]; then
+    fstype=$(lsblk -dno FSTYPE "$blk_dev")
+    case "$fstype" in
+    crypto_LUKS)
+        dm_name=${var_dev#/dev/mapper/}
+        echo "grow-var: resizing LUKS container $dm_name to fill partition."
+        cryptsetup resize "$dm_name"
+        ;;
+    *)
+        echo "grow-var: dm layer fstype '$fstype' — skipping intermediate resize." >&2
+        ;;
+    esac
+fi
 
 echo "grow-var: resizing btrfs on /var to max."
 btrfs filesystem resize max /var
