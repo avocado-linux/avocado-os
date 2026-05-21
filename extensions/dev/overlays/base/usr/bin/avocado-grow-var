@@ -24,14 +24,23 @@ fi
 var_dev=$(findmnt -no SOURCE /var)
 
 # Resolve through any device-mapper layer (e.g. LUKS) to the real block
-# partition.  lsblk -l lists all devices in the dependency tree of the given
-# device; selecting the first entry typed "part" gives the underlying
-# partition regardless of how many dm layers sit above it.
-blk_dev=$(lsblk -lno NAME,TYPE "$var_dev" 2>/dev/null \
-          | awk '$2 == "part" { print "/dev/" $1; exit }')
-: "${blk_dev:=$var_dev}"
+# partition.  For dm devices, read sysfs slaves — lsblk does not recurse
+# into dm dependency trees when given a mapper path directly.
+# Handles both /dev/mapper/<name> and /dev/dm-N forms (findmnt may return
+# either depending on whether udev has created the mapper symlink yet).
+blk_dev=$var_dev
+dm_dev=""
+case "$var_dev" in
+/dev/mapper/*) dm_dev=$(basename "$(readlink "$var_dev")") ;;
+/dev/dm-*)     dm_dev=$(basename "$var_dev") ;;
+esac
+if [ -n "$dm_dev" ]; then
+    slave=$(ls "/sys/block/$dm_dev/slaves/" 2>/dev/null | head -1)
+    blk_dev=${slave:+/dev/$slave}
+    : "${blk_dev:=$var_dev}"
+fi
 
-disk=/dev/$(lsblk -no PKNAME "$blk_dev")
+disk=/dev/$(lsblk -no PKNAME "$blk_dev" | head -1)
 part=$(printf '%s\n' "$blk_dev" | grep -oE '[0-9]+$')
 ptable=$(lsblk -dno PTTYPE "$disk")
 echo "grow-var: $var_dev (via $blk_dev) on $disk (partition $part, $ptable table)."
@@ -92,9 +101,25 @@ if [ "$blk_dev" != "$var_dev" ]; then
     fstype=$(lsblk -dno FSTYPE "$blk_dev")
     case "$fstype" in
     crypto_LUKS)
-        dm_name=${var_dev#/dev/mapper/}
-        echo "grow-var: resizing LUKS container $dm_name to fill partition."
-        cryptsetup resize "$dm_name"
+        case "$var_dev" in
+        /dev/mapper/*) dm_name=${var_dev#/dev/mapper/} ;;
+        *) dm_name=$(dmsetup info "$var_dev" 2>/dev/null | awk '/Name:/ {print $2}') ;;
+        esac
+        # cryptsetup resize requires the LUKS key to update header metadata.
+        # After switch_root the trusted key is no longer in the keyring, so
+        # resize cannot happen here.  The initramfs (cryptsetup-var.sh) already
+        # handles LUKS resize when it detects partition_sectors > dm_sectors on
+        # the next boot — with the key still available at that point.
+        data_offset=$(dmsetup table "$dm_name" | awk '{print $8}')
+        expected_dm=$(( $(blockdev --getsz "$blk_dev") - data_offset ))
+        dm_sectors=$(blockdev --getsz "$var_dev")
+        if [ "$dm_sectors" -lt "$expected_dm" ]; then
+            echo "grow-var: LUKS container ($dm_sectors sectors) < partition ($expected_dm sectors)."
+            echo "grow-var: partition extended — cryptsetup-var.sh will resize LUKS + btrfs on next boot."
+            echo "grow-var: reboot to complete resize."
+            exit 0
+        fi
+        echo "grow-var: LUKS container already at full size ($dm_sectors sectors)."
         ;;
     *)
         echo "grow-var: dm layer fstype '$fstype' — skipping intermediate resize." >&2
