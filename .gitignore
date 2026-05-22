@@ -1,4 +1,4 @@
-build-*/
+build-*
 .avocado-state
 *.rpm
 _repo/
