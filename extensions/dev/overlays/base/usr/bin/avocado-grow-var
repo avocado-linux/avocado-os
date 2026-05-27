@@ -35,12 +35,12 @@ case "$var_dev" in
 /dev/dm-*)     dm_dev=$(basename "$var_dev") ;;
 esac
 if [ -n "$dm_dev" ]; then
-    slave=$(ls "/sys/block/$dm_dev/slaves/" 2>/dev/null | head -1)
+    slave=$(ls "/sys/block/$dm_dev/slaves/" 2>/dev/null | head -n 1)
     blk_dev=${slave:+/dev/$slave}
     : "${blk_dev:=$var_dev}"
 fi
 
-disk=/dev/$(lsblk -no PKNAME "$blk_dev" | head -1)
+disk=/dev/$(lsblk -no PKNAME "$blk_dev" | head -n 1)
 part=$(printf '%s\n' "$blk_dev" | grep -oE '[0-9]+$')
 ptable=$(lsblk -dno PTTYPE "$disk")
 echo "grow-var: $var_dev (via $blk_dev) on $disk (partition $part, $ptable table)."
@@ -60,7 +60,12 @@ gpt)
     # alignment surprise that `sgdisk -n N:0:0` might introduce.
     varuuid=$(sgdisk -i "$part" "$disk" | awk -F': +' '/Partition unique GUID/ {print $2}')
     varstart=$(sgdisk -i "$part" "$disk" | awk -F': +' '/First sector/ {print $2}' | awk '{print $1}')
-    echo "grow-var: var keeps start=$varstart partuuid=$varuuid"
+    # Preserve the existing partition name. The Jetson initramfs
+    # (avocado-tegra-init) discovers /var by matching PARTNAME=DATAPART_EXPAND,
+    # so renaming the partition here would make /var unmountable on the next
+    # boot. Reuse whatever name the provisioned image gave it.
+    varname=$(sgdisk -i "$part" "$disk" | awk -F"'" '/Partition name/ {print $2}')
+    echo "grow-var: var keeps start=$varstart partuuid=$varuuid name=$varname"
 
     # Resize via delete + recreate in a single sgdisk invocation so the
     # GPT sees one atomic write. sgdisk only touches the table (not
@@ -70,7 +75,7 @@ gpt)
            -n "${part}:${varstart}:0" \
            -t "${part}:8300" \
            -u "${part}:${varuuid}" \
-           -c "${part}:var" \
+           -c "${part}:${varname}" \
            "$disk"
     ;;
 dos)
