@@ -179,18 +179,51 @@ else
     exit 1
 fi
 
-# Update repository metadata (distro packages only, excluding extensions)
+# Render the repositories to mirror the PRODUCTION content-addressed-pool layout:
+# pool every package once into <release>/_pkgs/<aa>/<sha>.rpm and write per-repo
+# metadata whose primary.xml references the pool (../../_pkgs/<aa>/<sha>.rpm),
+# exactly like the cloud render_pool. The release dir is the served channel root,
+# so _pkgs/ and the repos sit as siblings under it. (Replaces the old in-place
+# per-repo createrepo; the staged packages/ tree is now build-input only.)
 echo ""
-echo "Updating repository metadata..."
-echo "Metadata will use relative paths to packages"
-./repo/update-metadata-distro.sh "$PACKAGES_PATH/$DISTRO_CODENAME" "" "$RELEASES_PATH"
+echo "Rendering pooled repositories (mirrors production render)..."
 
-if [ $? -eq 0 ]; then
-    echo "✓ Repository metadata updated successfully"
-else
-    echo "✗ Repository metadata update failed" >&2
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RENDER_TOOL="$SCRIPT_DIR/../distro/scripts/render-pool-local.py"
+if [ ! -f "$RENDER_TOOL" ]; then
+    echo "Error: render tool not found at $RENDER_TOOL" >&2
     exit 1
 fi
+
+rendered_any=false
+while IFS='=' read -r key value || [ -n "$key" ]; do
+    [ "$key" = "repo" ] || continue
+    # Strip the literal "$releasever/" prefix -> path relative to the channel root.
+    rel_root="${value#\$releasever/}"
+    # Extension repos are rendered by dev-build-extensions.sh; skip here.
+    case "$rel_root" in
+        target/*-ext) continue ;;
+    esac
+
+    staged="$PACKAGES_PATH/$DISTRO_CODENAME/$rel_root"
+    if [ ! -d "$staged" ]; then
+        echo "  Skipping $rel_root (no staged packages at $staged)"
+        continue
+    fi
+
+    echo "  Rendering $rel_root ..."
+    if ! python3 "$RENDER_TOOL" --staged "$staged" --channel-root "$RELEASES_PATH" --subpath "$rel_root"; then
+        echo "✗ Render failed for $rel_root" >&2
+        exit 1
+    fi
+    rendered_any=true
+done < "$MAP_FILE"
+
+if [ "$rendered_any" != true ]; then
+    echo "✗ No repositories rendered (no repo= roots in $MAP_FILE)" >&2
+    exit 1
+fi
+echo "✓ Repositories rendered into the content-addressed pool ($RELEASES_PATH/_pkgs)"
 
 echo ""
 echo "=== Sync Complete ==="

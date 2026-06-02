@@ -35,27 +35,30 @@ mkdir -p "${OUTPUT_DIR}"
 # Initialize the repositories array
 repos=()
 
-# Process mappings from the map file to collect repository paths
-while IFS='=' read -r key value || [ -n "$key" ]; do   
-    # Skip empty lines or lines without an equals sign
-    if [ -z "$key" ] || [ -z "$value" ]; then
-        continue
-    fi
-    
+# Collect this target's repository roots from the map's `repo=<root>` lines.
+# W1: targets.json lists per-target repo roots (one repo per machine), NOT the
+# per-arch package paths and NOT the shared sdk/all repo. Each target arch's
+# packages nest under target/<machine>, which is a single repo here.
+while IFS='=' read -r key value || [ -n "$key" ]; do
+    [ "$key" = "repo" ] || continue
+    [ -n "$value" ] || continue
+
     # Expand variables in the value (like $releasever)
     expanded_value=$(eval "echo \"${value}\"")
-    
+
     # Convert absolute path to relative path by removing the releasever prefix
     # This makes paths relative to the targets.json file location
     relative_path="${expanded_value#${releasever}/}"
-    
-    source_dir="${SOURCE_DEPLOY_DIR}/${key}"
-    
-    # Only include repositories that actually exist and have packages
-    if [ -d "${source_dir}" ] && [ -n "$(find "${source_dir}" -name "*.rpm" -print -quit)" ]; then
-        echo "Found packages in: ${source_dir} -> ${relative_path}"
-        repos+=("\"${relative_path}\"")
-    fi
+
+    case "${relative_path}" in
+        "target/${TARGET_NAME}"|"sdk/${TARGET_NAME}")
+            echo "Found repo root for ${TARGET_NAME}: ${relative_path}"
+            repos+=("\"${relative_path}\"")
+            ;;
+        *)
+            echo "Skipping non-per-target repo root: ${relative_path}"
+            ;;
+    esac
 done < "${MAP_FILE}"
 
 # Add the SDK repository for this target if not already present (relative path)
