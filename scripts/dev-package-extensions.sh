@@ -28,6 +28,10 @@ Options:
     -n, --container-name NAME   Repository container name (default: $DEFAULT_CONTAINER_NAME)
     --network NETWORK       Docker network name (default: $DEFAULT_NETWORK_NAME)
     --release-dir DIR       Specific release directory name (default: auto-detect latest)
+    -E, --extensions-dir DIR    Top-level directory holding ALL extensions as
+                                <type>-<name> subdirs (e.g. bsp-qemuarm64, ext-dev),
+                                instead of the in-repo extensions/ + bsp/ split.
+                                Defaults to \$AVOCADO_EXTENSIONS_DIR if set.
     --skip-cleanup          Skip cleaning up extension build artifacts after packaging
     --all                   Package all extensions that support the target
     --list                  List available extensions and their supported targets
@@ -39,6 +43,7 @@ Examples:
     $0 -t raspberrypi4 bsp-raspberrypi4        # Package BSP extension for raspberrypi4
     $0 --list                                   # List all extensions
     $0 -t qemux86-64 --all --skip-cleanup      # Package all extensions but skip cleanup
+    $0 -t qemuarm64 --all -E /src/avocado-linux/extensions   # Package from a combined extensions dir
 
 This script:
 1. Discovers available extensions (both regular and BSP) and their supported targets
@@ -124,11 +129,48 @@ parse_yaml_supported_targets() {
     fi
 }
 
+# Resolve an extension identifier to its source dir and package name, setting the
+# `ext_dir` and `package_name` variables in the caller's scope.
+#
+# Combined mode (EXTENSIONS_DIR set): every extension is a `<type>-<name>` subdir
+# (bsp-<name>, ext-<name>), so the dir IS the identifier and the package is
+# avocado-<identifier> — no bsp/ext special-casing.
+# Legacy mode: regular extensions live in extensions/<name> (avocado-ext-<name>);
+# BSPs in bsp/<name>, surfaced as identifier bsp-<name> (avocado-bsp-<name>).
+resolve_extension_paths() {
+    local extension="$1"
+    if [ -n "$EXTENSIONS_DIR" ]; then
+        ext_dir="$EXTENSIONS_DIR/$extension"
+        package_name="avocado-$extension"
+    elif [[ "$extension" == bsp-* ]]; then
+        ext_dir="bsp/${extension#bsp-}"
+        package_name="avocado-bsp-${extension#bsp-}"
+    else
+        ext_dir="extensions/$extension"
+        package_name="avocado-ext-$extension"
+    fi
+}
+
 # Function to discover extensions and their supported targets
 discover_extensions() {
     local extensions_info=()
-    
-    # Discover regular extensions
+
+    if [ -n "$EXTENSIONS_DIR" ]; then
+        # Combined mode: all extensions are <type>-<name> subdirs of one dir; the
+        # subdir name is the identifier (already carries the bsp-/ext- prefix).
+        local ext_dir
+        for ext_dir in "$EXTENSIONS_DIR"/*/; do
+            if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.yaml" ]; then
+                local extension=$(basename "$ext_dir")
+                local supported_targets=$(parse_yaml_supported_targets "$ext_dir/avocado.yaml")
+                extensions_info+=("$extension:$supported_targets")
+            fi
+        done
+        printf '%s\n' "${extensions_info[@]}"
+        return
+    fi
+
+    # Legacy in-repo layout: regular extensions under extensions/, BSPs under bsp/.
     for ext_dir in extensions/*/; do
         if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.yaml" ]; then
             local extension=$(basename "$ext_dir")
@@ -136,7 +178,7 @@ discover_extensions() {
             extensions_info+=("$extension:$supported_targets")
         fi
     done
-    
+
     # Discover BSP extensions
     for bsp_dir in bsp/*/; do
         if [ -d "$bsp_dir" ] && [ -f "$bsp_dir/avocado.yaml" ]; then
@@ -146,7 +188,7 @@ discover_extensions() {
             extensions_info+=("$extension:$supported_targets")
         fi
     done
-    
+
     printf '%s\n' "${extensions_info[@]}"
 }
 
@@ -230,22 +272,12 @@ cleanup_extension() {
     local target="$2"
     
     echo "Cleaning up extension: $extension for target: $target"
-    
-    # Determine extension directory and package name based on type
+
+    # Determine extension directory and package name (combined or legacy layout)
     local ext_dir=""
     local package_name=""
-    
-    if [[ "$extension" == bsp-* ]]; then
-        # BSP extension
-        local bsp_name="${extension#bsp-}"
-        ext_dir="bsp/$bsp_name"
-        package_name="avocado-bsp-$bsp_name"
-    else
-        # Regular extension
-        ext_dir="extensions/$extension"
-        package_name="avocado-ext-$extension"
-    fi
-    
+    resolve_extension_paths "$extension"
+
     if [ ! -d "$ext_dir" ]; then
         echo "  ⚠ Extension directory '$ext_dir' not found, skipping cleanup" >&2
         return 0
@@ -282,22 +314,12 @@ package_extension() {
     local target="$2"
     
     echo "Packaging extension: $extension for target: $target"
-    
-    # Determine extension directory and package name based on type
+
+    # Determine extension directory and package name (combined or legacy layout)
     local ext_dir=""
     local package_name=""
-    
-    if [[ "$extension" == bsp-* ]]; then
-        # BSP extension
-        local bsp_name="${extension#bsp-}"
-        ext_dir="bsp/$bsp_name"
-        package_name="avocado-bsp-$bsp_name"
-    else
-        # Regular extension
-        ext_dir="extensions/$extension"
-        package_name="avocado-ext-$extension"
-    fi
-    
+    resolve_extension_paths "$extension"
+
     if [ ! -d "$ext_dir" ]; then
         echo "Error: Extension directory '$ext_dir' not found" >&2
         return 1
@@ -418,25 +440,33 @@ update_extension_metadata() {
     local packages_dir="$REPO_DIR/packages/$DISTRO_CODENAME"
     local releases_dir="$REPO_DIR/releases/$DISTRO_CODENAME/$RELEASE_DIR"
     
-    echo "Updating extension packages metadata..."
-    ./repo/update-metadata-extensions.sh "$packages_dir" "" "$releases_dir"
-    
-    if [ $? -eq 0 ]; then
-        echo "✓ Extension metadata updated successfully"
-    else
-        echo "✗ Extension metadata update failed" >&2
+    # Render the extension + SDK repos through the SAME content-addressed pool the
+    # distro sync uses, so the dev feed mirrors production: packages pooled into
+    # <channel-root>/_pkgs, per-repo metadata referencing ../../_pkgs/<aa>/<sha>.rpm.
+    # (Replaces the old in-place per-arch createrepo for these repos. The extension
+    # packaging may add all_avocadosdk packages to sdk/<target>, so re-render sdk too.)
+    local script_dir render_tool
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    render_tool="$script_dir/../distro/scripts/render-pool-local.py"
+    if [ ! -f "$render_tool" ]; then
+        echo "Error: render tool not found at $render_tool" >&2
         return 1
     fi
-    
-    echo "Updating SDK packages metadata..."
-    ./repo/update-metadata-sdk.sh "$packages_dir" "" "$releases_dir"
-    
-    if [ $? -eq 0 ]; then
-        echo "✓ SDK metadata updated successfully"
-    else
-        echo "✗ SDK metadata update failed" >&2
-        return 1
-    fi
+
+    local subpath staged
+    for subpath in "sdk/all" "sdk/$TARGET" "target/$TARGET-ext"; do
+        staged="$packages_dir/$subpath"
+        if [ ! -d "$staged" ] || [ -z "$(find "$staged" -name '*.rpm' -print -quit 2>/dev/null)" ]; then
+            echo "  Skipping $subpath (no staged packages)"
+            continue
+        fi
+        echo "  Rendering $subpath ..."
+        if ! python3 "$render_tool" --staged "$staged" --channel-root "$releases_dir" --subpath "$subpath"; then
+            echo "✗ Render failed for $subpath" >&2
+            return 1
+        fi
+    done
+    echo "✓ Extension/SDK repos rendered into the content-addressed pool ($releases_dir/_pkgs)"
     
     # Generate targets.json file from fragments
     echo "Generating targets.json file..."
@@ -510,11 +540,19 @@ TARGET=""
 EXTENSIONS=()
 BUILD_ALL=false
 LIST_ONLY=false
+# Combined extensions dir (all extensions as <type>-<name> subdirs). Empty = legacy
+# in-repo extensions/ + bsp/ layout. Env var provides a default for the eventual
+# move of these scripts out of avocado-os.
+EXTENSIONS_DIR="${AVOCADO_EXTENSIONS_DIR:-}"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         -t|--target)
             TARGET="$2"
+            shift 2
+            ;;
+        -E|--extensions-dir)
+            EXTENSIONS_DIR="$2"
             shift 2
             ;;
         -r|--repo-dir)
@@ -571,6 +609,17 @@ done
 
 # Convert relative path to absolute path
 REPO_DIR="$(realpath "$REPO_DIR")"
+
+# Resolve the combined extensions dir to an absolute path so resolution works
+# regardless of the current working directory.
+if [ -n "$EXTENSIONS_DIR" ]; then
+    if [ ! -d "$EXTENSIONS_DIR" ]; then
+        echo "Error: extensions dir '$EXTENSIONS_DIR' not found" >&2
+        exit 1
+    fi
+    EXTENSIONS_DIR="$(realpath "$EXTENSIONS_DIR")"
+    echo "Using combined extensions directory: $EXTENSIONS_DIR"
+fi
 
 echo "=== Avocado Development Extension Packager ==="
 

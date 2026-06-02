@@ -29,6 +29,10 @@ Options:
     -n, --container-name NAME   Repository container name (default: $DEFAULT_CONTAINER_NAME)
     --network NETWORK       Docker network name (default: $DEFAULT_NETWORK_NAME)
     --release-dir DIR       Specific release directory name (default: auto-detect latest)
+    -E, --extensions-dir DIR    Top-level directory holding ALL extensions as
+                                <type>-<name> subdirs (e.g. bsp-qemuarm64, ext-dev),
+                                instead of the in-repo extensions/ + bsp/ split.
+                                Defaults to \$AVOCADO_EXTENSIONS_DIR if set.
     --skip-cleanup          Skip cleaning up extension build artifacts after building
     --skip-package          Skip packaging extensions after building
     --all                   Build all extensions that support the target
@@ -143,10 +147,41 @@ parse_yaml_supported_targets() {
 }
 
 # Function to discover extensions and their supported targets
+# Resolve an extension identifier to its source dir and package name, setting the
+# `ext_dir` and `package_name` variables in the caller's scope. See the matching
+# helper in dev-package-extensions.sh for the layout rules.
+resolve_extension_paths() {
+    local extension="$1"
+    if [ -n "$EXTENSIONS_DIR" ]; then
+        ext_dir="$EXTENSIONS_DIR/$extension"
+        package_name="avocado-$extension"
+    elif [[ "$extension" == bsp-* ]]; then
+        ext_dir="bsp/${extension#bsp-}"
+        package_name="avocado-bsp-${extension#bsp-}"
+    else
+        ext_dir="extensions/$extension"
+        package_name="avocado-ext-$extension"
+    fi
+}
+
 discover_extensions() {
     local extensions_info=()
-    
-    # Discover regular extensions
+
+    if [ -n "$EXTENSIONS_DIR" ]; then
+        # Combined mode: all extensions are <type>-<name> subdirs of one dir.
+        local ext_dir
+        for ext_dir in "$EXTENSIONS_DIR"/*/; do
+            if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.yaml" ]; then
+                local extension=$(basename "$ext_dir")
+                local supported_targets=$(parse_yaml_supported_targets "$ext_dir/avocado.yaml")
+                extensions_info+=("$extension:$supported_targets")
+            fi
+        done
+        printf '%s\n' "${extensions_info[@]}"
+        return
+    fi
+
+    # Legacy in-repo layout: regular extensions under extensions/, BSPs under bsp/.
     for ext_dir in extensions/*/; do
         if [ -d "$ext_dir" ] && [ -f "$ext_dir/avocado.yaml" ]; then
             local extension=$(basename "$ext_dir")
@@ -154,7 +189,7 @@ discover_extensions() {
             extensions_info+=("$extension:$supported_targets")
         fi
     done
-    
+
     # Discover BSP extensions
     for bsp_dir in bsp/*/; do
         if [ -d "$bsp_dir" ] && [ -f "$bsp_dir/avocado.yaml" ]; then
@@ -164,7 +199,7 @@ discover_extensions() {
             extensions_info+=("$extension:$supported_targets")
         fi
     done
-    
+
     printf '%s\n' "${extensions_info[@]}"
 }
 
@@ -249,21 +284,11 @@ build_extension() {
     
     echo "Building extension: $extension for target: $target"
     
-    # Determine extension directory and package name based on type
+    # Determine extension directory and package name (combined or legacy layout)
     local ext_dir=""
     local package_name=""
-    
-    if [[ "$extension" == bsp-* ]]; then
-        # BSP extension
-        local bsp_name="${extension#bsp-}"
-        ext_dir="bsp/$bsp_name"
-        package_name="avocado-bsp-$bsp_name"
-    else
-        # Regular extension
-        ext_dir="extensions/$extension"
-        package_name="avocado-ext-$extension"
-    fi
-    
+    resolve_extension_paths "$extension"
+
     if [ ! -d "$ext_dir" ]; then
         echo "Error: Extension directory '$ext_dir' not found" >&2
         return 1
@@ -324,11 +349,19 @@ TARGET=""
 EXTENSIONS=()
 BUILD_ALL=false
 LIST_ONLY=false
+# Combined extensions dir (all extensions as <type>-<name> subdirs). Empty = legacy
+# in-repo extensions/ + bsp/ layout. Env var provides a default for the eventual
+# move of these scripts out of avocado-os.
+EXTENSIONS_DIR="${AVOCADO_EXTENSIONS_DIR:-}"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         -t|--target)
             TARGET="$2"
+            shift 2
+            ;;
+        -E|--extensions-dir)
+            EXTENSIONS_DIR="$2"
             shift 2
             ;;
         -r|--repo-dir)
@@ -389,6 +422,18 @@ done
 
 # Convert relative path to absolute path
 REPO_DIR="$(realpath "$REPO_DIR")"
+
+# Resolve the combined extensions dir to an absolute path so resolution works
+# regardless of the current working directory, and so it can be passed through to
+# dev-package-extensions.sh unambiguously.
+if [ -n "$EXTENSIONS_DIR" ]; then
+    if [ ! -d "$EXTENSIONS_DIR" ]; then
+        echo "Error: extensions dir '$EXTENSIONS_DIR' not found" >&2
+        exit 1
+    fi
+    EXTENSIONS_DIR="$(realpath "$EXTENSIONS_DIR")"
+    echo "Using combined extensions directory: $EXTENSIONS_DIR"
+fi
 
 echo "=== Avocado Development Extension Builder ==="
 
@@ -525,7 +570,12 @@ if [ "$SKIP_PACKAGE" = false ]; then
         --network "$NETWORK_NAME"
         --release-dir "$RELEASE_DIR"
     )
-    
+
+    # Forward the combined extensions dir so packaging resolves the same dirs.
+    if [ -n "$EXTENSIONS_DIR" ]; then
+        PACKAGE_ARGS+=(--extensions-dir "$EXTENSIONS_DIR")
+    fi
+
     if [ "$SKIP_CLEANUP" = true ]; then
         PACKAGE_ARGS+=(--skip-cleanup)
     fi
