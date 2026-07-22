@@ -46,6 +46,28 @@ serde_json = "1"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Loopback registry proxy (task 6.2). hyper is a pure-Rust HTTP/1 stack with no
+# crypto of its own; the upstream leg's TLS is driven by the same ring-backed
+# `tokio-rustls`/`rustls` above, so no `aws-lc-rs` enters the tree. We
+# deliberately do NOT use `reqwest`, whose default rustls would pull `aws-lc-rs`.
+hyper = { version = "1", default-features = false, features = [
+    "server",
+    "client",
+    "http1",
+] }
+hyper-util = { version = "0.1", default-features = false, features = ["tokio"] }
+http-body-util = "0.1"
+bytes = "1"
+
+[dev-dependencies]
+# Throwaway CA/leaf generation for the in-process TLS upstream in proxy tests.
+# `ring` (not the crate default `aws_lc_rs`) so the pinned-CA test stack matches
+# the agent's own ring provider and keeps `aws-lc-rs` out of the tree entirely.
+rcgen = { version = "0.13", default-features = false, features = [
+    "crypto",
+    "pem",
+    "ring",
+] }
 
 [profile.release]
 strip = true
