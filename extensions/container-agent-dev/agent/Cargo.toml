@@ -1,0 +1,52 @@
+[package]
+name = "avocado-container-agent-dev"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "avocado-container-agent-dev"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "net",
+    "time",
+    "io-util",
+] }
+# WS client only. We deliberately DO NOT enable tokio-tungstenite's
+# `rustls-tls-*` features: those pull `tokio-rustls` with its default features,
+# which selects the `aws_lc_rs` crypto provider (forbidden on the device — A9
+# clears the `ring` stack for the musl cross targets, same rule avocado-conn
+# enforces). Instead we establish TLS ourselves with a ring-only
+# `tokio-rustls::TlsConnector` and hand the stream to `client_async`, so
+# `aws-lc-rs` never enters the tree.
+tokio-tungstenite = { version = "0.26", default-features = false, features = [
+    "handshake",
+] }
+tokio-rustls = { version = "0.26", default-features = false, features = [
+    "ring",
+    "logging",
+    "tls12",
+] }
+# Direct rustls dep so we can build a `ClientConfig` pinned to the ring
+# provider and install it as the process default (defense-in-depth), matching
+# avocado-conn's explicit-vertex pattern.
+rustls = { version = "0.23", default-features = false, features = [
+    "ring",
+    "logging",
+    "std",
+    "tls12",
+] }
+rustls-pemfile = "2"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+strip = true
+lto = true
