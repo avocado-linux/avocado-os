@@ -14,6 +14,7 @@ tokio = { version = "1", features = [
     "net",
     "time",
     "io-util",
+    "process",
 ] }
 # WS client only. We deliberately DO NOT enable tokio-tungstenite's
 # `rustls-tls-*` features: those pull `tokio-rustls` with its default features,
@@ -68,6 +69,8 @@ rcgen = { version = "0.13", default-features = false, features = [
     "pem",
     "ring",
 ] }
+# Temp dir standing in for the writable partition in the sync pointer tests.
+tempfile = "3"
 
 [profile.release]
 strip = true

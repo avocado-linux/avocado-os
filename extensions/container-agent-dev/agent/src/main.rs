@@ -36,6 +36,7 @@ use tokio_tungstenite::tungstenite::http::header::AUTHORIZATION;
 use tracing::{info, warn};
 
 mod proxy;
+mod sync;
 
 /// Default on-device path the host writes the bootstrap file to (design D5 / A7).
 const DEFAULT_BOOTSTRAP_PATH: &str = "/var/lib/avocado/container-dev/bootstrap.json";
@@ -309,15 +310,21 @@ pub(crate) fn endpoint_host(endpoint: &str) -> &str {
 // Connect + serve.
 // ---------------------------------------------------------------------------
 
-/// Handle one host frame. Task 6.1 logs and holds; the pull + restart is the
-/// task 6.3 seam.
-async fn handle_host_frame(frame: HostFrame, _state: &AgentState) {
+/// Handle one host frame. On a `Sync`, pull the new image through the loopback
+/// proxy, rewrite the active-image pointer on the writable partition, restart
+/// the container, and record the running digest (task 6.3, [`sync::on_sync`]).
+async fn handle_host_frame(frame: HostFrame, state: &AgentState) {
     match frame {
         HostFrame::Sync { image, tag, digest } => {
-            info!(%image, %tag, %digest, "received sync (pull + restart is task 6.3)");
-            // SEAM (task 6.3): pull `image:tag@digest` through the loopback
-            // registry proxy, restart the container, update
-            // `state.running_digest`, and send a `Status` frame.
+            info!(%image, %tag, %digest, "received sync; pulling + restarting");
+            // The engine shell-out and env-resolved config are the thin,
+            // untested production glue; the ordering/pointer/digest core lives
+            // in the fully-tested `sync::on_sync`.
+            let engine = sync::CommandEngine::from_env();
+            let cfg = sync::SyncConfig::from_env();
+            if let Err(e) = sync::on_sync(&engine, &cfg, &image, &tag, &digest, state).await {
+                warn!(error = %e, %image, %tag, %digest, "sync failed");
+            }
         }
     }
 }
