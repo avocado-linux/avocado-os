@@ -35,12 +35,20 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::http::header::AUTHORIZATION;
 use tracing::{info, warn};
 
+mod proxy;
+
 /// Default on-device path the host writes the bootstrap file to (design D5 / A7).
 const DEFAULT_BOOTSTRAP_PATH: &str = "/var/lib/avocado/container-dev/bootstrap.json";
 /// Env var that overrides the bootstrap path (used by tests and staging).
 const BOOTSTRAP_PATH_ENV: &str = "AVOCADO_CONTAINER_DEV_BOOTSTRAP";
 /// Env var that supplies the device identity reported in `Hello`.
 const DEVICE_ID_ENV: &str = "AVOCADO_DEVICE_ID";
+/// Default loopback port the device engine pulls from (task 6.2). Chosen off
+/// 5000 to avoid the macOS AirPlay clash noted in the Phase 0 port survey
+/// (design 1.6); the engine config (task 6.4) points at `127.0.0.1:<this>`.
+const DEFAULT_LOOPBACK_PORT: u16 = 15151;
+/// Env var overriding the loopback registry port.
+const LOOPBACK_PORT_ENV: &str = "AVOCADO_CONTAINER_DEV_LOOPBACK_PORT";
 
 // ---------------------------------------------------------------------------
 // Wire contract (MUST match avocado-cli/src/utils/container_dev/ws.rs).
@@ -136,6 +144,15 @@ fn bootstrap_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(DEFAULT_BOOTSTRAP_PATH))
 }
 
+/// Resolve the loopback registry port: `$AVOCADO_CONTAINER_DEV_LOOPBACK_PORT`
+/// or the default.
+fn loopback_port() -> u16 {
+    std::env::var(LOOPBACK_PORT_ENV)
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(DEFAULT_LOOPBACK_PORT)
+}
+
 /// Load and parse the bootstrap from `path`.
 fn load_bootstrap(path: &std::path::Path) -> Result<Bootstrap> {
     let raw = std::fs::read_to_string(path)
@@ -220,6 +237,10 @@ struct AgentState {
     /// The content digest the agent is currently running. Empty until a pull
     /// lands (task 6.3 updates this); re-sent in `Hello` on every reconnect.
     running_digest: Mutex<String>,
+    /// Raised by the loopback proxy (task 6.2) when the bulk upstream rejects
+    /// the read/control token. Surfaced to the host as a `Status` frame on the
+    /// next (re)connect; a new token comes only from a host re-`up`.
+    rebootstrap: proxy::ReBootstrap,
 }
 
 impl AgentState {
@@ -227,6 +248,7 @@ impl AgentState {
         Self {
             device_id,
             running_digest: Mutex::new(String::new()),
+            rebootstrap: proxy::ReBootstrap::default(),
         }
     }
 
@@ -250,7 +272,7 @@ impl AgentState {
 
 /// Build a rustls `ClientConfig` pinned to ONLY the bootstrap CA, using the
 /// ring provider. No native roots, no webpki-roots.
-fn build_tls_config(ca_cert_pem: &str) -> Result<rustls::ClientConfig> {
+pub(crate) fn build_tls_config(ca_cert_pem: &str) -> Result<rustls::ClientConfig> {
     let mut root_store = rustls::RootCertStore::empty();
     let mut reader = std::io::Cursor::new(ca_cert_pem.as_bytes());
     let certs = rustls_pemfile::certs(&mut reader)
@@ -276,7 +298,7 @@ fn build_tls_config(ca_cert_pem: &str) -> Result<rustls::ClientConfig> {
 }
 
 /// Split a `host:port` endpoint into its host component for SNI.
-fn endpoint_host(endpoint: &str) -> &str {
+pub(crate) fn endpoint_host(endpoint: &str) -> &str {
     endpoint
         .rsplit_once(':')
         .map(|(h, _)| h)
@@ -354,6 +376,27 @@ async fn connect_and_serve(
     .await
     .context("sending Hello")?;
 
+    // Surface a pending re-bootstrap (raised by the loopback proxy on a bulk
+    // 401) to the host. There is no token-renewal endpoint; the operator must
+    // re-run `avocado container dev up` to mint a fresh token.
+    if state.rebootstrap.is_raised() {
+        let status = DeviceFrame::Status(Status {
+            device_id: state.device_id.clone(),
+            state: "needs_rebootstrap".to_string(),
+            detail: Some(
+                "bulk pull rejected the read/control token; re-run `avocado container dev up`"
+                    .to_string(),
+            ),
+        });
+        sink.send(Message::Text(
+            serde_json::to_string(&status)
+                .context("serializing re-bootstrap status")?
+                .into(),
+        ))
+        .await
+        .context("sending re-bootstrap status")?;
+    }
+
     while let Some(msg) = stream.next().await {
         let msg = msg.context("reading control WS frame")?;
         match msg {
@@ -413,6 +456,25 @@ async fn main() -> Result<()> {
     info!(%device_id, bootstrap = %path.display(), "container dev agent starting");
 
     let state = Arc::new(AgentState::new(device_id));
+
+    // Start the loopback registry proxy (task 6.2): the device engine pulls
+    // from this plain-HTTP loopback (no insecure flag, no per-engine trust
+    // file); each read is forwarded to the host bulk HTTPS listener over the
+    // pinned CA + read/control token. Bulk NEVER rides the control WS.
+    match proxy::HttpsUpstream::from_bootstrap(&bootstrap) {
+        Ok(upstream) => {
+            let port = loopback_port();
+            let upstream = Arc::new(upstream);
+            let rebootstrap = state.rebootstrap.clone();
+            tokio::spawn(async move {
+                if let Err(e) = proxy::serve_loopback(port, upstream, rebootstrap).await {
+                    warn!(error = %e, "loopback registry proxy exited");
+                }
+            });
+        }
+        Err(e) => warn!(error = %e, "loopback registry proxy not started"),
+    }
+
     run(bootstrap, state).await
 }
 
