@@ -1,0 +1,20 @@
+[Unit]
+Description=Avocado Container Dev Mode device agent (development only)
+Documentation=https://github.com/avocadolinux/avocado-os
+After=network.target
+Wants=network.target
+# Stay inert until `avocado container dev up` delivers the bootstrap (bulk
+# endpoint, read/control token, pinned CA) to the writable partition (design
+# D5/5.2). No bootstrap means no session to join, so there is nothing to do.
+ConditionPathExists=/var/lib/avocado/container-dev/bootstrap.json
+
+[Service]
+ExecStartPre=/bin/mkdir -p /var/lib/avocado/container-dev
+ExecStart=/usr/bin/avocado-container-agent-dev
+Environment=RUST_LOG=info
+Restart=always
+RestartSec=5
+SyslogIdentifier=avocado-container-agent-dev
+
+[Install]
+WantedBy=multi-user.target

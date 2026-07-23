@@ -1,0 +1,66 @@
+supported_targets: '*'
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-ext-container-agent-dev:
+    version: 2024.1.0
+    release: r0
+    summary: Container Dev Mode device agent (development only)
+    description: |
+      Device-side agent for Container Dev Mode: holds a control WebSocket to the
+      host CLI, proxies image pulls from the host's registry over the
+      bootstrap-delivered pinned CA, and hot-reloads the target container on sync.
+      Its own extension so it is present ONLY in a dev runtime and absent from
+      prod. The per-project CA is NOT baked here; it arrives at bootstrap on the
+      writable partition when `avocado container dev up` runs. DO NOT USE IN
+      PRODUCTION.
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+    package_files:
+      - agent
+      - overlay
+      - avocado.yaml
+      - cad-*.sh
+
+    overlay: overlay
+
+    enable_services:
+      - container-agent-dev.service
+
+    on_merge:
+      - systemctl start --no-block container-agent-dev.service
+
+    on_unmerge:
+      - systemctl stop container-agent-dev.service
+
+    packages:
+      avocado-container-agent-dev:
+        compile: avocado-container-agent-dev
+        install: cad-install.sh
+
+    sdk:
+      packages:
+        nativesdk-binutils: '*'
+        nativesdk-cargo: '*'
+        nativesdk-gcc: '*'
+        nativesdk-glibc-dev: '*'
+        nativesdk-libgcc-dev: '*'
+        nativesdk-rust: '*'
+        packagegroup-rust-cross-canadian-avocado-{{ avocado.target }}: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
+
+  compile:
+    avocado-container-agent-dev:
+      compile: cad-compile.sh
+      clean: cad-clean.sh
+      packages:
+        libstd-rs: '*'
+        libstd-rs-dev: '*'
+  packages:
+    avocado-sdk-toolchain: '*'

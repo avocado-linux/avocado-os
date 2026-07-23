@@ -1,1 +1,3 @@
 /target
+# Cross-compilation config written by cad-compile.sh at build time.
+/.cargo/
