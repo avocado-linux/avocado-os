@@ -41,6 +41,11 @@ EOF
 # Use a persistent cargo registry cache to avoid re-downloading crates
 export CARGO_HOME="${AVOCADO_BUILD_DIR}/.cargo-cache"
 
+# Enforce the ring-only rustls crypto provider before building. TARGET is
+# mandatory here so the guard resolves the same SDK triple the build ships;
+# without it the guard would check the host triple instead. Runs under set -e,
+# so a non-zero exit (aws-lc-rs present, or a guard error) fails the compile.
+TARGET="$RUST_TARGET" scripts/check-provider.sh
 cargo build --release --target "$RUST_TARGET" --target-dir "$AVOCADO_BUILD_DIR"
 
 echo "avocado-container-agent-dev compiled successfully"
