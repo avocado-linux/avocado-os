@@ -1,5 +1,7 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+RUST_TARGET=""
 
 # Find the Rust target from RUST_TARGET_PATH
 for json_file in "$RUST_TARGET_PATH"/*.json; do
