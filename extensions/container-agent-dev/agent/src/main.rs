@@ -372,6 +372,12 @@ async fn connect_and_serve(
     connected.store(true, Ordering::SeqCst);
     info!(endpoint = %bootstrap.ws_endpoint, "control WS connected");
 
+    // The sink goes idle after the frames below and only the stream is polled.
+    // That does NOT strand the automatic Pong replies to host keepalive pings:
+    // tungstenite queues a Pong as `additional_send` and flushes it from inside
+    // `read()` itself (protocol/mod.rs), which is the same call `poll_next`
+    // drives on the read half — so a ping is answered without the sink being
+    // touched, and the connection is not churned by a keepalive timeout.
     let (mut sink, mut stream) = ws.split();
 
     let hello = state.hello();
