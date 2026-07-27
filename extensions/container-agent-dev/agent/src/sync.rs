@@ -5,14 +5,15 @@
 //!      (`127.0.0.1:<port>`, task 6.2). The pull rides the proxy -> host bulk
 //!      HTTPS path; it NEVER re-pulls over the control WebSocket (D9 splits
 //!      bulk from control).
-//!   2. **Rewrites the active-image pointer** — a small JSON file recording the
+//!   2. **Restarts the container** via the engine AFTER the pull, so the new
+//!      image takes effect. The read-only rootFS is untouched throughout.
+//!   3. **Rewrites the active-image pointer** — a small JSON file recording the
 //!      now-active `{image, tag, digest}` — on the **writable partition**
-//!      (`/var/lib/avocado/container-dev/active-image.json`). The path is
-//!      derived from [`WRITABLE_ROOT`], never a read-only rootFS path
-//!      (`/usr`, `/etc`, the image rootfs).
-//!   3. **Restarts the container** via the engine AFTER the pull + pointer
-//!      rewrite, so the new image takes effect. The read-only rootFS is
-//!      untouched throughout.
+//!      (`/var/lib/avocado/container-dev/active-image.json`), only once the
+//!      restart succeeded, so a failed restart never leaves the pointer ahead of
+//!      what the device actually runs. The path is derived from
+//!      [`WRITABLE_ROOT`], never a read-only rootFS path (`/usr`, `/etc`, the
+//!      image rootfs).
 //!   4. Updates [`crate::AgentState::running_digest`] so task 6.1's reconnect
 //!      `Hello` reports it.
 //!
@@ -203,8 +204,19 @@ pub(crate) async fn on_sync<E: Engine>(
         .await
         .with_context(|| format!("pulling {reference} through loopback proxy"))?;
 
-    // 2. Rewrite the active-image pointer on the WRITABLE partition. The path is
-    //    derived from cfg.writable_root, never a read-only rootFS path.
+    // 2. Restart the container AFTER the pull so the new image takes effect.
+    engine
+        .restart(&cfg.container)
+        .await
+        .with_context(|| format!("restarting container {}", cfg.container))?;
+
+    // 3. Rewrite the active-image pointer on the WRITABLE partition, only once
+    //    the restart has actually succeeded. The pointer records what the device
+    //    IS running, so writing it ahead of the restart would leave it claiming
+    //    the new image while the container still ran the old one on any restart
+    //    failure. Nothing consumes the pointer during startup, so it has no
+    //    reason to precede the restart. The path is derived from
+    //    cfg.writable_root, never a read-only rootFS path.
     let active = ActiveImage {
         image: image.to_string(),
         tag: tag.to_string(),
@@ -213,13 +225,6 @@ pub(crate) async fn on_sync<E: Engine>(
     let path = write_active_image(&cfg.writable_root, &active)
         .context("rewriting active-image pointer")?;
     info!(pointer = %path.display(), "active-image pointer rewritten on writable partition");
-
-    // 3. Restart the container AFTER the pull + pointer rewrite so the new image
-    //    takes effect.
-    engine
-        .restart(&cfg.container)
-        .await
-        .with_context(|| format!("restarting container {}", cfg.container))?;
 
     // 4. Record the now-running digest so the reconnect Hello reports it.
     *state
@@ -242,6 +247,7 @@ mod tests {
     struct FakeEngine {
         calls: Arc<Mutex<Vec<String>>>,
         fail_pull: bool,
+        fail_restart: bool,
     }
 
     impl FakeEngine {
@@ -249,6 +255,7 @@ mod tests {
             Self {
                 calls,
                 fail_pull: false,
+                fail_restart: false,
             }
         }
 
@@ -256,6 +263,15 @@ mod tests {
             Self {
                 calls,
                 fail_pull: true,
+                fail_restart: false,
+            }
+        }
+
+        fn failing_restart(calls: Arc<Mutex<Vec<String>>>) -> Self {
+            Self {
+                calls,
+                fail_pull: false,
+                fail_restart: true,
             }
         }
     }
@@ -274,6 +290,9 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push(format!("restart:{container}"));
+            if self.fail_restart {
+                anyhow::bail!("simulated restart failure");
+            }
             Ok(())
         }
     }
@@ -434,6 +453,47 @@ mod tests {
             *state.running_digest.lock().unwrap(),
             "sha256:old",
             "running digest must be unchanged after an aborted sync"
+        );
+    }
+
+    // Edge: a restart failure must not leave the pointer claiming an image the
+    // device is not running. The pull succeeded so the bytes are on the device,
+    // but the container still runs the OLD image - a pointer written ahead of
+    // the restart would disagree with both reality and `running_digest`.
+    #[tokio::test]
+    async fn restart_failure_leaves_no_stale_pointer() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let engine = FakeEngine::failing_restart(calls.clone());
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = test_cfg(tmp.path().to_path_buf());
+        let state = crate::AgentState::new("dev-01".to_string());
+        *state.running_digest.lock().unwrap() = "sha256:old".to_string();
+
+        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+            .await
+            .expect_err("restart failure must fail the sync");
+        assert!(
+            err.to_string().contains("restarting container"),
+            "unexpected error: {err}"
+        );
+
+        let recorded = calls.lock().unwrap().clone();
+        assert_eq!(
+            recorded,
+            vec![
+                "pull:127.0.0.1:15151/my-app@sha256:new".to_string(),
+                "restart:avocado-dev".to_string(),
+            ],
+            "the pull and the restart attempt should both be recorded: {recorded:?}"
+        );
+        assert!(
+            !active_image_path(tmp.path()).exists(),
+            "pointer must not claim the new image when the restart failed"
+        );
+        assert_eq!(
+            *state.running_digest.lock().unwrap(),
+            "sha256:old",
+            "running digest must still report the image actually running"
         );
     }
 
