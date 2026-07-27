@@ -9,9 +9,31 @@ Wants=network.target
 ConditionPathExists=/var/lib/avocado/container-dev/bootstrap.json
 
 [Service]
-ExecStartPre=/bin/mkdir -p /var/lib/avocado/container-dev
+# StateDirectory replaces the former `ExecStartPre=/bin/mkdir -p`: under
+# ProtectSystem=strict that mkdir would hit a read-only /var, and systemd
+# creating the directory itself is also what makes it the one writable path
+# below.
+StateDirectory=avocado/container-dev
 ExecStart=/usr/bin/avocado-container-agent-dev
 Environment=RUST_LOG=info
+
+# The agent runs as root: it listens on a loopback socket, dials outbound TLS,
+# parses untrusted WS/HTTP frames, and execs docker/podman. Dev-only and
+# ConditionPathExists-gated, but a memory-safety or logic bug anywhere in that
+# surface (or in a transitive dep) would otherwise land with an unconfined view
+# of the filesystem. Confine what it can reach.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# The engine socket under /run stays reachable: a read-only mount rejects writes
+# to regular files, directories and symlinks, never to sockets, so connect()
+# still succeeds. RestrictNamespaces and ProtectControlGroups are deliberately
+# NOT set - podman does its container work in-process rather than behind a
+# daemon, so both would break the podman engine path.
+
 Restart=always
 RestartSec=5
 SyslogIdentifier=avocado-container-agent-dev
