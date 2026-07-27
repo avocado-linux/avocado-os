@@ -27,12 +27,37 @@
 //! exceeded the agent's mid-stream behavior is best-effort (the stream simply
 //! cuts), explicitly NOT a load-bearing terminal signal. The upstream
 //! `WWW-Authenticate` is never proxied back to the engine under any status.
+//!
+//! # Trust assumptions
+//!
+//! **The loopback listener performs no device-side authorization.** Any local
+//! process that can reach `127.0.0.1:<port>` gets its `GET`/`HEAD` forwarded
+//! upstream under the agent's `Authorization: Bearer <read_token>`, so the read
+//! token is effectively shared with every process on the device. That is
+//! deliberate, and it is the same trust boundary the "no engine trust config"
+//! guarantee buys: the engine authenticates to this proxy by being local, and
+//! adding a device-side gate would need a credential the engine would then have
+//! to be configured with — reintroducing exactly the per-engine trust file the
+//! design exists to avoid. What bounds the exposure is that the socket is
+//! loopback-only (never `0.0.0.0`), the method allowlist is GET/HEAD so a local
+//! process can only read, and the whole extension is dev-only and gated on a
+//! bootstrap the host must deliver. A device running untrusted local workloads
+//! is outside this threat model; the mitigation there is not to install the dev
+//! extension.
+//!
+//! **Each upstream request opens a fresh TCP + TLS + HTTP/1 connection.** There
+//! is no connection pool, so pulling a multi-layer image pays one full TLS
+//! handshake per manifest and per blob. That is accepted rather than optimized:
+//! a pool would need idle-connection eviction and reuse-after-error handling on
+//! a dev-only path whose cost is a handful of handshakes per sync. Revisit it if
+//! this proxy ever carries a production pull.
 
 use std::convert::Infallible;
 use std::future::Future;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use bytes::Bytes;
@@ -45,6 +70,7 @@ use hyper::service::service_fn;
 use hyper::{HeaderMap, Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::time::sleep;
 use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::pki_types::ServerName;
 use tracing::{info, warn};
@@ -71,6 +97,10 @@ const PASSTHROUGH_HEADERS: &[&str] = &[
 
 /// The plain-text body returned to the engine when the bulk upstream rejects
 /// the read/control token. It carries no upstream status or header semantics.
+/// Pause after a failed `accept()` before trying again, so a sustained error
+/// condition (EMFILE) does not turn the serve loop into a busy spin.
+const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
+
 const REBOOTSTRAP_MSG: &str =
     "bulk upstream rejected the read/control token; re-run `avocado container dev up`";
 
@@ -308,10 +338,23 @@ pub(crate) async fn serve<U: Upstream>(
     rebootstrap: ReBootstrap,
 ) -> Result<()> {
     loop {
-        let (stream, _peer) = listener
-            .accept()
-            .await
-            .context("accepting loopback connection")?;
+        let (stream, _peer) = match listener.accept().await {
+            Ok(pair) => pair,
+            // A per-accept error (fd exhaustion, a peer that vanished between
+            // the SYN and the accept) says nothing about the listener itself.
+            // Returning here would end the task for the rest of the process
+            // lifetime - `main` only logs that the proxy exited and never
+            // respawns it - so every later Sync pull would fail connection-
+            // refused with no path back short of restarting the unit. Log and
+            // keep serving instead.
+            Err(e) => {
+                warn!(error = %e, "accepting loopback connection failed; continuing to serve");
+                // Back off briefly so a sustained error (EMFILE while the fd
+                // table stays full) spins the task rather than the CPU.
+                sleep(ACCEPT_ERROR_BACKOFF).await;
+                continue;
+            }
+        };
         let upstream = upstream.clone();
         let rebootstrap = rebootstrap.clone();
         tokio::spawn(async move {
