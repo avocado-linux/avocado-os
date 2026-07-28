@@ -100,6 +100,26 @@ const PASSTHROUGH_HEADERS: &[&str] = &[
 const REBOOTSTRAP_MSG: &str =
     "bulk upstream rejected the read/control token; re-run `avocado container dev up`";
 
+/// A source of inbound connections.
+///
+/// Exists so the accept-error retry policy can be tested; production always
+/// uses the [`TcpListener`] impl below.
+pub(crate) trait Accept: Send {
+    type Conn: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static;
+
+    fn accept(&self) -> impl Future<Output = std::io::Result<Self::Conn>> + Send;
+}
+
+impl Accept for TcpListener {
+    type Conn = tokio::net::TcpStream;
+
+    async fn accept(&self) -> std::io::Result<Self::Conn> {
+        TcpListener::accept(self)
+            .await
+            .map(|(stream, _peer)| stream)
+    }
+}
+
 /// Pause after a failed `accept()` before trying again, so a transient error
 /// does not turn the serve loop into a busy spin.
 const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
@@ -345,14 +365,28 @@ pub(crate) async fn serve<U: Upstream>(
     upstream: Arc<U>,
     rebootstrap: ReBootstrap,
 ) -> Result<()> {
+    serve_on(listener, upstream, rebootstrap).await
+}
+
+/// The accept loop, over anything that can accept connections.
+///
+/// Generic over [`Accept`] rather than taking a `TcpListener` so the retry
+/// policy is reachable from a test: forcing repeated `accept()` failures on a
+/// real listener means corrupting its fd, which is not portable. Mirrors the
+/// [`Upstream`] seam this module already uses for the same reason.
+pub(crate) async fn serve_on<L: Accept, U: Upstream>(
+    listener: L,
+    upstream: Arc<U>,
+    rebootstrap: ReBootstrap,
+) -> Result<()> {
     // Consecutive accept failures. Reset by any successful accept, so a run has
     // to be genuinely unbroken to reach the limit.
     let mut consecutive_errors: u32 = 0;
     loop {
-        let (stream, _peer) = match listener.accept().await {
-            Ok(pair) => {
+        let stream = match listener.accept().await {
+            Ok(stream) => {
                 consecutive_errors = 0;
-                pair
+                stream
             }
             // A single accept error (a peer that vanished between the SYN and
             // the accept, a momentary EMFILE) says nothing about the listener,
@@ -430,6 +464,134 @@ mod tests {
     use super::*;
 
     use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+
+    /// A listener whose `accept()` fails a scripted number of times.
+    ///
+    /// `fail_forever` models a listener that has gone permanently bad - the case
+    /// the retry bound exists for. `fails_then_blocks` models a transient run
+    /// followed by recovery, so the counter's reset can be observed.
+    #[derive(Clone)]
+    struct ScriptedListener {
+        attempts: Arc<AtomicUsize>,
+        fail_forever: bool,
+        succeed_after: usize,
+    }
+
+    impl ScriptedListener {
+        fn failing_forever() -> Self {
+            Self {
+                attempts: Arc::new(AtomicUsize::new(0)),
+                fail_forever: true,
+                succeed_after: 0,
+            }
+        }
+
+        fn failing_then_recovering(succeed_after: usize) -> Self {
+            Self {
+                attempts: Arc::new(AtomicUsize::new(0)),
+                fail_forever: false,
+                succeed_after,
+            }
+        }
+
+        fn attempts(&self) -> usize {
+            self.attempts.load(Ordering::SeqCst)
+        }
+    }
+
+    impl Accept for ScriptedListener {
+        type Conn = tokio::io::DuplexStream;
+
+        async fn accept(&self) -> std::io::Result<Self::Conn> {
+            let n = self.attempts.fetch_add(1, Ordering::SeqCst);
+            if self.fail_forever || n < self.succeed_after {
+                return Err(std::io::Error::from_raw_os_error(libc_ebadf()));
+            }
+            if n == self.succeed_after {
+                // One success in the middle: enough to reset the counter.
+                let (a, _b) = tokio::io::duplex(64);
+                return Ok(a);
+            }
+            if n <= self.succeed_after * 2 {
+                // A SECOND failing run after the success. Both runs are one
+                // short of the limit, so the loop survives only if the success
+                // reset the counter - cumulatively they are well past it.
+                return Err(std::io::Error::from_raw_os_error(libc_ebadf()));
+            }
+            // Then park, the way a real listener waits for the next peer. A
+            // listener that kept returning instantly would spin the loop.
+            std::future::pending().await
+        }
+    }
+
+    fn libc_ebadf() -> i32 {
+        9 // EBADF - the permanently-bad-listener case from the review
+    }
+
+    /// A listener that fails forever must end the loop rather than spin, so the
+    /// process exits and `Restart=always` can recover it. Before the bound was
+    /// added this returned never, which is what made the supervisor useless.
+    #[tokio::test]
+    async fn a_permanently_failing_listener_ends_the_serve_loop() {
+        let listener = ScriptedListener::failing_forever();
+        let upstream = Arc::new(ok_upstream());
+        let rebootstrap = ReBootstrap::default();
+
+        let err = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            serve_on(listener, upstream, rebootstrap),
+        )
+        .await
+        .expect("the loop must terminate rather than spin forever")
+        .expect_err("a permanently failing listener must surface an error");
+
+        assert!(
+            err.to_string().contains("in a row"),
+            "the error should name the consecutive-failure run: {err}"
+        );
+    }
+
+    /// The counter must reset on a successful accept, or a long-lived proxy that
+    /// sees scattered transient errors would eventually shut itself down for no
+    /// reason. Fails if the reset is removed.
+    #[tokio::test]
+    async fn a_successful_accept_resets_the_error_counter() {
+        // More total failures than the limit, but never a consecutive run that
+        // reaches it: two batches either side of a success.
+        let listener = ScriptedListener::failing_then_recovering(ACCEPT_ERROR_LIMIT as usize - 1);
+        let observed = listener.clone();
+        let upstream = Arc::new(ok_upstream());
+
+        let handle = tokio::spawn(serve_on(listener, upstream, ReBootstrap::default()));
+
+        // Wait for both failing runs plus the success between them to elapse.
+        let want = 2 * (ACCEPT_ERROR_LIMIT as usize - 1) + 1;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while observed.attempts() < want && !handle.is_finished() {
+            assert!(std::time::Instant::now() < deadline, "test timed out");
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+
+        assert!(
+            !handle.is_finished(),
+            "the loop gave up after {} accepts: a success between two runs of \
+             {} failures must reset the counter, since neither run reaches the \
+             limit of {ACCEPT_ERROR_LIMIT} on its own",
+            observed.attempts(),
+            ACCEPT_ERROR_LIMIT - 1,
+        );
+        handle.abort();
+    }
+
+    /// A minimal upstream for the accept-loop tests, which never reach it.
+    fn ok_upstream() -> FakeUpstream {
+        FakeUpstream {
+            status: StatusCode::OK,
+            headers: Vec::new(),
+            body: "",
+        }
+    }
 
     use http_body_util::BodyExt;
     use hyper::body::Incoming;
