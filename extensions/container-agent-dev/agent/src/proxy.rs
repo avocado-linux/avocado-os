@@ -97,12 +97,20 @@ const PASSTHROUGH_HEADERS: &[&str] = &[
 
 /// The plain-text body returned to the engine when the bulk upstream rejects
 /// the read/control token. It carries no upstream status or header semantics.
-/// Pause after a failed `accept()` before trying again, so a sustained error
-/// condition (EMFILE) does not turn the serve loop into a busy spin.
-const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
-
 const REBOOTSTRAP_MSG: &str =
     "bulk upstream rejected the read/control token; re-run `avocado container dev up`";
+
+/// Pause after a failed `accept()` before trying again, so a transient error
+/// does not turn the serve loop into a busy spin.
+const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
+
+/// How many consecutive `accept()` failures end the serve loop.
+///
+/// A transient failure should not kill the proxy, but a permanently bad
+/// listener must not be retried forever: the task would never return, so the
+/// process would never exit and `Restart=always` would have nothing to restart.
+/// Returning after a run of failures hands recovery back to the supervisor.
+const ACCEPT_ERROR_LIMIT: u32 = 32;
 
 // ---------------------------------------------------------------------------
 // Re-bootstrap status flag.
@@ -337,20 +345,37 @@ pub(crate) async fn serve<U: Upstream>(
     upstream: Arc<U>,
     rebootstrap: ReBootstrap,
 ) -> Result<()> {
+    // Consecutive accept failures. Reset by any successful accept, so a run has
+    // to be genuinely unbroken to reach the limit.
+    let mut consecutive_errors: u32 = 0;
     loop {
         let (stream, _peer) = match listener.accept().await {
-            Ok(pair) => pair,
-            // A per-accept error (fd exhaustion, a peer that vanished between
-            // the SYN and the accept) says nothing about the listener itself.
-            // Returning here would end the task for the rest of the process
-            // lifetime - `main` only logs that the proxy exited and never
-            // respawns it - so every later Sync pull would fail connection-
-            // refused with no path back short of restarting the unit. Log and
-            // keep serving instead.
+            Ok(pair) => {
+                consecutive_errors = 0;
+                pair
+            }
+            // A single accept error (a peer that vanished between the SYN and
+            // the accept, a momentary EMFILE) says nothing about the listener,
+            // and killing the proxy over one would leave every later Sync pull
+            // failing connection-refused. Retry those.
+            //
+            // But retrying forever is its own failure: on a permanently bad
+            // listener the task never returns, so the process never exits and
+            // `Restart=always` has nothing to restart - the proxy is dead and
+            // the supervisor cannot tell. Give up after an unbroken run and let
+            // the error propagate so systemd can do its job.
             Err(e) => {
-                warn!(error = %e, "accepting loopback connection failed; continuing to serve");
-                // Back off briefly so a sustained error (EMFILE while the fd
-                // table stays full) spins the task rather than the CPU.
+                consecutive_errors += 1;
+                if consecutive_errors >= ACCEPT_ERROR_LIMIT {
+                    return Err(e).with_context(|| {
+                        format!("accepting loopback connections failed {consecutive_errors} times in a row")
+                    });
+                }
+                warn!(
+                    error = %e,
+                    consecutive_errors,
+                    "accepting loopback connection failed; retrying"
+                );
                 sleep(ACCEPT_ERROR_BACKOFF).await;
                 continue;
             }
