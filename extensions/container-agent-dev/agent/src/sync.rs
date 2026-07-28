@@ -120,6 +120,24 @@ impl CommandEngine {
             .map(|v| v.trim().to_string())
             .filter(|v| !v.is_empty())
             .unwrap_or_else(|| DEFAULT_ENGINE.to_string());
+        if binary.contains("podman") {
+            // Under the shipped systemd unit podman cannot work: it needs
+            // CAP_SYS_ADMIN, namespaces, cgroup writes and a writable
+            // /var/lib/containers, all of which the unit's sandbox denies. It
+            // would fail at store init and, because on_sync's error is only
+            // logged, present as syncs that silently do nothing. Say so once at
+            // startup so the cause is visible.
+            //
+            // A warning rather than a refusal: the sandbox is the unit's, not
+            // the binary's, and the agent run directly for debugging has no such
+            // restriction.
+            warn!(
+                engine = %binary,
+                "podman is not supported under the container-agent-dev systemd unit \
+                 (its sandbox denies the privileges rootful podman needs); expect pulls \
+                 to fail unless this agent is running outside that unit"
+            );
+        }
         Self { binary }
     }
 }
