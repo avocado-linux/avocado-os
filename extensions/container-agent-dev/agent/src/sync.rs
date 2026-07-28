@@ -30,7 +30,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::AgentState;
 
@@ -210,27 +210,47 @@ pub(crate) async fn on_sync<E: Engine>(
         .await
         .with_context(|| format!("restarting container {}", cfg.container))?;
 
-    // 3. Rewrite the active-image pointer on the WRITABLE partition, only once
+    // 3. Record the now-running digest. This happens IMMEDIATELY after the
+    //    restart, before the pointer write, because at this instant the
+    //    container really is running `digest` - that is an observed fact, not a
+    //    plan. Deferring it behind the pointer write would let a pointer failure
+    //    leave `Hello` reporting an image the device is demonstrably not running,
+    //    which is the mirror image of the skew that moving the pointer after the
+    //    restart fixed.
+    *state
+        .running_digest
+        .lock()
+        .expect("running_digest mutex poisoned") = digest.to_string();
+
+    // 4. Rewrite the active-image pointer on the WRITABLE partition, only once
     //    the restart has actually succeeded. The pointer records what the device
     //    IS running, so writing it ahead of the restart would leave it claiming
     //    the new image while the container still ran the old one on any restart
     //    failure. Nothing consumes the pointer during startup, so it has no
     //    reason to precede the restart. The path is derived from
     //    cfg.writable_root, never a read-only rootFS path.
+    //
+    //    A failure here is reported, not propagated. The pull and the restart
+    //    both succeeded, so the sync did happen; failing the whole operation
+    //    over the bookkeeping record would tell the host the sync did not take
+    //    effect when it did, and the host's only recovery - retry the same
+    //    digest - cannot fix a full or unwritable /var anyway.
     let active = ActiveImage {
         image: image.to_string(),
         tag: tag.to_string(),
         digest: digest.to_string(),
     };
-    let path = write_active_image(&cfg.writable_root, &active)
-        .context("rewriting active-image pointer")?;
-    info!(pointer = %path.display(), "active-image pointer rewritten on writable partition");
-
-    // 4. Record the now-running digest so the reconnect Hello reports it.
-    *state
-        .running_digest
-        .lock()
-        .expect("running_digest mutex poisoned") = digest.to_string();
+    match write_active_image(&cfg.writable_root, &active) {
+        Ok(path) => {
+            info!(pointer = %path.display(), "active-image pointer rewritten on writable partition")
+        }
+        Err(e) => warn!(
+            error = %e,
+            %digest,
+            "container restarted but the active-image pointer could not be written; \
+             the running digest is still reported correctly"
+        ),
+    }
 
     info!(%image, %tag, %digest, "sync complete: pulled, pointer rewritten, container restarted");
     Ok(())
@@ -494,6 +514,53 @@ mod tests {
             *state.running_digest.lock().unwrap(),
             "sha256:old",
             "running digest must still report the image actually running"
+        );
+    }
+
+    // The mirror of `restart_failure_leaves_no_stale_pointer`: the restart
+    // SUCCEEDS and the pointer write then fails (ENOSPC, an unwritable /var, a
+    // state root pointing somewhere impossible). The container really is running
+    // the new image at that point, so `running_digest` must say so - reporting
+    // the old digest in the reconnect `Hello` would tell the host to re-sync an
+    // image the device already runs, and would be a claim contradicted by the
+    // device itself.
+    #[tokio::test]
+    async fn pointer_write_failure_after_a_successful_restart_still_reports_the_new_digest() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let engine = FakeEngine::new(calls.clone());
+        let tmp = tempfile::tempdir().unwrap();
+
+        // A writable_root whose parent is a FILE: create_dir_all cannot succeed,
+        // so write_active_image fails while pull and restart do not.
+        let blocker = tmp.path().join("not-a-dir");
+        std::fs::write(&blocker, b"x").unwrap();
+        let cfg = test_cfg(blocker.join("state"));
+
+        let state = crate::AgentState::new("dev-01".to_string());
+        *state.running_digest.lock().unwrap() = "sha256:old".to_string();
+
+        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+            .await
+            .expect("a pointer-write failure must not fail a sync that already took effect");
+
+        let recorded = calls.lock().unwrap().clone();
+        assert_eq!(
+            recorded,
+            vec![
+                "pull:127.0.0.1:15151/my-app@sha256:new".to_string(),
+                "restart:avocado-dev".to_string(),
+            ],
+            "the pull and restart must both have run: {recorded:?}"
+        );
+        assert!(
+            !active_image_path(&cfg.writable_root).exists(),
+            "the pointer genuinely could not be written"
+        );
+        assert_eq!(
+            *state.running_digest.lock().unwrap(),
+            "sha256:new",
+            "Hello must report the digest the container is actually running, \
+             even though the pointer write failed"
         );
     }
 
