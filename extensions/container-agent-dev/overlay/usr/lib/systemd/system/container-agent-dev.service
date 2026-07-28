@@ -20,44 +20,50 @@ StateDirectoryMode=0700
 ExecStart=/usr/bin/avocado-container-agent-dev
 Environment=RUST_LOG=info
 
-# What this block is and is not.
+# DOCKER ONLY. This unit deliberately does not support the podman engine.
 #
 # The agent runs as root: it listens on a loopback socket, dials outbound TLS,
 # parses untrusted WS/HTTP frames, and execs the container engine as its own
-# child. These directives raise the cost of a bug in that surface, but they are
-# NOT a security boundary, and the earlier version of this comment overstated
-# them. A root process retains CAP_SYS_ADMIN and can remount its own read-only
-# binds read-write, which is why systemd.exec(5) tells you to pair ProtectSystem
-# with CapabilityBoundingSet=~CAP_SYS_ADMIN. We cannot: rootful podman needs
-# exactly that capability, so an effective filesystem sandbox and exec-ing a
-# rootful engine are mutually exclusive here. Treat this as defense in depth.
+# child. Confining that meant choosing, because the two goals are mutually
+# exclusive. systemd.exec(5) is explicit that ProtectSystem is undone by a
+# privileged process unless paired with CapabilityBoundingSet=~CAP_SYS_ADMIN -
+# root can otherwise remount its own read-only binds read-write - and rootful
+# podman needs exactly CAP_SYS_ADMIN, plus namespaces, cgroup writes and kernel
+# knobs, all in-process. Keeping podman working meant the sandbox was decorative;
+# a real sandbox means podman cannot run under this unit.
+#
+# We chose the sandbox. Docker is unaffected: its daemon is a separate unit
+# holding the privilege, reached over an AF_UNIX socket, and a read-only mount
+# does not block connect() to a socket. Restoring podman properly is tracked as
+# a follow-up - it needs the engine out of this process, not a weaker unit.
+CapabilityBoundingSet=
+AmbientCapabilities=
 NoNewPrivileges=true
+ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 RestrictSUIDSGID=true
 RestrictRealtime=true
 LockPersonality=true
 SystemCallArchitectures=native
+RestrictNamespaces=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# The agent writes bootstrap.json and active-image.json into StateDirectory;
+# both describe a session and one carries a token, so neither should default to
+# world-readable.
+UMask=0077
 
-# ProtectSystem=true, not strict. Strict makes all of /var and /run read-only
-# except StateDirectory, and rootful podman does its storage work in-process
-# against /var/lib/containers, /run/containers and /run/libpod - none of which
-# StateDirectory covers - so every `podman pull` failed at store init and each
-# Sync silently no-opped. `true` keeps /usr and /boot read-only, which is the
-# part that protects the image, without breaking a supported engine.
-ProtectSystem=true
-
-# AF_NETLINK is required, not optional: podman re-creates the container netns on
-# restart and netavark opens a NETLINK_ROUTE socket to configure it. The filter
-# is seccomp, so it survives execve into podman - omitting netlink failed the
-# restart with "failed to create netlink socket" on any bridge-networked
-# container, and this extension pulls kernel-module-bridge precisely for that.
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
-
-# RestrictNamespaces, ProtectControlGroups, ProtectKernelTunables and
-# ProtectKernelModules are all deliberately absent: podman creates namespaces,
-# writes cgroups and needs kernel knobs in-process, so each would break it the
-# same way ProtectSystem=strict did.
+# StateDirectory is the only writable path under ProtectSystem=strict, which is
+# all the agent needs: bootstrap.json and active-image.json both live there.
+#
+# No AF_NETLINK. It was only ever required by netavark configuring a podman
+# container's netns; the docker CLI just talks to its daemon over AF_UNIX, and
+# the agent's own traffic is AF_INET/AF_INET6.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 # Raise the fd ceiling rather than only absorbing EMFILE in the proxy's accept
 # loop; the default is the reason that error path exists at all.
