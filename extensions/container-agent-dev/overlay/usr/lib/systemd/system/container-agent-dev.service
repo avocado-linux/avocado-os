@@ -9,30 +9,59 @@ Wants=network.target
 ConditionPathExists=/var/lib/avocado/container-dev/bootstrap.json
 
 [Service]
-# StateDirectory replaces the former `ExecStartPre=/bin/mkdir -p`: under
-# ProtectSystem=strict that mkdir would hit a read-only /var, and systemd
-# creating the directory itself is also what makes it the one writable path
-# below.
+# StateDirectory replaces the former `ExecStartPre=/bin/mkdir -p`, which could
+# not run under a read-only /var. Mode 0700 is NOT the default: systemd applies
+# 0755 on every start, including to a directory that already exists, and this
+# one holds bootstrap.json with the Bearer read/control token and the session
+# CA. Without this line a `systemctl start` silently widens a 0700 directory
+# created by `avocado container dev up`.
 StateDirectory=avocado/container-dev
+StateDirectoryMode=0700
 ExecStart=/usr/bin/avocado-container-agent-dev
 Environment=RUST_LOG=info
 
+# What this block is and is not.
+#
 # The agent runs as root: it listens on a loopback socket, dials outbound TLS,
-# parses untrusted WS/HTTP frames, and execs docker/podman. Dev-only and
-# ConditionPathExists-gated, but a memory-safety or logic bug anywhere in that
-# surface (or in a transitive dep) would otherwise land with an unconfined view
-# of the filesystem. Confine what it can reach.
+# parses untrusted WS/HTTP frames, and execs the container engine as its own
+# child. These directives raise the cost of a bug in that surface, but they are
+# NOT a security boundary, and the earlier version of this comment overstated
+# them. A root process retains CAP_SYS_ADMIN and can remount its own read-only
+# binds read-write, which is why systemd.exec(5) tells you to pair ProtectSystem
+# with CapabilityBoundingSet=~CAP_SYS_ADMIN. We cannot: rootful podman needs
+# exactly that capability, so an effective filesystem sandbox and exec-ing a
+# rootful engine are mutually exclusive here. Treat this as defense in depth.
 NoNewPrivileges=true
-ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 RestrictSUIDSGID=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-# The engine socket under /run stays reachable: a read-only mount rejects writes
-# to regular files, directories and symlinks, never to sockets, so connect()
-# still succeeds. RestrictNamespaces and ProtectControlGroups are deliberately
-# NOT set - podman does its container work in-process rather than behind a
-# daemon, so both would break the podman engine path.
+RestrictRealtime=true
+LockPersonality=true
+SystemCallArchitectures=native
+
+# ProtectSystem=true, not strict. Strict makes all of /var and /run read-only
+# except StateDirectory, and rootful podman does its storage work in-process
+# against /var/lib/containers, /run/containers and /run/libpod - none of which
+# StateDirectory covers - so every `podman pull` failed at store init and each
+# Sync silently no-opped. `true` keeps /usr and /boot read-only, which is the
+# part that protects the image, without breaking a supported engine.
+ProtectSystem=true
+
+# AF_NETLINK is required, not optional: podman re-creates the container netns on
+# restart and netavark opens a NETLINK_ROUTE socket to configure it. The filter
+# is seccomp, so it survives execve into podman - omitting netlink failed the
+# restart with "failed to create netlink socket" on any bridge-networked
+# container, and this extension pulls kernel-module-bridge precisely for that.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+# RestrictNamespaces, ProtectControlGroups, ProtectKernelTunables and
+# ProtectKernelModules are all deliberately absent: podman creates namespaces,
+# writes cgroups and needs kernel knobs in-process, so each would break it the
+# same way ProtectSystem=strict did.
+
+# Raise the fd ceiling rather than only absorbing EMFILE in the proxy's accept
+# loop; the default is the reason that error path exists at all.
+LimitNOFILE=65536
 
 Restart=always
 RestartSec=5
