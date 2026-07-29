@@ -21,7 +21,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
@@ -474,21 +474,71 @@ async fn main() -> Result<()> {
     // from this plain-HTTP loopback (no insecure flag, no per-engine trust
     // file); each read is forwarded to the host bulk HTTPS listener over the
     // pinned CA + read/control token. Bulk NEVER rides the control WS.
-    match proxy::HttpsUpstream::from_bootstrap(&bootstrap) {
+    // Warn once, here, if the configured engine cannot work under the shipped
+    // systemd unit. This is the only place that runs exactly once per process:
+    // `CommandEngine::from_env` is constructed per `Sync` frame, so warning
+    // there logged nothing at `systemctl start` (when the operator's override is
+    // new information) and then repeated the warning before every pull failure.
+    sync::warn_if_unsupported_engine(&sync::engine_binary_from_env());
+
+    let proxy_task = match proxy::HttpsUpstream::from_bootstrap(&bootstrap) {
         Ok(upstream) => {
             let port = loopback_port();
             let upstream = Arc::new(upstream);
             let rebootstrap = state.rebootstrap.clone();
-            tokio::spawn(async move {
-                if let Err(e) = proxy::serve_loopback(port, upstream, rebootstrap).await {
-                    warn!(error = %e, "loopback registry proxy exited");
-                }
-            });
+            Some(tokio::spawn(async move {
+                proxy::serve_loopback(port, upstream, rebootstrap).await
+            }))
         }
-        Err(e) => warn!(error = %e, "loopback registry proxy not started"),
-    }
+        Err(e) => {
+            warn!(error = %e, "loopback registry proxy not started");
+            None
+        }
+    };
 
-    run(bootstrap, state).await
+    // The proxy's bounded accept-retry only reaches `Restart=always` if losing
+    // the proxy ends the PROCESS. Spawning it detached and dropping the handle
+    // meant `serve_loopback` returning Err killed only its own task: `run()`
+    // kept the control WS up, systemd saw a healthy unit, and every later Sync
+    // failed connection-refused against a proxy that was gone - while the agent
+    // went on reporting a stale running_digest. Nothing restarted it, because
+    // from systemd's view nothing had failed.
+    //
+    // Select the two so whichever ends first ends `main`. The proxy is not
+    // optional: without it no pull can succeed, so exiting and letting the
+    // supervisor rebuild the process is the honest response to losing it.
+    match proxy_task {
+        Some(proxy_task) => end_when_either_ends(proxy_task, run(bootstrap, state)).await,
+        // No proxy to watch: the upstream could not even be built, which is
+        // already warned above. Serving the control WS alone is still better
+        // than exiting, since a re-bootstrap can fix it.
+        None => run(bootstrap, state).await,
+    }
+}
+
+/// Return as soon as EITHER the proxy task or the control-WS loop ends.
+///
+/// Extracted from `main` so the seam is testable. It is the whole reason the
+/// proxy's bounded accept-retry means anything: the retry makes `serve_loopback`
+/// return, and only this makes that return end the process, which is what
+/// `Restart=always` needs in order to fire. Spawned detached with its handle
+/// dropped, a returning proxy killed only its own task - systemd saw a healthy
+/// unit while every later pull failed connection-refused.
+async fn end_when_either_ends(
+    proxy: tokio::task::JoinHandle<Result<()>>,
+    serving: impl std::future::Future<Output = Result<()>>,
+) -> Result<()> {
+    tokio::select! {
+        proxied = proxy => match proxied {
+            // The proxy is not optional - without it no pull can succeed - so
+            // even a clean stop is a reason to exit and be rebuilt.
+            Ok(Ok(())) => bail!("loopback registry proxy stopped serving"),
+            Ok(Err(e)) => Err(e).context("loopback registry proxy failed"),
+            Err(e) => Err(anyhow::Error::new(e))
+                .context("loopback registry proxy task panicked"),
+        },
+        served = serving => served,
+    }
 }
 
 #[cfg(test)]
@@ -657,5 +707,65 @@ mod tests {
             err.to_string().contains("no certificates"),
             "unexpected error: {err}"
         );
+    }
+
+    // The seam that makes the proxy's accept-retry mean anything. Losing the
+    // proxy must end `main`, because that is what `Restart=always` needs in
+    // order to fire; a returning proxy task whose handle was dropped left
+    // systemd looking at a healthy unit while every pull failed
+    // connection-refused.
+    #[tokio::test]
+    async fn a_failing_proxy_ends_the_process_even_while_the_ws_keeps_serving() {
+        let proxy = tokio::spawn(async { Err(anyhow::anyhow!("listener died")) });
+        // A control-WS loop that would otherwise run forever, as `run()` does.
+        let serving = std::future::pending::<Result<()>>();
+
+        let err = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            end_when_either_ends(proxy, serving),
+        )
+        .await
+        .expect("losing the proxy must end this, not hang on the WS loop")
+        .expect_err("a failed proxy must surface an error");
+
+        assert!(
+            format!("{err:#}").contains("listener died"),
+            "the proxy's own error must survive to the exit: {err:#}"
+        );
+    }
+
+    // A proxy that stops cleanly is still fatal: without it no pull can
+    // succeed, so exiting to be rebuilt beats serving a control WS that can
+    // only ever report failures.
+    #[tokio::test]
+    async fn a_cleanly_stopped_proxy_also_ends_the_process() {
+        let proxy = tokio::spawn(async { Ok(()) });
+        let serving = std::future::pending::<Result<()>>();
+
+        let err = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            end_when_either_ends(proxy, serving),
+        )
+        .await
+        .expect("a stopped proxy must end this")
+        .expect_err("a stopped proxy must be reported as an error");
+        assert!(format!("{err:#}").contains("stopped serving"), "{err:#}");
+    }
+
+    // The other direction: the WS loop ending returns its own result rather
+    // than being masked by the still-running proxy.
+    #[tokio::test]
+    async fn a_failing_ws_loop_returns_its_own_error() {
+        let proxy = tokio::spawn(async { std::future::pending::<Result<()>>().await });
+        let serving = async { Err(anyhow::anyhow!("ws gave up")) };
+
+        let err = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            end_when_either_ends(proxy, serving),
+        )
+        .await
+        .expect("the WS loop ending must end this")
+        .expect_err("a failed WS loop must surface an error");
+        assert!(format!("{err:#}").contains("ws gave up"), "{err:#}");
     }
 }
