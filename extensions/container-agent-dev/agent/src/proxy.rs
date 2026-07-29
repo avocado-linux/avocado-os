@@ -360,14 +360,6 @@ pub(crate) async fn bind_loopback(port: u16) -> Result<TcpListener> {
 
 /// Serve the loopback registry over `listener`, forwarding every read to
 /// `upstream`. Runs until the listener errors.
-pub(crate) async fn serve<U: Upstream>(
-    listener: TcpListener,
-    upstream: Arc<U>,
-    rebootstrap: ReBootstrap,
-) -> Result<()> {
-    serve_on(listener, upstream, rebootstrap).await
-}
-
 /// The accept loop, over anything that can accept connections.
 ///
 /// Generic over [`Accept`] rather than taking a `TcpListener` so the retry
@@ -456,7 +448,7 @@ pub(crate) async fn serve_loopback<U: Upstream>(
         Ok(addr) => info!(%addr, "loopback registry proxy listening"),
         Err(_) => info!("loopback registry proxy listening"),
     }
-    serve(listener, upstream, rebootstrap).await
+    serve_on(listener, upstream, rebootstrap).await
 }
 
 #[cfg(test)]
@@ -469,7 +461,7 @@ mod tests {
     /// A listener whose `accept()` fails a scripted number of times.
     ///
     /// `fail_forever` models a listener that has gone permanently bad - the case
-    /// the retry bound exists for. `fails_then_blocks` models a transient run
+    /// the retry bound exists for. `failing_then_recovering` models a transient run
     /// followed by recovery, so the counter's reset can be observed.
     #[derive(Clone)]
     struct ScriptedListener {
@@ -506,7 +498,7 @@ mod tests {
         async fn accept(&self) -> std::io::Result<Self::Conn> {
             let n = self.attempts.fetch_add(1, Ordering::SeqCst);
             if self.fail_forever || n < self.succeed_after {
-                return Err(std::io::Error::from_raw_os_error(libc_ebadf()));
+                return Err(std::io::Error::other("scripted accept failure"));
             }
             if n == self.succeed_after {
                 // One success in the middle: enough to reset the counter.
@@ -517,7 +509,7 @@ mod tests {
                 // A SECOND failing run after the success. Both runs are one
                 // short of the limit, so the loop survives only if the success
                 // reset the counter - cumulatively they are well past it.
-                return Err(std::io::Error::from_raw_os_error(libc_ebadf()));
+                return Err(std::io::Error::other("scripted accept failure"));
             }
             // Then park, the way a real listener waits for the next peer. A
             // listener that kept returning instantly would spin the loop.
@@ -525,19 +517,16 @@ mod tests {
         }
     }
 
-    fn libc_ebadf() -> i32 {
-        9 // EBADF - the permanently-bad-listener case from the review
-    }
-
     /// A listener that fails forever must end the loop rather than spin, so the
     /// process exits and `Restart=always` can recover it. Before the bound was
     /// added this returned never, which is what made the supervisor useless.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_permanently_failing_listener_ends_the_serve_loop() {
         let listener = ScriptedListener::failing_forever();
         let upstream = Arc::new(ok_upstream());
         let rebootstrap = ReBootstrap::default();
 
+        let started = tokio::time::Instant::now();
         let err = tokio::time::timeout(
             std::time::Duration::from_secs(30),
             serve_on(listener, upstream, rebootstrap),
@@ -550,12 +539,25 @@ mod tests {
             err.to_string().contains("in a row"),
             "the error should name the consecutive-failure run: {err}"
         );
+
+        // The backoff is the only thing standing between a sustained accept
+        // error and a busy spin, and without this it had no coverage at all -
+        // deleting the sleep left every proxy test green. Time is virtual here
+        // (`start_paused`), so this asserts the sleep actually elapsed without
+        // the suite paying for it.
+        let elapsed = started.elapsed();
+        let want = ACCEPT_ERROR_BACKOFF * (ACCEPT_ERROR_LIMIT - 1);
+        assert!(
+            elapsed >= want,
+            "each retry must back off: expected at least {want:?} across \
+             {ACCEPT_ERROR_LIMIT} attempts, only {elapsed:?} elapsed"
+        );
     }
 
     /// The counter must reset on a successful accept, or a long-lived proxy that
     /// sees scattered transient errors would eventually shut itself down for no
     /// reason. Fails if the reset is removed.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_successful_accept_resets_the_error_counter() {
         // More total failures than the limit, but never a consecutive run that
         // reaches it: two batches either side of a success.
@@ -929,7 +931,7 @@ mod tests {
         // The loopback socket must be 127.0.0.1, never 0.0.0.0.
         assert!(loopback_addr.ip().is_loopback());
 
-        tokio::spawn(serve(listener, upstream, rebootstrap.clone()));
+        tokio::spawn(serve_on(listener, upstream, rebootstrap.clone()));
 
         // The engine speaks PLAIN HTTP to the loopback with zero TLS/trust
         // config; the proxy forwards over the pinned-CA HTTPS upstream.

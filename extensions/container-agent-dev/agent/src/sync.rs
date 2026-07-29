@@ -120,25 +120,48 @@ impl CommandEngine {
             .map(|v| v.trim().to_string())
             .filter(|v| !v.is_empty())
             .unwrap_or_else(|| DEFAULT_ENGINE.to_string());
-        if binary.contains("podman") {
-            // Under the shipped systemd unit podman cannot work: it needs
-            // CAP_SYS_ADMIN, namespaces, cgroup writes and a writable
-            // /var/lib/containers, all of which the unit's sandbox denies. It
-            // would fail at store init and, because on_sync's error is only
-            // logged, present as syncs that silently do nothing. Say so once at
-            // startup so the cause is visible.
-            //
-            // A warning rather than a refusal: the sandbox is the unit's, not
-            // the binary's, and the agent run directly for debugging has no such
-            // restriction.
-            warn!(
-                engine = %binary,
-                "podman is not supported under the container-agent-dev systemd unit \
-                 (its sandbox denies the privileges rootful podman needs); expect pulls \
-                 to fail unless this agent is running outside that unit"
-            );
-        }
         Self { binary }
+    }
+}
+
+/// The engine binary the agent would use, resolved from the environment.
+///
+/// Split out so `main` can inspect it once at startup without constructing an
+/// engine. [`CommandEngine::from_env`] runs per `Sync` frame, which is the wrong
+/// place to warn from: nothing is logged at `systemctl start`, and then the same
+/// warning repeats before every pull failure.
+pub(crate) fn engine_binary_from_env() -> String {
+    std::env::var(ENGINE_ENV)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| DEFAULT_ENGINE.to_string())
+}
+
+/// Whether `binary` names an engine the shipped systemd unit cannot run.
+///
+/// Rootful podman needs CAP_SYS_ADMIN, namespace creation, cgroup writes and a
+/// writable `/var/lib/containers`; the unit's sandbox denies all of them. Pure so
+/// the classification is testable without an environment or a process.
+pub(crate) fn is_unsupported_engine(binary: &str) -> bool {
+    binary.contains("podman")
+}
+
+/// Warn once when the configured engine cannot work under the shipped unit.
+///
+/// A warning rather than a refusal: the restriction belongs to the unit, not the
+/// binary, so an agent run directly for debugging is unaffected. Without it the
+/// failure is invisible in the worst way - podman fails at store init, `on_sync`'s
+/// error is only logged by its caller, and every Sync silently no-ops while the
+/// agent stays connected reporting a stale digest.
+pub(crate) fn warn_if_unsupported_engine(binary: &str) {
+    if is_unsupported_engine(binary) {
+        warn!(
+            engine = %binary,
+            "podman is not supported under the container-agent-dev systemd unit \
+             (its sandbox denies the privileges rootful podman needs); expect pulls \
+             to fail unless this agent is running outside that unit"
+        );
     }
 }
 
@@ -579,6 +602,30 @@ mod tests {
             "sha256:new",
             "Hello must report the digest the container is actually running, \
              even though the pointer write failed"
+        );
+    }
+
+    // The engine classification the startup warning keys on. Pure, so the
+    // decision is testable without an environment or a spawned process - which
+    // is the whole reason it was split out of `CommandEngine::from_env`, where it
+    // ran once per Sync frame and so could not warn at startup at all.
+    #[test]
+    fn podman_is_classified_unsupported_and_docker_is_not() {
+        assert!(is_unsupported_engine("podman"));
+        assert!(
+            is_unsupported_engine("/usr/bin/podman"),
+            "an absolute path must classify the same as a bare name"
+        );
+        assert!(
+            is_unsupported_engine("podman-remote"),
+            "a podman variant is still podman"
+        );
+
+        assert!(!is_unsupported_engine("docker"));
+        assert!(!is_unsupported_engine("/usr/bin/docker"));
+        assert!(
+            !is_unsupported_engine(DEFAULT_ENGINE),
+            "the default engine must never be classified unsupported"
         );
     }
 

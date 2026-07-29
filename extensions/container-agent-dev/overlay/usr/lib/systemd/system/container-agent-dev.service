@@ -57,8 +57,11 @@ SystemCallErrorNumber=EPERM
 # world-readable.
 UMask=0077
 
-# StateDirectory is the only writable path under ProtectSystem=strict, which is
-# all the agent needs: bootstrap.json and active-image.json both live there.
+# StateDirectory is the only PERSISTENT writable path under ProtectSystem=strict,
+# which is all the agent needs: bootstrap.json and active-image.json both live
+# there. PrivateTmp above also grants a private /tmp and /var/tmp, discarded when
+# the unit stops - so a new write path needs its own directive only if it must
+# survive a restart.
 #
 # No AF_NETLINK. It was only ever required by netavark configuring a podman
 # container's netns; the docker CLI just talks to its daemon over AF_UNIX, and

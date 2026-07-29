@@ -69,6 +69,10 @@ rcgen = { version = "0.13", default-features = false, features = [
     "pem",
     "ring",
 ] }
+# Virtual time for the proxy's accept-retry tests: `start_paused` lets them assert
+# the backoff elapsed without spending it, which both pins the sleep and keeps the
+# suite fast. Dev-only - the edition-2024 resolver keeps it out of the shipped binary.
+tokio = { version = "1", features = ["test-util"] }
 # Temp dir standing in for the writable partition in the sync pointer tests.
 tempfile = "3"
 
