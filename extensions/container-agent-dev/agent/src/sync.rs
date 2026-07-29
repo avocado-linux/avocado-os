@@ -7,15 +7,19 @@
 //!      bulk from control).
 //!   2. **Restarts the container** via the engine AFTER the pull, so the new
 //!      image takes effect. The read-only rootFS is untouched throughout.
-//!   3. **Rewrites the active-image pointer** — a small JSON file recording the
+//!   3. **Records the now-running digest** in [`crate::AgentState::running_digest`]
+//!      so task 6.1's reconnect `Hello` reports it. This lands BEFORE the pointer
+//!      write so a full or unwritable `/var` cannot stop the agent reporting what
+//!      it actually runs.
+//!   4. **Rewrites the active-image pointer** — a small JSON file recording the
 //!      now-active `{image, tag, digest}` — on the **writable partition**
 //!      (`/var/lib/avocado/container-dev/active-image.json`), only once the
 //!      restart succeeded, so a failed restart never leaves the pointer ahead of
 //!      what the device actually runs. The path is derived from
 //!      [`WRITABLE_ROOT`], never a read-only rootFS path (`/usr`, `/etc`, the
-//!      image rootfs).
-//!   4. Updates [`crate::AgentState::running_digest`] so task 6.1's reconnect
-//!      `Hello` reports it.
+//!      image rootfs). This is the one step allowed to fail without failing the
+//!      sync, so no step may assume the pointer file exists - it can be absent
+//!      while the digest at step 3 is already set.
 //!
 //! The engine interaction is behind the [`Engine`] trait (mirroring task 6.2's
 //! [`crate::proxy::Upstream`] pattern) so the ordering / pointer / digest logic
@@ -224,11 +228,14 @@ impl SyncConfig {
     }
 }
 
-/// Handle a `Sync`: pull -> rewrite pointer -> restart -> record digest.
+/// Handle a `Sync`: pull -> restart -> record digest -> rewrite pointer.
 ///
-/// The order is load-bearing: a pull failure aborts before the pointer rewrite,
-/// the restart, and the digest update, so a failed sync never claims a new
-/// image is running and never mutates state. All writes target the writable
+/// The order is load-bearing at both ends. A pull failure aborts before the
+/// restart, the digest update and the pointer write, so a failed sync never
+/// claims a new image is running and never mutates state. The digest is recorded
+/// before the pointer write, so an unwritable `/var` costs the pointer file but
+/// not a correct `Hello` - which makes the pointer write the only step that may
+/// fail while the sync still returns `Ok`. All writes target the writable
 /// partition; the read-only rootFS is never touched.
 pub(crate) async fn on_sync<E: Engine>(
     engine: &E,
@@ -281,19 +288,24 @@ pub(crate) async fn on_sync<E: Engine>(
         tag: tag.to_string(),
         digest: digest.to_string(),
     };
+    // One terminal line per outcome, and only the Ok arm says "sync complete".
+    // A single unconditional success line here claimed "pointer rewritten" on the
+    // failure branch too, so grepping for the obvious success string reported a
+    // current pointer when no file had been written - the warning above it was
+    // right, but the success line is the one that reads as authoritative.
     match write_active_image(&cfg.writable_root, &active) {
-        Ok(path) => {
-            info!(pointer = %path.display(), "active-image pointer rewritten on writable partition")
-        }
+        Ok(path) => info!(
+            %image, %tag, %digest, pointer = %path.display(),
+            "sync complete: pulled, container restarted, active-image pointer rewritten"
+        ),
         Err(e) => warn!(
             error = %e,
-            %digest,
-            "container restarted but the active-image pointer could not be written; \
-             the running digest is still reported correctly"
+            %image, %tag, %digest,
+            "sync incomplete: pulled and container restarted, but the active-image \
+             pointer could not be written; the running digest is reported from memory \
+             only and will be lost on restart"
         ),
     }
-
-    info!(%image, %tag, %digest, "sync complete: pulled, pointer rewritten, container restarted");
     Ok(())
 }
 
