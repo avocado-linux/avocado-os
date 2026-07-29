@@ -19,6 +19,16 @@ StateDirectory=avocado/container-dev
 StateDirectoryMode=0700
 ExecStart=/usr/bin/avocado-container-agent-dev
 Environment=RUST_LOG=info
+# Pin the engine rather than leaving the DOCKER ONLY decision below to a comment.
+# The agent only warns on a podman value and then execs it anyway (deliberately -
+# the restriction is this unit's, not the binary's, so a debugging run outside the
+# unit still works), which means an unset variable here let a DefaultEnvironment=
+# in system.conf select podman. That failure is the worst shape available: podman
+# dies at store init under this sandbox, on_sync's error is only logged, the unit
+# stays active (running), and every Sync silently no-ops while the device keeps
+# reporting healthy. A unit-level Environment= beats DefaultEnvironment=, so this
+# closes that path.
+Environment=AVOCADO_CONTAINER_DEV_ENGINE=docker
 
 # DOCKER ONLY. This unit deliberately does not support the podman engine.
 #
@@ -37,7 +47,6 @@ Environment=RUST_LOG=info
 # does not block connect() to a socket. Restoring podman properly is tracked as
 # a follow-up - it needs the engine out of this process, not a weaker unit.
 CapabilityBoundingSet=
-AmbientCapabilities=
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
@@ -47,14 +56,28 @@ RestrictRealtime=true
 LockPersonality=true
 SystemCallArchitectures=native
 RestrictNamespaces=true
+# PrivateDevices, ProtectKernelTunables and ProtectControlGroups are the three
+# directives systemd.exec(5) names as closing ProtectSystem=strict's /dev, /proc
+# and /sys carve-outs; strict alone leaves all three writable. /dev is the one
+# that matters most here: block devices are root:disk 0660 and this agent runs as
+# root, so the owner bits alone allow opening /dev/mmcblk0 O_RDWR and overwriting
+# the "read-only" rootfs. An empty CapabilityBoundingSet does not stop it and
+# SystemCallFilter has nothing to deny - the open needs no capability and no
+# privileged syscall. Without this line the untrusted WS/HTTP frame path can
+# reach the exact hole the block above claims to have closed.
+PrivateDevices=yes
 ProtectControlGroups=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
-# The agent writes bootstrap.json and active-image.json into StateDirectory;
-# both describe a session and one carries a token, so neither should default to
-# world-readable.
+# The agent writes active-image.json into StateDirectory, so this keeps that file
+# off world-readable. It does NOT govern bootstrap.json: the host writes that one
+# (see main.rs) and the agent only reads it, so the Bearer read/control token's
+# mode is set by the delivery path, not here. StateDirectoryMode=0700 above is
+# what keeps the token unreadable, and even that first applies at `systemctl
+# start` - after ConditionPathExists has already proven bootstrap.json exists.
+# Writing it 0600 belongs on the CLI side that delivers it.
 UMask=0077
 
 # StateDirectory is the only PERSISTENT writable path under ProtectSystem=strict,
