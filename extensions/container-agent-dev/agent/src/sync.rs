@@ -115,6 +115,8 @@ fn loopback_reference(port: u16, image: &str, digest: &str) -> String {
 /// the sync ordering / pointer / digest logic is unit-testable with a fake.
 pub(crate) trait Engine: Send + Sync + 'static {
     fn pull(&self, reference: &str) -> impl Future<Output = Result<()>> + Send;
+    /// Point `target` (the ref the service names) at `source` (what we just pulled).
+    fn tag(&self, source: &str, target: &str) -> impl Future<Output = Result<()>> + Send;
     fn restart(&self, container: &str) -> impl Future<Output = Result<()>> + Send;
 }
 
@@ -193,6 +195,10 @@ pub(crate) fn service_from_env() -> Option<String> {
 impl Engine for CommandEngine {
     async fn pull(&self, reference: &str) -> Result<()> {
         run_engine(&self.binary, &["pull", reference]).await
+    }
+
+    async fn tag(&self, source: &str, target: &str) -> Result<()> {
+        run_engine(&self.binary, &["tag", source, target]).await
     }
 
     /// Restart the owning systemd unit when one is configured, else the container.
@@ -283,13 +289,26 @@ pub(crate) async fn on_sync<E: Engine>(
         .await
         .with_context(|| format!("pulling {reference} through loopback proxy"))?;
 
-    // 2. Restart the container AFTER the pull so the new image takes effect.
+    // 2. Point the ref the service names at what we just pulled.
+    //
+    //    The pull is digest-pinned, so it lands as an untagged image. The unit's
+    //    ExecStart names `<image>:<tag>`, which on this device either does not
+    //    exist (the host built it, so the target never had that tag) or still
+    //    resolves to the PREVIOUS build. Either way the restart below would not
+    //    run what was just fetched, while every step still reported success.
+    let service_ref = format!("{image}:{tag}");
+    engine
+        .tag(&reference, &service_ref)
+        .await
+        .with_context(|| format!("tagging {reference} as {service_ref}"))?;
+
+    // 3. Restart the container AFTER the pull and tag so the new image takes effect.
     engine
         .restart(&cfg.container)
         .await
         .with_context(|| format!("restarting container {}", cfg.container))?;
 
-    // 3. Record the now-running digest. This happens IMMEDIATELY after the
+    // 4. Record the now-running digest. This happens IMMEDIATELY after the
     //    restart, before the pointer write, because at this instant the
     //    container really is running `digest` - that is an observed fact, not a
     //    plan. Deferring it behind the pointer write would let a pointer failure
@@ -389,6 +408,14 @@ mod tests {
             Ok(())
         }
 
+        async fn tag(&self, source: &str, target: &str) -> Result<()> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("tag:{source}->{target}"));
+            Ok(())
+        }
+
         async fn restart(&self, container: &str) -> Result<()> {
             self.calls
                 .lock()
@@ -427,19 +454,50 @@ mod tests {
         let recorded = calls.lock().unwrap().clone();
         assert_eq!(
             recorded.len(),
-            2,
-            "expected exactly pull then restart, got {recorded:?}"
+            3,
+            "expected pull, tag, then restart, got {recorded:?}"
         );
         assert!(
             recorded[0].starts_with("pull:"),
             "first call must be the pull: {recorded:?}"
         );
         assert!(
-            recorded[1].starts_with("restart:"),
-            "second call must be the restart: {recorded:?}"
+            recorded[1].starts_with("tag:"),
+            "the tag must land between the pull and the restart: {recorded:?}"
+        );
+        assert!(
+            recorded[2].starts_with("restart:"),
+            "the restart must come last: {recorded:?}"
         );
         assert_eq!(recorded[0], "pull:127.0.0.1:15151/my-app@sha256:new");
-        assert_eq!(recorded[1], "restart:avocado-dev");
+        assert_eq!(recorded[2], "restart:avocado-dev");
+    }
+
+    // The pull lands a digest-pinned image. Unless something points the ref the
+    // service actually names at it, the restart re-runs whatever that ref already
+    // meant - the old image, or nothing at all when the target never had the tag.
+    #[tokio::test]
+    async fn sync_tags_the_pulled_digest_before_restarting() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let engine = FakeEngine::new(calls.clone());
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = test_cfg(tmp.path().to_path_buf());
+        let state = crate::AgentState::new("dev-01".to_string());
+
+        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+            .await
+            .expect("sync succeeds");
+
+        let recorded = calls.lock().unwrap().clone();
+        assert_eq!(
+            recorded,
+            vec![
+                "pull:127.0.0.1:15151/my-app@sha256:new".to_string(),
+                "tag:127.0.0.1:15151/my-app@sha256:new->my-app:dev".to_string(),
+                "restart:avocado-dev".to_string(),
+            ],
+            "the pulled digest must be tagged as the service's ref BEFORE the restart: {recorded:?}"
+        );
     }
 
     // Falsifier 2: the pointer lands on the writable partition, never a rootFS
@@ -586,6 +644,7 @@ mod tests {
             recorded,
             vec![
                 "pull:127.0.0.1:15151/my-app@sha256:new".to_string(),
+                "tag:127.0.0.1:15151/my-app@sha256:new->my-app:dev".to_string(),
                 "restart:avocado-dev".to_string(),
             ],
             "the pull and the restart attempt should both be recorded: {recorded:?}"
@@ -632,6 +691,7 @@ mod tests {
             recorded,
             vec![
                 "pull:127.0.0.1:15151/my-app@sha256:new".to_string(),
+                "tag:127.0.0.1:15151/my-app@sha256:new->my-app:dev".to_string(),
                 "restart:avocado-dev".to_string(),
             ],
             "the pull and restart must both have run: {recorded:?}"
