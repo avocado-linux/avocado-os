@@ -54,6 +54,16 @@ const ENGINE_ENV: &str = "AVOCADO_CONTAINER_DEV_ENGINE";
 const CONTAINER_ENV: &str = "AVOCADO_CONTAINER_DEV_CONTAINER";
 /// Env var overriding the writable state root (used by tests and staging).
 const STATE_ROOT_ENV: &str = "AVOCADO_CONTAINER_DEV_STATE_ROOT";
+/// Env var naming the systemd unit that OWNS the container, restarted instead of
+/// the container itself when set.
+///
+/// `<engine> restart <container>` re-executes the container's existing config,
+/// which pins the image by ID at create time - so a freshly pulled image for the
+/// same tag is ignored and the sync silently no-ops while reporting success. The
+/// unit that launched the container re-runs `<engine> run` on restart, which
+/// re-resolves the tag and therefore adopts the new image. This mirrors the
+/// `service:` field each entry under `container_dev.images` already declares.
+const SERVICE_ENV: &str = "AVOCADO_CONTAINER_DEV_SERVICE";
 
 // ---------------------------------------------------------------------------
 // Active-image pointer.
@@ -169,13 +179,34 @@ pub(crate) fn warn_if_unsupported_engine(binary: &str) {
     }
 }
 
+/// The systemd unit owning the container, from `$AVOCADO_CONTAINER_DEV_SERVICE`.
+///
+/// `None` keeps the container-restart path, so a device that does not launch its
+/// container from a unit behaves exactly as before.
+pub(crate) fn service_from_env() -> Option<String> {
+    std::env::var(SERVICE_ENV)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
 impl Engine for CommandEngine {
     async fn pull(&self, reference: &str) -> Result<()> {
         run_engine(&self.binary, &["pull", reference]).await
     }
 
+    /// Restart the owning systemd unit when one is configured, else the container.
+    ///
+    /// See [`SERVICE_ENV`]: restarting the container re-executes its pinned image
+    /// ID, so the pulled image would never actually run.
     async fn restart(&self, container: &str) -> Result<()> {
-        run_engine(&self.binary, &["restart", container]).await
+        match service_from_env() {
+            Some(service) => {
+                info!(service = %service, "restarting owning systemd unit to adopt the pulled image");
+                run_engine("systemctl", &["restart", &service]).await
+            }
+            None => run_engine(&self.binary, &["restart", container]).await,
+        }
     }
 }
 
