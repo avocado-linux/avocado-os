@@ -372,7 +372,24 @@ impl Upstream for HttpsUpstream {
 /// An IDLE deadline, not a total-transfer one: capping total transfer would kill
 /// a legitimate multi-gigabyte layer over a slow link, while a link that is
 /// moving bytes at all keeps resetting this.
+#[cfg(not(test))]
 const UPSTREAM_BODY_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Short under test so the WIRING is assertable, not just the wrapper.
+///
+/// Virtual time cannot cover it: with the wrapper removed there is no timer left
+/// inside the body at all, and tokio's paused-clock auto-advance does not fire
+/// for an outer `timeout` when the inner future parks without registering a
+/// waker - the test hangs instead of failing, which is the one outcome a
+/// regression must not produce. [`the_production_body_idle_timeout_is_generous`]
+/// pins the shipped value so this override cannot hide a typo in it.
+#[cfg(test)]
+const UPSTREAM_BODY_IDLE_TIMEOUT: Duration = Duration::from_millis(50);
+
+/// The idle deadline the shipped binary uses, kept beside the override so both
+/// values are visible together and the real one stays asserted.
+#[cfg(test)]
+const PRODUCTION_BODY_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Wraps a body so a gap of [`UPSTREAM_BODY_IDLE_TIMEOUT`] between chunks ends
 /// the stream with an error instead of hanging forever.
@@ -926,6 +943,21 @@ mod tests {
         }
     }
 
+    #[test]
+    fn the_production_body_idle_timeout_is_generous() {
+        // The suite runs with a 50ms override, so nothing else would notice the
+        // shipped value being wrong. It has to be long enough that a slow but
+        // live link is never cut - it bounds a stall, not a slow transfer.
+        assert!(
+            PRODUCTION_BODY_IDLE_TIMEOUT >= Duration::from_secs(30),
+            "a short production idle deadline would kill slow but healthy pulls"
+        );
+        assert!(
+            UPSTREAM_BODY_IDLE_TIMEOUT < PRODUCTION_BODY_IDLE_TIMEOUT,
+            "the test override must be the shorter of the two"
+        );
+    }
+
     /// A 200 whose body never delivers a byte.
     struct StallingUpstream;
 
@@ -944,7 +976,7 @@ mod tests {
         }
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn a_stalled_upstream_body_fails_through_the_proxy() {
         // The wiring, not just the wrapper: reverting `proxy_read` to hand the
         // upstream body straight to the response leaves the two IdleTimeoutBody
@@ -959,11 +991,13 @@ mod tests {
         .await;
         assert_eq!(resp.status(), StatusCode::OK);
 
-        let err = resp
-            .into_body()
-            .collect()
+        // The outer bound is what makes an unwired wrapper FAIL rather than hang.
+        // With the wrapper in place the body's own 50ms deadline fires long
+        // first, so this costs nothing on the passing path.
+        let err = tokio::time::timeout(BODY_TEST_BOUND, resp.into_body().collect())
             .await
-            .expect_err("a stalled upstream body must not hang the engine's pull");
+            .expect("a stalled upstream body must not hang the engine's pull")
+            .expect_err("a stalled upstream body must surface as an error");
         assert_eq!(err.kind(), std::io::ErrorKind::TimedOut);
     }
 
@@ -1015,17 +1049,25 @@ mod tests {
             .expect("a raise with no waiter must still wake the next waiter");
     }
 
-    #[tokio::test(start_paused = true)]
+    /// Bound for the body tests: comfortably longer than the 50ms idle deadline
+    /// the suite runs with, short enough that a regression reports in seconds
+    /// rather than hanging the run.
+    const BODY_TEST_BOUND: Duration = Duration::from_secs(5);
+
+    #[tokio::test]
     async fn a_body_that_stalls_mid_stream_fails_instead_of_hanging() {
         // The stage timeouts cover TCP, TLS, the HTTP/1 handshake and the
         // request head - every stage EXCEPT the one a sleeping laptop actually
         // stalls in. Unwrapped, this collect never returns: `docker pull` waits
         // on a loopback response that never arrives, `on_sync` never returns, no
         // Status is ever emitted, and systemd still reports active (running).
-        let err = IdleTimeoutBody::new(StallingBody)
-            .collect()
-            .await
-            .expect_err("a stalled body must not hang forever");
+        let err = tokio::time::timeout(
+            BODY_TEST_BOUND,
+            IdleTimeoutBody::new(StallingBody).collect(),
+        )
+        .await
+        .expect("a stalled body must not hang forever")
+        .expect_err("a stalled body must surface as an error");
         assert_eq!(
             err.kind(),
             std::io::ErrorKind::TimedOut,
@@ -1037,7 +1079,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn a_body_that_delivers_is_passed_through_untouched() {
         // The mirror: the wrapper must not truncate or corrupt a working
         // stream, or every pull breaks. Without this the test above passes for a
