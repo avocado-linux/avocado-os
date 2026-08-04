@@ -158,22 +158,40 @@ pub(crate) struct ReBootstrap {
 impl ReBootstrap {
     /// Raise the flag and wake anyone waiting to report it. Idempotent in the
     /// flag; the wake is what makes it reach the host mid-session.
+    ///
+    /// `notify_one`, not `notify_waiters`: the reporting select arm builds a
+    /// fresh `notified()` future on every iteration, so it is only registered as
+    /// a waiter while parked in the select. A 401 raised while the loop body ran
+    /// another arm - mid-`send_frame`, say - found no waiter, and
+    /// `notify_waiters` stores no permit, so the wake was dropped. The flag
+    /// stayed set and surfaced at the next session start, which is exactly the
+    /// mid-session delivery this was supposed to fix. `notify_one` stores the
+    /// permit, so the next `notified()` completes immediately.
     pub(crate) fn raise(&self) {
         self.raised.store(true, Ordering::SeqCst);
-        self.changed.notify_waiters();
+        self.changed.notify_one();
     }
 
     /// Whether a re-bootstrap has been requested.
+    ///
+    /// Test-only: the reporting path reads the flag exclusively through
+    /// [`Self::take`], because observing and lowering have to be one step for a
+    /// raise landing mid-send not to be erased. A non-consuming read is still
+    /// what the proxy's own tests want - "the 401 raised it", "the 200 did not"
+    /// - and those must not lower it as a side effect.
+    #[cfg(test)]
     pub(crate) fn is_raised(&self) -> bool {
         self.raised.load(Ordering::SeqCst)
     }
 
-    /// Lower the flag once it has been reported to the host.
+    /// Lower the flag, reporting whether it had been raised.
     ///
-    /// Without this a single transient 401 kept every later session announcing
-    /// `needs_rebootstrap`, long after the token it referred to was replaced.
-    pub(crate) fn clear(&self) {
-        self.raised.store(false, Ordering::SeqCst);
+    /// Atomic so the caller can lower it BEFORE reporting without racing a
+    /// concurrent `raise`. Lowering is what keeps a single transient 401 from
+    /// making every later session announce `needs_rebootstrap` long after the
+    /// token it referred to was replaced.
+    pub(crate) fn take(&self) -> bool {
+        self.raised.swap(false, Ordering::SeqCst)
     }
 
     /// Resolve when the flag is next raised.
@@ -339,6 +357,82 @@ impl Upstream for HttpsUpstream {
 // Proxy logic.
 // ---------------------------------------------------------------------------
 
+/// Ceiling on the gap between two body chunks from the bulk upstream.
+///
+/// [`UPSTREAM_STAGE_TIMEOUT`] bounds every stage BEFORE the body, but the stall
+/// those were written for - a laptop that sleeps or drops off Wi-Fi mid-pull,
+/// leaving a half-open connection with no RST - lands overwhelmingly DURING body
+/// transfer, which was the one stage still uncovered. The outcome had been
+/// softened rather than removed: the read loop keeps the WS polled so the socket
+/// no longer wedges, but the sync worker parked forever, later `Sync` frames
+/// piled into the latest-wins slot and never ran, no `Status` was emitted
+/// because `on_sync` never returned, and systemd still reported
+/// `active (running)`.
+///
+/// An IDLE deadline, not a total-transfer one: capping total transfer would kill
+/// a legitimate multi-gigabyte layer over a slow link, while a link that is
+/// moving bytes at all keeps resetting this.
+const UPSTREAM_BODY_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Wraps a body so a gap of [`UPSTREAM_BODY_IDLE_TIMEOUT`] between chunks ends
+/// the stream with an error instead of hanging forever.
+struct IdleTimeoutBody<B> {
+    inner: B,
+    idle: std::pin::Pin<Box<tokio::time::Sleep>>,
+}
+
+impl<B> IdleTimeoutBody<B> {
+    fn new(inner: B) -> Self {
+        Self {
+            inner,
+            idle: Box::pin(sleep(UPSTREAM_BODY_IDLE_TIMEOUT)),
+        }
+    }
+}
+
+impl<B> hyper::body::Body for IdleTimeoutBody<B>
+where
+    B: hyper::body::Body<Data = Bytes, Error = std::io::Error> + Unpin,
+{
+    type Data = Bytes;
+    type Error = std::io::Error;
+
+    fn poll_frame(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<std::result::Result<hyper::body::Frame<Bytes>, std::io::Error>>>
+    {
+        use std::task::Poll;
+
+        let this = self.as_mut().get_mut();
+        match std::pin::Pin::new(&mut this.inner).poll_frame(cx) {
+            // Any progress - a chunk, the end of the stream, or an error -
+            // restarts the clock from here.
+            Poll::Ready(frame) => {
+                this.idle
+                    .as_mut()
+                    .reset(tokio::time::Instant::now() + UPSTREAM_BODY_IDLE_TIMEOUT);
+                Poll::Ready(frame)
+            }
+            Poll::Pending => match this.idle.as_mut().poll(cx) {
+                Poll::Ready(()) => Poll::Ready(Some(Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    format!(
+                        "the bulk upstream sent no body data for {}s; the host is unreachable \
+                         or the connection is half-open",
+                        UPSTREAM_BODY_IDLE_TIMEOUT.as_secs()
+                    ),
+                )))),
+                Poll::Pending => Poll::Pending,
+            },
+        }
+    }
+
+    fn size_hint(&self) -> hyper::body::SizeHint {
+        self.inner.size_hint()
+    }
+}
+
 /// Build a small static-body engine response (used for every gateway error).
 fn gateway_error(status: StatusCode, message: &'static str) -> Response<RespBody> {
     let body = Full::new(Bytes::from_static(message.as_bytes()))
@@ -383,7 +477,7 @@ pub(crate) async fn proxy_read<U: Upstream>(
                 }
             }
             builder
-                .body(upstream.body)
+                .body(IdleTimeoutBody::new(upstream.body).boxed())
                 .expect("engine success response is always valid")
         }
         Ok(upstream)
@@ -832,6 +926,47 @@ mod tests {
         }
     }
 
+    /// A 200 whose body never delivers a byte.
+    struct StallingUpstream;
+
+    impl Upstream for StallingUpstream {
+        async fn fetch(
+            &self,
+            _method: Method,
+            _path: String,
+            _range: Option<HeaderValue>,
+        ) -> Result<UpstreamResponse> {
+            Ok(UpstreamResponse {
+                status: StatusCode::OK,
+                headers: HeaderMap::new(),
+                body: StallingBody.boxed(),
+            })
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_stalled_upstream_body_fails_through_the_proxy() {
+        // The wiring, not just the wrapper: reverting `proxy_read` to hand the
+        // upstream body straight to the response leaves the two IdleTimeoutBody
+        // unit tests green while every real pull can still hang forever.
+        let resp = proxy_read(
+            Method::GET,
+            "/v2/app/blobs/sha256:abc".to_string(),
+            None,
+            &StallingUpstream,
+            &ReBootstrap::default(),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let err = resp
+            .into_body()
+            .collect()
+            .await
+            .expect_err("a stalled upstream body must not hang the engine's pull");
+        assert_eq!(err.kind(), std::io::ErrorKind::TimedOut);
+    }
+
     async fn collect(resp: Response<RespBody>) -> (StatusCode, HeaderMap, Bytes) {
         let status = resp.status();
         let headers = resp.headers().clone();
@@ -845,6 +980,75 @@ mod tests {
     }
 
     // --- proxy-logic tests -------------------------------------------------
+
+    /// A body that never produces a frame and never wakes its waker - a
+    /// half-open connection to a host that went to sleep mid-layer.
+    struct StallingBody;
+
+    impl hyper::body::Body for StallingBody {
+        type Data = Bytes;
+        type Error = std::io::Error;
+
+        fn poll_frame(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Option<std::result::Result<hyper::body::Frame<Bytes>, std::io::Error>>>
+        {
+            std::task::Poll::Pending
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_raise_with_no_waiter_registered_is_still_delivered() {
+        // The reporting arm builds a fresh `notified()` future on every select
+        // iteration, so it counts as a registered waiter only while parked in
+        // the select. A 401 raised while the loop body ran another arm -
+        // mid-`send_frame`, say - found no waiter, and `notify_waiters` stores
+        // no permit, so the wake was dropped. The flag stayed set and surfaced
+        // at the next session start, which is exactly the mid-session delivery
+        // the Notify was added for.
+        let flag = ReBootstrap::default();
+        flag.raise();
+
+        tokio::time::timeout(Duration::from_secs(5), flag.raised())
+            .await
+            .expect("a raise with no waiter must still wake the next waiter");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_body_that_stalls_mid_stream_fails_instead_of_hanging() {
+        // The stage timeouts cover TCP, TLS, the HTTP/1 handshake and the
+        // request head - every stage EXCEPT the one a sleeping laptop actually
+        // stalls in. Unwrapped, this collect never returns: `docker pull` waits
+        // on a loopback response that never arrives, `on_sync` never returns, no
+        // Status is ever emitted, and systemd still reports active (running).
+        let err = IdleTimeoutBody::new(StallingBody)
+            .collect()
+            .await
+            .expect_err("a stalled body must not hang forever");
+        assert_eq!(
+            err.kind(),
+            std::io::ErrorKind::TimedOut,
+            "a stalled body must fail as a timeout: {err}"
+        );
+        assert!(
+            err.to_string().contains("no body data"),
+            "the error must say the stall was in the body: {err}"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_body_that_delivers_is_passed_through_untouched() {
+        // The mirror: the wrapper must not truncate or corrupt a working
+        // stream, or every pull breaks. Without this the test above passes for a
+        // wrapper that errors unconditionally.
+        let bytes = IdleTimeoutBody::new(full("LAYER-BYTES"))
+            .collect()
+            .await
+            .expect("a delivering body must not be cut off")
+            .to_bytes();
+        assert_eq!(&bytes[..], b"LAYER-BYTES");
+    }
 
     #[tokio::test]
     async fn proxy_forwards_upstream_200_body_verbatim() {

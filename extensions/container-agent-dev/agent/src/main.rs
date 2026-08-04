@@ -65,11 +65,21 @@ const LOOPBACK_PORT_ENV: &str = "AVOCADO_CONTAINER_DEV_LOOPBACK_PORT";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum HostFrame {
-    /// The `{image, tag, digest}` now available for the device to pull.
+    /// The `{image, tag, digest}` now available for the device to pull, and the
+    /// systemd unit that consumes it.
     Sync {
         image: String,
         tag: String,
         digest: String,
+        /// The device unit owning this image, from the host's own
+        /// `container_dev.images[].service`. Optional on the wire so a device
+        /// running against an older host still parses the frame - it then falls
+        /// back to `$AVOCADO_CONTAINER_DEV_SERVICE` and finally to restarting
+        /// the container, which is what every device did before this field
+        /// existed. See `sync::SERVICE_ENV` for why the container branch cannot
+        /// adopt a new image.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        service: Option<String>,
     },
 }
 
@@ -367,16 +377,38 @@ pub(crate) fn endpoint_host(endpoint: &str) -> &str {
 /// Handle one host frame. On a `Sync`, pull the new image through the loopback
 /// proxy, rewrite the active-image pointer on the writable partition, restart
 /// the container, and record the running digest (task 6.3, [`sync::on_sync`]).
-async fn handle_host_frame(frame: HostFrame, state: &AgentState) -> Option<DeviceFrame> {
+/// The engine and config `handle_host_frame` runs a sync against.
+///
+/// Taken as parameters rather than built inside, so a test can drive the
+/// reporting path with a fake engine. Building them internally made the failure
+/// branch unreachable from a test: the only coverage was a test that constructed
+/// the `Status` frame itself and asserted serde round-tripped it, which stayed
+/// green with the whole reporting path reverted to a bare `warn!`.
+async fn handle_host_frame<E: sync::Engine>(
+    engine: &E,
+    cfg: &sync::SyncConfig,
+    frame: HostFrame,
+    state: &AgentState,
+) -> Option<DeviceFrame> {
     match frame {
-        HostFrame::Sync { image, tag, digest } => {
-            info!(%image, %tag, %digest, "received sync; pulling + restarting");
-            // The engine shell-out and env-resolved config are the thin,
-            // untested production glue; the ordering/pointer/digest core lives
-            // in the fully-tested `sync::on_sync`.
-            let engine = sync::CommandEngine::from_env();
-            let cfg = sync::SyncConfig::from_env();
-            match sync::on_sync(&engine, &cfg, &image, &tag, &digest, state).await {
+        HostFrame::Sync {
+            image,
+            tag,
+            digest,
+            service,
+        } => {
+            info!(%image, %tag, %digest, ?service, "received sync; pulling + restarting");
+            match sync::on_sync(
+                engine,
+                cfg,
+                &image,
+                &tag,
+                &digest,
+                service.as_deref(),
+                state,
+            )
+            .await
+            {
                 Ok(()) => None,
                 Err(e) => {
                     // Report it, do not only log it. A swallowed failure left the
@@ -405,6 +437,32 @@ async fn handle_host_frame(frame: HostFrame, state: &AgentState) -> Option<Devic
 /// duration - and N saves during one slow pull queued N frames in the socket
 /// buffer, each getting its own full pull/tag/restart afterwards: N container
 /// restarts instead of one, N-1 onto an already-superseded digest.
+/// Aborts the sync worker when the session ends, however it ends.
+///
+/// The abort used to sit after the serve loop, reachable only by falling out of
+/// it. Three `?` sites returned early instead - the two `send_frame` calls and
+/// the stream read - and the read one is the COMMON path, because tungstenite
+/// yields `Some(Err(..))` on a reset and only `None` on a clean close. The
+/// worker then parked on `work.notified()` forever: one leaked task per errored
+/// session, and against a host that accepts the upgrade then dies, one per
+/// backoff cycle for the process lifetime.
+///
+/// The leak was the smaller half. A worker that outlived its session kept
+/// running its pull/tag/restart while the next session spawned another one, so
+/// two sequences could race on `running_digest` and the pointer file with
+/// nothing serializing them.
+/// Holds an [`tokio::task::AbortHandle`] rather than the `JoinHandle`: the
+/// session never joins the worker, it only needs to be able to cancel it, and
+/// the narrower handle is what makes the guard's effect assertable - a test can
+/// keep the `JoinHandle` and await the cancelled `JoinError`.
+struct AbortOnDrop(tokio::task::AbortHandle);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 struct SessionChannels {
     /// Latest-wins slot. A Sync that arrives while another is running replaces
     /// any already-queued one, because only the newest digest is worth applying.
@@ -494,7 +552,7 @@ async fn connect_and_serve(
     };
     let (outbound_tx, mut outbound) = tokio::sync::mpsc::channel::<DeviceFrame>(8);
 
-    let worker = {
+    let _worker = AbortOnDrop({
         let pending = Arc::clone(&channels.pending);
         let work = Arc::clone(&channels.work);
         let state = Arc::clone(state);
@@ -507,7 +565,12 @@ async fn connect_and_serve(
                 let Some(frame) = pending.lock().expect("pending mutex poisoned").take() else {
                     continue;
                 };
-                if let Some(report) = handle_host_frame(frame, &state).await
+                // The engine shell-out and env-resolved config are the thin,
+                // untested production glue; the ordering/pointer/digest core
+                // lives in the fully-tested `sync::on_sync`.
+                let engine = sync::CommandEngine::from_env();
+                let cfg = sync::SyncConfig::from_env();
+                if let Some(report) = handle_host_frame(&engine, &cfg, frame, &state).await
                     && outbound_tx.send(report).await.is_err()
                 {
                     // The session ended while the sync ran; the next Hello
@@ -516,18 +579,16 @@ async fn connect_and_serve(
                 }
             }
         })
-    };
+        .abort_handle()
+    });
     // Dropping our own copy means `outbound` closes when the worker does.
     drop(outbound_tx);
 
     // A re-bootstrap raised BEFORE this session started still needs announcing;
     // one raised during it arrives through `rebootstrap.raised()` below.
-    if state.rebootstrap.is_raised() {
-        send_frame(&mut sink, &rebootstrap_status(state)).await?;
-        state.rebootstrap.clear();
-    }
+    report_rebootstrap(&mut sink, state).await?;
 
-    let result = loop {
+    loop {
         tokio::select! {
             // Biased so an outbound report is written before another host frame
             // is accepted; without it a busy host could starve the reports the
@@ -543,10 +604,7 @@ async fn connect_and_serve(
             // front meant it was always set strictly after the only read that
             // would have transmitted it.
             () = state.rebootstrap.raised() => {
-                send_frame(&mut sink, &rebootstrap_status(state)).await?;
-                // Lower it once reported, or one transient 401 latches for the
-                // process lifetime.
-                state.rebootstrap.clear();
+                report_rebootstrap(&mut sink, state).await?;
             }
 
             msg = stream.next() => {
@@ -582,10 +640,34 @@ async fn connect_and_serve(
                 }
             }
         }
-    };
+    }
+    // The sync worker is aborted by `_worker`'s Drop on every exit from here,
+    // including the `?` early-returns above.
+}
 
-    worker.abort();
-    result
+/// Report a raised re-bootstrap to the host, if one is raised.
+///
+/// Lowers the flag BEFORE sending. Clearing afterwards erased any raise that
+/// landed during the send itself, which is a live window: the proxy raises from
+/// its own task while this await is parked, so the 401 that arrived mid-send was
+/// dropped with no report and no way to ask again.
+///
+/// A failed send re-raises rather than swallowing, because the session is about
+/// to end and the pre-loop report on the next one is the only thing that would
+/// carry it.
+async fn report_rebootstrap<S>(sink: &mut S, state: &AgentState) -> Result<()>
+where
+    S: futures_util::SinkExt<Message> + Unpin,
+    <S as futures_util::Sink<Message>>::Error: std::error::Error + Send + Sync + 'static,
+{
+    if !state.rebootstrap.take() {
+        return Ok(());
+    }
+    if let Err(e) = send_frame(sink, &rebootstrap_status(state)).await {
+        state.rebootstrap.raise();
+        return Err(e);
+    }
+    Ok(())
 }
 
 /// The `needs_rebootstrap` status. There is no token-renewal endpoint; the
@@ -783,6 +865,8 @@ mod tests {
 
     #[test]
     fn host_sync_frame_deserializes_from_wire() {
+        // A host that predates the `service` field must still parse, or a CLI
+        // upgrade becomes mandatory for every device in the field.
         let wire = r#"{"type":"sync","image":"my-app","tag":"dev","digest":"sha256:abc"}"#;
         let frame: HostFrame = serde_json::from_str(wire).expect("sync frame parses");
         assert_eq!(
@@ -791,6 +875,25 @@ mod tests {
                 image: "my-app".to_string(),
                 tag: "dev".to_string(),
                 digest: "sha256:abc".to_string(),
+                service: None,
+            }
+        );
+    }
+
+    #[test]
+    fn host_sync_frame_carries_the_owning_service() {
+        // The field that makes the sync actually take effect: without it the
+        // agent restarts the container, which stays bound to its create-time
+        // image id, so every shipped device no-ops.
+        let wire = r#"{"type":"sync","image":"my-app","tag":"dev","digest":"sha256:abc","service":"app.service"}"#;
+        let frame: HostFrame = serde_json::from_str(wire).expect("sync frame parses");
+        assert_eq!(
+            frame,
+            HostFrame::Sync {
+                image: "my-app".to_string(),
+                tag: "dev".to_string(),
+                digest: "sha256:abc".to_string(),
+                service: Some("app.service".to_string()),
             }
         );
     }
@@ -989,7 +1092,7 @@ mod tests {
         // it. Nothing could lower it either, so one transient 401 latched for
         // the process lifetime.
         let flag = proxy::ReBootstrap::default();
-        assert!(!flag.is_raised());
+        assert!(!flag.is_raised(), "a fresh flag must start lowered");
 
         let waiter = {
             let flag = flag.clone();
@@ -1004,28 +1107,150 @@ mod tests {
             .expect("raise must wake a mid-session waiter")
             .expect("waiter task");
 
-        assert!(flag.is_raised());
-        flag.clear();
+        assert!(flag.take(), "take must report that the flag was raised");
         assert!(
-            !flag.is_raised(),
+            !flag.take(),
             "the flag must lower once reported, or every later session re-announces it"
         );
     }
 
-    #[test]
-    fn a_failed_sync_produces_a_status_frame_for_the_host() {
+    /// An engine whose pull always fails, so `handle_host_frame` takes its
+    /// reporting branch without execing anything.
+    struct FailingEngine;
+
+    impl sync::Engine for FailingEngine {
+        async fn pull(&self, _reference: &str) -> Result<()> {
+            anyhow::bail!("simulated pull failure")
+        }
+        async fn tag(&self, _source: &str, _target: &str) -> Result<()> {
+            Ok(())
+        }
+        async fn restart(&self, _container: &str, _service: Option<&str>) -> Result<()> {
+            Ok(())
+        }
+        async fn running_image_id(&self, _container: &str) -> Result<Option<String>> {
+            Ok(None)
+        }
+        async fn resolve_image_id(&self, _reference: &str) -> Result<Option<String>> {
+            Ok(None)
+        }
+    }
+
+    #[tokio::test]
+    async fn the_session_guard_aborts_its_worker_on_drop() {
+        // The abort used to sit after the serve loop, so the three `?` sites
+        // inside it - the two send_frame calls and the stream read - returned
+        // without it. The read one is the COMMON session end (tungstenite yields
+        // Some(Err(..)) on a reset), leaking one parked worker per errored
+        // session, and letting the old worker's pull/tag/restart race the new
+        // session's on `running_digest` and the pointer file.
+        //
+        // The guard makes that unreachable by construction: every exit from
+        // `connect_and_serve`, including a `?`, drops it.
+        // A worker that never finishes on its own, so the only way this await
+        // resolves is the guard cancelling it.
+        let handle = tokio::spawn(std::future::pending::<()>());
+        let guard = AbortOnDrop(handle.abort_handle());
+
+        drop(guard);
+
+        let err = handle
+            .await
+            .expect_err("dropping the guard must abort the worker, not leave it parked");
+        assert!(
+            err.is_cancelled(),
+            "the worker must end cancelled rather than panicking: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failed_sync_produces_a_status_frame_for_the_host() {
         // A swallowed sync failure left the host with no Status, no Progress and
         // no updated Hello - Hello is re-sent only on reconnect - so it went on
         // showing the device synced at the old digest with no error surface.
+        //
+        // This drives `handle_host_frame` itself. The previous version built a
+        // DeviceFrame::Status inside the test body and asserted serde_json
+        // emitted its fields, so it covered serde and nothing else: reverting
+        // the whole reporting path back to a bare `warn!` returning None left it
+        // green.
         let state = AgentState::new("dev-01".to_string());
-        let frame = DeviceFrame::Status(Status {
-            device_id: state.device_id.clone(),
-            state: "sync_failed".to_string(),
-            detail: Some("my-app:dev @ sha256:new: boom".to_string()),
-        });
-        let json = serde_json::to_string(&frame).expect("serializes");
-        assert!(json.contains("sync_failed"), "{json}");
-        assert!(json.contains("dev-01"), "{json}");
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = sync::SyncConfig {
+            loopback_port: 15151,
+            container: "avocado-dev".to_string(),
+            writable_root: tmp.path().to_path_buf(),
+        };
+        let frame = HostFrame::Sync {
+            image: "my-app".to_string(),
+            tag: "dev".to_string(),
+            digest: "sha256:new".to_string(),
+            service: None,
+        };
+
+        let report = handle_host_frame(&FailingEngine, &cfg, frame, &state)
+            .await
+            .expect("a failed sync must report a Status frame to the host");
+
+        match report {
+            DeviceFrame::Status(status) => {
+                assert_eq!(status.device_id, "dev-01");
+                assert_eq!(status.state, "sync_failed");
+                let detail = status.detail.expect("the failure must carry a detail");
+                assert!(
+                    detail.contains("my-app:dev") && detail.contains("sha256:new"),
+                    "the detail must name the image that failed: {detail}"
+                );
+            }
+            other => panic!("expected a Status frame, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_successful_sync_reports_nothing() {
+        // The mirror: `handle_host_frame` must stay silent on success, or every
+        // sync would emit a spurious Status. Without this the test above passes
+        // for an implementation that reports unconditionally.
+        struct OkEngine;
+        impl sync::Engine for OkEngine {
+            async fn pull(&self, _reference: &str) -> Result<()> {
+                Ok(())
+            }
+            async fn tag(&self, _source: &str, _target: &str) -> Result<()> {
+                Ok(())
+            }
+            async fn restart(&self, _container: &str, _service: Option<&str>) -> Result<()> {
+                Ok(())
+            }
+            async fn running_image_id(&self, _container: &str) -> Result<Option<String>> {
+                Ok(Some("sha256:same".to_string()))
+            }
+            async fn resolve_image_id(&self, _reference: &str) -> Result<Option<String>> {
+                Ok(Some("sha256:same".to_string()))
+            }
+        }
+
+        let state = AgentState::new("dev-01".to_string());
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = sync::SyncConfig {
+            loopback_port: 15151,
+            container: "avocado-dev".to_string(),
+            writable_root: tmp.path().to_path_buf(),
+        };
+        let frame = HostFrame::Sync {
+            image: "my-app".to_string(),
+            tag: "dev".to_string(),
+            digest: "sha256:new".to_string(),
+            service: None,
+        };
+
+        assert!(
+            handle_host_frame(&OkEngine, &cfg, frame, &state)
+                .await
+                .is_none(),
+            "a successful sync must not report a Status frame"
+        );
+        assert_eq!(*state.running_digest.lock().unwrap(), "sha256:new");
     }
 
     #[test]
