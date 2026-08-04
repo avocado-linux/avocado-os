@@ -1154,9 +1154,12 @@ mod tests {
 
         drop(guard);
 
-        let err = handle
+        // Bounded: without the abort this await never resolves, and a hung test
+        // reads as CI infrastructure trouble rather than the regression it is.
+        let err = tokio::time::timeout(Duration::from_secs(5), handle)
             .await
-            .expect_err("dropping the guard must abort the worker, not leave it parked");
+            .expect("dropping the guard must abort the worker, not leave it parked")
+            .expect_err("an aborted worker must not report success");
         assert!(
             err.is_cancelled(),
             "the worker must end cancelled rather than panicking: {err}"
