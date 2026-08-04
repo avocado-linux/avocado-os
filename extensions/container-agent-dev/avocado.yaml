@@ -29,12 +29,21 @@ extensions:
     overlay: overlay
 
     enable_services:
+      - container-agent-dev.path
       - container-agent-dev.service
 
     on_merge:
-      - systemctl start --no-block container-agent-dev.service
+      # Start the PATH unit, not the service. The service carries
+      # ConditionPathExists on the bootstrap, which does not exist at merge
+      # time, so starting it here was skipped and nothing ever re-triggered it:
+      # `avocado container dev up` delivers the bootstrap over SSH and issues no
+      # systemctl call anywhere in its container-dev paths. The path unit has no
+      # such condition, so it starts here and activates the service the moment
+      # the bootstrap lands.
+      - systemctl start --no-block container-agent-dev.path
 
     on_unmerge:
+      - systemctl stop container-agent-dev.path
       - systemctl stop container-agent-dev.service
 
     packages:

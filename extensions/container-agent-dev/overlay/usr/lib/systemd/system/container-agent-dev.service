@@ -3,10 +3,39 @@ Description=Avocado Container Dev Mode device agent (development only)
 Documentation=https://github.com/avocadolinux/avocado-os
 After=network.target
 Wants=network.target
+# The agent execs the docker CLI as its own child on every sync, so a daemon
+# that has not started yet is a startup ordering problem, not a runtime one.
+# Without this the first Sync after a boot raced dockerd and failed at
+# `Command::new("docker").status()`; the swallowed-error path reduced that to a
+# warn!, `running_digest` kept its old value, and the host went on seeing a
+# connected device whose syncs no-oped. `Wants=` rather than `Requires=`: a
+# device that is not running docker at all should still start the agent and fail
+# loudly on the engine preflight, which names the missing binary.
+After=docker.service
+Wants=docker.service
 # Stay inert until `avocado container dev up` delivers the bootstrap (bulk
 # endpoint, read/control token, pinned CA) to the writable partition (design
 # D5/5.2). No bootstrap means no session to join, so there is nothing to do.
 ConditionPathExists=/var/lib/avocado/container-dev/bootstrap.json
+# The default StartLimitIntervalSec=10s / StartLimitBurst=5 cannot trip at
+# RestartSec=5: two starts per 10s window is well under five, so a unit that
+# fails instantly - a truncated or malformed bootstrap.json makes
+# `load_bootstrap` return Err and the process exit in milliseconds - sat in
+# `activating (auto-restart)` forever. `systemctl is-failed` answers `activating`
+# rather than `failed`, no OnFailure= hook ever runs, and the only evidence is
+# one journal line every 5s.
+#
+# Widening the window is what makes the limit reachable: five starts inside five
+# minutes at 5s apart trips in roughly 25 seconds, so a genuinely broken
+# bootstrap lands the unit in `failed` where it can be seen and hooked, while a
+# transient failure (the host briefly unreachable at boot) still gets its
+# retries.
+#
+# Both keys live in [Unit], not [Service] - systemd moved them in v229 and
+# silently ignores them under [Service], which `systemd-analyze verify` reports
+# as "Unknown key ... ignoring".
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 # StateDirectory replaces the former `ExecStartPre=/bin/mkdir -p`, which could

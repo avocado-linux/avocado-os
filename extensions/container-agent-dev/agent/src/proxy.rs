@@ -142,18 +142,43 @@ const ACCEPT_ERROR_LIMIT: u32 = 32;
 /// after a host re-`up`). The agent surfaces it (task 6.1's WS loop emits a
 /// `Status` frame); it is never a silent retry loop, and there is no renewal
 /// endpoint — the token is refreshed only by a host re-`up` re-bootstrap.
+/// Carries a `Notify` as well as the flag, because a bare flag could not be
+/// delivered. The WS loop read `is_raised()` exactly once per session, BEFORE
+/// entering its frame loop - and the 401 that raises it happens during a pull,
+/// which is inside that loop. So the flag was set strictly after the only read
+/// that would have transmitted it, and with the sink otherwise idle the host was
+/// never told. There was also no way to lower it, so one transient 401 latched
+/// for the process lifetime.
 #[derive(Clone, Default)]
-pub(crate) struct ReBootstrap(Arc<AtomicBool>);
+pub(crate) struct ReBootstrap {
+    raised: Arc<AtomicBool>,
+    changed: Arc<tokio::sync::Notify>,
+}
 
 impl ReBootstrap {
-    /// Raise the flag. Idempotent.
+    /// Raise the flag and wake anyone waiting to report it. Idempotent in the
+    /// flag; the wake is what makes it reach the host mid-session.
     pub(crate) fn raise(&self) {
-        self.0.store(true, Ordering::SeqCst);
+        self.raised.store(true, Ordering::SeqCst);
+        self.changed.notify_waiters();
     }
 
     /// Whether a re-bootstrap has been requested.
     pub(crate) fn is_raised(&self) -> bool {
-        self.0.load(Ordering::SeqCst)
+        self.raised.load(Ordering::SeqCst)
+    }
+
+    /// Lower the flag once it has been reported to the host.
+    ///
+    /// Without this a single transient 401 kept every later session announcing
+    /// `needs_rebootstrap`, long after the token it referred to was replaced.
+    pub(crate) fn clear(&self) {
+        self.raised.store(false, Ordering::SeqCst);
+    }
+
+    /// Resolve when the flag is next raised.
+    pub(crate) async fn raised(&self) {
+        self.changed.notified().await;
     }
 }
 
@@ -212,6 +237,39 @@ impl HttpsUpstream {
     }
 }
 
+/// Ceiling on each pre-body upstream stage: TCP connect, TLS handshake, HTTP/1
+/// handshake, and the request/response head.
+///
+/// None of these had one. A laptop that sleeps or drops off Wi-Fi mid-pull leaves
+/// a half-open connection with no RST; no SO_KEEPALIVE is set anywhere, so the
+/// 7200s tcp_keepalive_time never applies, and after `send_request` the agent is
+/// purely READING, so there are no outbound retransmits for tcp_retries2 to give
+/// up on. The read hung forever: `docker pull` waited on a loopback response that
+/// never arrived, `on_sync` never returned, and - before syncs moved off the read
+/// loop - the WS was never polled again either. systemd reported
+/// `active (running)` with the device completely dead and nothing logged.
+///
+/// Generous on purpose: this bounds a stall, not a slow link. Body streaming is
+/// deliberately NOT wrapped, because a multi-gigabyte layer over a slow link is
+/// legitimately long; the stages here are the ones that should complete in
+/// milliseconds on any working link.
+const UPSTREAM_STAGE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Run `fut`, failing with a named error if it does not finish in time.
+async fn with_stage_timeout<T>(
+    stage: &'static str,
+    fut: impl Future<Output = Result<T>>,
+) -> Result<T> {
+    match tokio::time::timeout(UPSTREAM_STAGE_TIMEOUT, fut).await {
+        Ok(result) => result,
+        Err(_) => anyhow::bail!(
+            "{stage} did not complete within {}s; the host is unreachable or the connection \
+             is half-open",
+            UPSTREAM_STAGE_TIMEOUT.as_secs()
+        ),
+    }
+}
+
 impl Upstream for HttpsUpstream {
     async fn fetch(
         &self,
@@ -219,19 +277,27 @@ impl Upstream for HttpsUpstream {
         path: String,
         range: Option<HeaderValue>,
     ) -> Result<UpstreamResponse> {
-        let tcp = TcpStream::connect(&self.authority)
-            .await
-            .with_context(|| format!("connecting to bulk listener {}", self.authority))?;
-        let tls = self
-            .connector
-            .connect(self.server_name.clone(), tcp)
-            .await
-            .context("bulk TLS handshake (pinned CA)")?;
+        let tcp = with_stage_timeout("connecting to the bulk listener", async {
+            TcpStream::connect(&self.authority)
+                .await
+                .with_context(|| format!("connecting to bulk listener {}", self.authority))
+        })
+        .await?;
+        let tls = with_stage_timeout("the bulk TLS handshake", async {
+            self.connector
+                .connect(self.server_name.clone(), tcp)
+                .await
+                .context("bulk TLS handshake (pinned CA)")
+        })
+        .await?;
 
         let io = TokioIo::new(tls);
-        let (mut sender, conn) = hyper::client::conn::http1::handshake(io)
-            .await
-            .context("bulk HTTP/1 handshake")?;
+        let (mut sender, conn) = with_stage_timeout("the bulk HTTP/1 handshake", async {
+            hyper::client::conn::http1::handshake(io)
+                .await
+                .context("bulk HTTP/1 handshake")
+        })
+        .await?;
         tokio::spawn(async move {
             if let Err(e) = conn.await {
                 warn!(error = %e, "bulk upstream connection closed with error");
@@ -250,10 +316,13 @@ impl Upstream for HttpsUpstream {
             .body(Empty::<Bytes>::new())
             .context("building upstream request")?;
 
-        let response = sender
-            .send_request(request)
-            .await
-            .context("sending upstream request")?;
+        let response = with_stage_timeout("the upstream request", async {
+            sender
+                .send_request(request)
+                .await
+                .context("sending upstream request")
+        })
+        .await?;
 
         let status = response.status();
         let headers = response.headers().clone();

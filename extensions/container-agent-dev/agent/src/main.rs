@@ -25,7 +25,7 @@ use anyhow::{Context, Result, bail, ensure};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
-use tokio::time::sleep;
+use tokio::time::{Instant, sleep};
 use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_tungstenite::client_async;
@@ -138,6 +138,19 @@ pub struct Bootstrap {
     pub ws_endpoint: String,
 }
 
+impl Bootstrap {
+    /// Whether this bootstrap and `other` carry the same session material.
+    ///
+    /// Only the fields a live session depends on: a token, endpoint or CA change
+    /// means the session in progress is finished, whatever else the file says.
+    fn same_session_as(&self, other: &Bootstrap) -> bool {
+        self.read_token == other.read_token
+            && self.bulk_endpoint == other.bulk_endpoint
+            && self.ws_endpoint == other.ws_endpoint
+            && self.ca_cert_pem == other.ca_cert_pem
+    }
+}
+
 /// Resolve the bootstrap path: `$AVOCADO_CONTAINER_DEV_BOOTSTRAP` or the default.
 fn bootstrap_path() -> PathBuf {
     std::env::var_os(BOOTSTRAP_PATH_ENV)
@@ -228,6 +241,25 @@ impl Default for Backoff {
     }
 }
 
+/// How long a session must last before it counts as evidence the link works.
+///
+/// The reset used to key on the handshake alone, which a broken host completes
+/// happily before dropping the connection - so the backoff never grew past its
+/// 1s base. Ten seconds is far longer than the accept-panic-drop cycle that
+/// motivated it and far shorter than any real session.
+const MIN_SESSION_FOR_RESET: Duration = Duration::from_secs(10);
+
+/// Whether a finished session is evidence the link works, and so whether the
+/// reconnect backoff may reset.
+///
+/// A function rather than an inline condition so the duration floor is
+/// assertable: `run()` needs a real host to exercise, and an inline test
+/// re-stating the same expression would pass with the floor removed - which is
+/// exactly how this shipped without one.
+fn session_proves_the_link_works(handshook: bool, session: Duration) -> bool {
+    handshook && session >= MIN_SESSION_FOR_RESET
+}
+
 // ---------------------------------------------------------------------------
 // Agent state.
 // ---------------------------------------------------------------------------
@@ -298,6 +330,28 @@ pub(crate) fn build_tls_config(ca_cert_pem: &str) -> Result<rustls::ClientConfig
     Ok(config)
 }
 
+/// Ceiling on each control-WS dial stage.
+///
+/// The serve loop itself is deliberately unbounded - a session is meant to stay
+/// open - but every stage of GETTING there should complete in milliseconds on a
+/// working link, and hanging in one means the reconnect loop never runs again.
+const WS_DIAL_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Run `fut`, failing with a named error if it does not finish in time.
+async fn with_dial_timeout<T>(
+    stage: &'static str,
+    fut: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+    match tokio::time::timeout(WS_DIAL_TIMEOUT, fut).await {
+        Ok(result) => result,
+        Err(_) => anyhow::bail!(
+            "{stage} did not complete within {}s; the host is unreachable or the connection \
+             is half-open",
+            WS_DIAL_TIMEOUT.as_secs()
+        ),
+    }
+}
+
 /// Split a `host:port` endpoint into its host component for SNI.
 pub(crate) fn endpoint_host(endpoint: &str) -> &str {
     endpoint
@@ -313,7 +367,7 @@ pub(crate) fn endpoint_host(endpoint: &str) -> &str {
 /// Handle one host frame. On a `Sync`, pull the new image through the loopback
 /// proxy, rewrite the active-image pointer on the writable partition, restart
 /// the container, and record the running digest (task 6.3, [`sync::on_sync`]).
-async fn handle_host_frame(frame: HostFrame, state: &AgentState) {
+async fn handle_host_frame(frame: HostFrame, state: &AgentState) -> Option<DeviceFrame> {
     match frame {
         HostFrame::Sync { image, tag, digest } => {
             info!(%image, %tag, %digest, "received sync; pulling + restarting");
@@ -322,11 +376,41 @@ async fn handle_host_frame(frame: HostFrame, state: &AgentState) {
             // in the fully-tested `sync::on_sync`.
             let engine = sync::CommandEngine::from_env();
             let cfg = sync::SyncConfig::from_env();
-            if let Err(e) = sync::on_sync(&engine, &cfg, &image, &tag, &digest, state).await {
-                warn!(error = %e, %image, %tag, %digest, "sync failed");
+            match sync::on_sync(&engine, &cfg, &image, &tag, &digest, state).await {
+                Ok(()) => None,
+                Err(e) => {
+                    // Report it, do not only log it. A swallowed failure left the
+                    // host with no Status, no Progress, and no updated Hello -
+                    // Hello is re-sent only on reconnect, which on a healthy link
+                    // may be hours - so it went on showing the device synced at
+                    // the old digest with no error surface anywhere.
+                    warn!(error = %e, %image, %tag, %digest, "sync failed");
+                    Some(DeviceFrame::Status(Status {
+                        device_id: state.device_id.clone(),
+                        state: "sync_failed".to_string(),
+                        detail: Some(format!("{image}:{tag} @ {digest}: {e:#}")),
+                    }))
+                }
             }
         }
     }
+}
+
+/// The device-to-host frames one session may emit, and how they reach the sink.
+///
+/// Syncs run on their own task rather than inline in the read loop, which is
+/// what lets the stream keep being polled while a pull is in flight. Inline,
+/// `handle_host_frame` awaited three unbounded subprocesses inside
+/// `while let Some(msg) = stream.next().await`, so nothing was read for the
+/// duration - and N saves during one slow pull queued N frames in the socket
+/// buffer, each getting its own full pull/tag/restart afterwards: N container
+/// restarts instead of one, N-1 onto an already-superseded digest.
+struct SessionChannels {
+    /// Latest-wins slot. A Sync that arrives while another is running replaces
+    /// any already-queued one, because only the newest digest is worth applying.
+    pending: Arc<Mutex<Option<HostFrame>>>,
+    /// Wakes the sync worker when `pending` is refilled.
+    work: Arc<tokio::sync::Notify>,
 }
 
 /// Dial the control WS, send `Hello`, and serve frames until the link closes.
@@ -335,7 +419,7 @@ async fn handle_host_frame(frame: HostFrame, state: &AgentState) {
 /// reset the backoff on a link that actually established.
 async fn connect_and_serve(
     bootstrap: &Bootstrap,
-    state: &AgentState,
+    state: &Arc<AgentState>,
     connected: &AtomicBool,
 ) -> Result<()> {
     ensure!(
@@ -346,16 +430,25 @@ async fn connect_and_serve(
     let tls_config = build_tls_config(&bootstrap.ca_cert_pem)?;
     let connector = TlsConnector::from(Arc::new(tls_config));
 
-    let tcp = TcpStream::connect(&bootstrap.ws_endpoint)
-        .await
-        .with_context(|| format!("connecting TCP to {}", bootstrap.ws_endpoint))?;
+    // Same reasoning as the proxy's stage timeouts: without one, a half-open
+    // connection to a sleeping host wedges the dial forever, and the reconnect
+    // loop that is supposed to recover never gets another turn.
+    let tcp = with_dial_timeout("the control WS TCP connect", async {
+        TcpStream::connect(&bootstrap.ws_endpoint)
+            .await
+            .with_context(|| format!("connecting TCP to {}", bootstrap.ws_endpoint))
+    })
+    .await?;
 
     let host = endpoint_host(&bootstrap.ws_endpoint).to_string();
     let server_name = ServerName::try_from(host).context("invalid TLS server name")?;
-    let tls = connector
-        .connect(server_name, tcp)
-        .await
-        .context("TLS handshake to control WS")?;
+    let tls = with_dial_timeout("the control WS TLS handshake", async {
+        connector
+            .connect(server_name, tcp)
+            .await
+            .context("TLS handshake to control WS")
+    })
+    .await?;
 
     let mut request = format!("wss://{}/", bootstrap.ws_endpoint)
         .into_client_request()
@@ -366,9 +459,12 @@ async fn connect_and_serve(
             .context("building Authorization header")?,
     );
 
-    let (ws, _response) = client_async(request, tls)
-        .await
-        .context("WebSocket upgrade to control WS")?;
+    let (ws, _response) = with_dial_timeout("the control WS upgrade", async {
+        client_async(request, tls)
+            .await
+            .context("WebSocket upgrade to control WS")
+    })
+    .await?;
     connected.store(true, Ordering::SeqCst);
     info!(endpoint = %bootstrap.ws_endpoint, "control WS connected");
 
@@ -389,61 +485,194 @@ async fn connect_and_serve(
     .await
     .context("sending Hello")?;
 
-    // Surface a pending re-bootstrap (raised by the loopback proxy on a bulk
-    // 401) to the host. There is no token-renewal endpoint; the operator must
-    // re-run `avocado container dev up` to mint a fresh token.
+    // The sync worker and the frames it produces. Everything the device sends
+    // after `Hello` arrives on `outbound` and is written by the select loop
+    // below, so the sink has exactly one writer.
+    let channels = SessionChannels {
+        pending: Arc::new(Mutex::new(None)),
+        work: Arc::new(tokio::sync::Notify::new()),
+    };
+    let (outbound_tx, mut outbound) = tokio::sync::mpsc::channel::<DeviceFrame>(8);
+
+    let worker = {
+        let pending = Arc::clone(&channels.pending);
+        let work = Arc::clone(&channels.work);
+        let state = Arc::clone(state);
+        let outbound_tx = outbound_tx.clone();
+        tokio::spawn(async move {
+            loop {
+                work.notified().await;
+                // Drain the slot, not a queue: whatever is there is the newest
+                // Sync, and any earlier one it replaced is already superseded.
+                let Some(frame) = pending.lock().expect("pending mutex poisoned").take() else {
+                    continue;
+                };
+                if let Some(report) = handle_host_frame(frame, &state).await
+                    && outbound_tx.send(report).await.is_err()
+                {
+                    // The session ended while the sync ran; the next Hello
+                    // carries the running digest, so nothing is lost.
+                    return;
+                }
+            }
+        })
+    };
+    // Dropping our own copy means `outbound` closes when the worker does.
+    drop(outbound_tx);
+
+    // A re-bootstrap raised BEFORE this session started still needs announcing;
+    // one raised during it arrives through `rebootstrap.raised()` below.
     if state.rebootstrap.is_raised() {
-        let status = DeviceFrame::Status(Status {
-            device_id: state.device_id.clone(),
-            state: "needs_rebootstrap".to_string(),
-            detail: Some(
-                "bulk pull rejected the read/control token; re-run `avocado container dev up`"
-                    .to_string(),
-            ),
-        });
-        sink.send(Message::Text(
-            serde_json::to_string(&status)
-                .context("serializing re-bootstrap status")?
-                .into(),
-        ))
-        .await
-        .context("sending re-bootstrap status")?;
+        send_frame(&mut sink, &rebootstrap_status(state)).await?;
+        state.rebootstrap.clear();
     }
 
-    while let Some(msg) = stream.next().await {
-        let msg = msg.context("reading control WS frame")?;
-        match msg {
-            Message::Text(text) => match serde_json::from_str::<HostFrame>(text.as_str()) {
-                Ok(frame) => handle_host_frame(frame, state).await,
-                Err(e) => warn!(error = %e, raw = %text, "ignoring malformed host frame"),
-            },
-            Message::Close(_) => {
-                info!("control WS closed by host");
-                break;
+    let result = loop {
+        tokio::select! {
+            // Biased so an outbound report is written before another host frame
+            // is accepted; without it a busy host could starve the reports the
+            // whole restructure exists to deliver.
+            biased;
+
+            Some(frame) = outbound.recv() => {
+                send_frame(&mut sink, &frame).await?;
             }
-            Message::Ping(_) | Message::Pong(_) => {}
-            Message::Binary(_) | Message::Frame(_) => {
-                warn!("ignoring unexpected non-text control frame");
+
+            // Raised by the loopback proxy on a bulk 401, which happens during a
+            // pull - inside this loop, not before it. Reading the flag once up
+            // front meant it was always set strictly after the only read that
+            // would have transmitted it.
+            () = state.rebootstrap.raised() => {
+                send_frame(&mut sink, &rebootstrap_status(state)).await?;
+                // Lower it once reported, or one transient 401 latches for the
+                // process lifetime.
+                state.rebootstrap.clear();
+            }
+
+            msg = stream.next() => {
+                let Some(msg) = msg else { break Ok(()) };
+                let msg = msg.context("reading control WS frame")?;
+                match msg {
+                    Message::Text(text) => match serde_json::from_str::<HostFrame>(text.as_str()) {
+                        Ok(frame) => {
+                            // Latest wins. Replacing a queued Sync is the point:
+                            // applying a superseded digest costs a container
+                            // restart and achieves nothing.
+                            let replaced = channels
+                                .pending
+                                .lock()
+                                .expect("pending mutex poisoned")
+                                .replace(frame)
+                                .is_some();
+                            if replaced {
+                                info!("coalesced a superseded sync still waiting to run");
+                            }
+                            channels.work.notify_one();
+                        }
+                        Err(e) => warn!(error = %e, raw = %text, "ignoring malformed host frame"),
+                    },
+                    Message::Close(_) => {
+                        info!("control WS closed by host");
+                        break Ok(());
+                    }
+                    Message::Ping(_) | Message::Pong(_) => {}
+                    Message::Binary(_) | Message::Frame(_) => {
+                        warn!("ignoring unexpected non-text control frame");
+                    }
+                }
             }
         }
-    }
+    };
 
+    worker.abort();
+    result
+}
+
+/// The `needs_rebootstrap` status. There is no token-renewal endpoint; the
+/// operator must re-run `avocado container dev up` to mint a fresh token.
+fn rebootstrap_status(state: &AgentState) -> DeviceFrame {
+    DeviceFrame::Status(Status {
+        device_id: state.device_id.clone(),
+        state: "needs_rebootstrap".to_string(),
+        detail: Some(
+            "bulk pull rejected the read/control token; re-run `avocado container dev up`"
+                .to_string(),
+        ),
+    })
+}
+
+/// Serialize and write one device frame to the control WS sink.
+async fn send_frame<S>(sink: &mut S, frame: &DeviceFrame) -> Result<()>
+where
+    S: futures_util::SinkExt<Message> + Unpin,
+    <S as futures_util::Sink<Message>>::Error: std::error::Error + Send + Sync + 'static,
+{
+    sink.send(Message::Text(
+        serde_json::to_string(frame)
+            .context("serializing device frame")?
+            .into(),
+    ))
+    .await
+    .context("sending device frame")?;
     Ok(())
 }
 
 /// The reconnect loop: connect, serve, and on any close/error back off and
 /// redial, re-sending `Hello` with the current running digest.
+/// Returns `Ok(())` when the bootstrap on disk stops matching the one this
+/// process started with, so `main` exits and the supervisor rebuilds against the
+/// new material. Reloading in place is not enough: the read token is also baked
+/// into the loopback proxy's upstream (`HttpsUpstream::from_bootstrap`), and a
+/// token the proxy still sends is exactly what 401s the bulk leg. Exiting
+/// re-reads both from one code path.
+///
+/// Without this the documented recovery could not work. Re-running `avocado
+/// container dev up` mints a fresh token and overwrites bootstrap.json; the
+/// agent kept the old one, so bulk pulls 401'd, the WS upgrade was rejected by
+/// the same host-side auth check, `connect_and_serve` errored on every redial,
+/// and this loop spun forever. Nothing exited, so `Restart=always` never fired,
+/// and the only fix was a manual unit restart that no message mentioned.
 async fn run(bootstrap: Bootstrap, state: Arc<AgentState>) -> Result<()> {
+    let path = bootstrap_path();
     let mut backoff = Backoff::default();
     loop {
         let connected = AtomicBool::new(false);
+        let started = Instant::now();
         match connect_and_serve(&bootstrap, &state, &connected).await {
             Ok(()) => info!("control WS session ended; reconnecting"),
             Err(e) => warn!(error = %e, "control WS session failed; reconnecting"),
         }
-        if connected.load(Ordering::SeqCst) {
+
+        // A session that completed its handshake and then ended immediately is
+        // not evidence the link works. `connected` flips the moment
+        // `client_async` returns, so without a duration floor EVERY
+        // handshake-completing session reset the backoff and the 30s cap was
+        // unreachable: a host whose `desired` mutex is poisoned accepts the
+        // upgrade, panics on the first Hello and drops the socket, which pinned
+        // an embedded device to a ~1 Hz pinned-CA TLS handshake loop against a
+        // host that would never work again.
+        if session_proves_the_link_works(connected.load(Ordering::SeqCst), started.elapsed()) {
             backoff.reset();
         }
+
+        // Adopt new session material by exiting, not by continuing.
+        match load_bootstrap(&path) {
+            Ok(current) if !current.same_session_as(&bootstrap) => {
+                info!(
+                    bootstrap = %path.display(),
+                    "bootstrap changed on disk; exiting so the supervisor rebuilds this \
+                     process against the new session material"
+                );
+                return Ok(());
+            }
+            Ok(_) => {}
+            // Unreadable or malformed: keep the session we have rather than
+            // exiting on a file caught mid-delivery.
+            Err(e) => {
+                warn!(error = %e, "could not re-read the bootstrap; keeping the current one")
+            }
+        }
+
         let delay = backoff.next_delay();
         info!(delay_secs = delay.as_secs(), "backing off before reconnect");
         sleep(delay).await;
@@ -479,21 +708,34 @@ async fn main() -> Result<()> {
     // `CommandEngine::from_env` is constructed per `Sync` frame, so warning
     // there logged nothing at `systemctl start` (when the operator's override is
     // new information) and then repeated the warning before every pull failure.
-    sync::warn_if_unsupported_engine(&sync::engine_binary_from_env());
+    let engine_binary = sync::engine_binary_from_env();
+    sync::warn_if_unsupported_engine(&engine_binary);
+    // Refuse to start without the engine, rather than staying `active (running)`
+    // and no-oping every sync. See `ensure_engine_available`.
+    sync::ensure_engine_available(&engine_binary)?;
 
-    let proxy_task = match proxy::HttpsUpstream::from_bootstrap(&bootstrap) {
-        Ok(upstream) => {
-            let port = loopback_port();
-            let upstream = Arc::new(upstream);
-            let rebootstrap = state.rebootstrap.clone();
-            Some(tokio::spawn(async move {
-                proxy::serve_loopback(port, upstream, rebootstrap).await
-            }))
-        }
-        Err(e) => {
-            warn!(error = %e, "loopback registry proxy not started");
-            None
-        }
+    // Failing to BUILD the upstream is as fatal as losing it later.
+    //
+    // This used to `warn!` once and carry on with `None`, three lines above a
+    // comment arguing at length that losing the proxy must end the process
+    // "because without it no pull can succeed". Two tests locked in "losing the
+    // proxy is fatal"; never having it was uncovered. A truncated `ca_cert_pem`
+    // from a partial SSH write, or a bulk endpoint host `ServerName::try_from`
+    // rejects, left the agent `active (running)` with port 15151 closed and
+    // every Sync failing connection-refused - the exact state that comment was
+    // written to prevent.
+    //
+    // The stated justification, that a re-bootstrap could fix it, was
+    // self-defeating twice over: `raise()` is only reached from `proxy_read`, so
+    // with no proxy the needs_rebootstrap frame can never be sent, and the
+    // bootstrap was never re-read anyway.
+    let upstream = proxy::HttpsUpstream::from_bootstrap(&bootstrap)
+        .context("building the loopback proxy's upstream; without it no pull can succeed")?;
+    let proxy_task = {
+        let port = loopback_port();
+        let upstream = Arc::new(upstream);
+        let rebootstrap = state.rebootstrap.clone();
+        tokio::spawn(async move { proxy::serve_loopback(port, upstream, rebootstrap).await })
     };
 
     // The proxy's bounded accept-retry only reaches `Restart=always` if losing
@@ -507,13 +749,7 @@ async fn main() -> Result<()> {
     // Select the two so whichever ends first ends `main`. The proxy is not
     // optional: without it no pull can succeed, so exiting and letting the
     // supervisor rebuild the process is the honest response to losing it.
-    match proxy_task {
-        Some(proxy_task) => end_when_either_ends(proxy_task, run(bootstrap, state)).await,
-        // No proxy to watch: the upstream could not even be built, which is
-        // already warned above. Serving the control WS alone is still better
-        // than exiting, since a re-bootstrap can fix it.
-        None => run(bootstrap, state).await,
-    }
+    end_when_either_ends(proxy_task, run(bootstrap, state)).await
 }
 
 /// Return as soon as EITHER the proxy task or the control-WS loop ends.
@@ -676,6 +912,120 @@ mod tests {
         backoff.reset();
         assert_eq!(backoff.next_delay(), Duration::from_secs(1));
         assert_eq!(backoff.next_delay(), Duration::from_secs(2));
+    }
+
+    #[test]
+    fn a_handshake_that_immediately_drops_does_not_reset_the_backoff() {
+        // `connected` flips the moment `client_async` returns, so a host that
+        // accepts the upgrade and then panics on the first Hello - a poisoned
+        // `desired` mutex does exactly that - completed a "successful"
+        // connection every time. Without a duration floor the backoff reset on
+        // each one, the 30s cap was unreachable, and the device sat in a ~1 Hz
+        // pinned-CA TLS handshake loop indefinitely.
+        assert!(
+            !session_proves_the_link_works(true, Duration::from_millis(5)),
+            "a 5ms session must not count as a working link"
+        );
+        assert!(
+            !session_proves_the_link_works(true, MIN_SESSION_FOR_RESET - Duration::from_millis(1)),
+            "just under the floor must not reset"
+        );
+        assert!(
+            session_proves_the_link_works(true, MIN_SESSION_FOR_RESET),
+            "a session at the floor is evidence the link works"
+        );
+        assert!(
+            !session_proves_the_link_works(false, Duration::from_secs(600)),
+            "a dial that never handshook must not reset however long it took"
+        );
+    }
+
+    #[test]
+    fn a_changed_bootstrap_ends_the_process_so_the_new_token_is_adopted() {
+        // Re-running `avocado container dev up` mints a fresh token and
+        // overwrites bootstrap.json. The agent kept the old one: bulk pulls
+        // 401'd, the WS upgrade was rejected by the same host-side auth check,
+        // and the reconnect loop spun forever without ever exiting - so
+        // Restart=always never fired and the documented recovery could not work.
+        let base = Bootstrap {
+            bulk_endpoint: "10.0.2.2:15150".to_string(),
+            read_token: "T1".to_string(),
+            ca_cert_pem: "PEM".to_string(),
+            ws_endpoint: "10.0.2.2:15152".to_string(),
+        };
+
+        assert!(base.same_session_as(&base.clone()));
+
+        for changed in [
+            Bootstrap {
+                read_token: "T2".to_string(),
+                ..base.clone()
+            },
+            Bootstrap {
+                ca_cert_pem: "OTHER".to_string(),
+                ..base.clone()
+            },
+            Bootstrap {
+                bulk_endpoint: "10.0.2.2:15999".to_string(),
+                ..base.clone()
+            },
+            Bootstrap {
+                ws_endpoint: "10.0.2.2:15999".to_string(),
+                ..base.clone()
+            },
+        ] {
+            assert!(
+                !base.same_session_as(&changed),
+                "a changed {changed:?} must end the session"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_raised_rebootstrap_wakes_a_waiter_and_clears_once_reported() {
+        // The flag was read exactly once per session, BEFORE the frame loop -
+        // and the 401 that raises it happens during a pull, inside that loop. So
+        // it was always set strictly after the only read that would have sent
+        // it. Nothing could lower it either, so one transient 401 latched for
+        // the process lifetime.
+        let flag = proxy::ReBootstrap::default();
+        assert!(!flag.is_raised());
+
+        let waiter = {
+            let flag = flag.clone();
+            tokio::spawn(async move { flag.raised().await })
+        };
+        // Let the waiter reach `notified()` before raising.
+        tokio::task::yield_now().await;
+        flag.raise();
+
+        tokio::time::timeout(Duration::from_secs(5), waiter)
+            .await
+            .expect("raise must wake a mid-session waiter")
+            .expect("waiter task");
+
+        assert!(flag.is_raised());
+        flag.clear();
+        assert!(
+            !flag.is_raised(),
+            "the flag must lower once reported, or every later session re-announces it"
+        );
+    }
+
+    #[test]
+    fn a_failed_sync_produces_a_status_frame_for_the_host() {
+        // A swallowed sync failure left the host with no Status, no Progress and
+        // no updated Hello - Hello is re-sent only on reconnect - so it went on
+        // showing the device synced at the old digest with no error surface.
+        let state = AgentState::new("dev-01".to_string());
+        let frame = DeviceFrame::Status(Status {
+            device_id: state.device_id.clone(),
+            state: "sync_failed".to_string(),
+            detail: Some("my-app:dev @ sha256:new: boom".to_string()),
+        });
+        let json = serde_json::to_string(&frame).expect("serializes");
+        assert!(json.contains("sync_failed"), "{json}");
+        assert!(json.contains("dev-01"), "{json}");
     }
 
     #[test]
