@@ -20,15 +20,19 @@ extensions:
 
       REQUIRES the `docker` extension in the same runtime. The agent execs the
       engine CLI as its own child on every sync, so without it there is nothing
-      it can do. This cannot be declared here - the extension schema has no
-      inter-extension dependency key (`dependencies:` is an alias for
-      `packages:`, i.e. RPM packages), and pulling `docker: '*'` in directly
-      would install the binary without `docker.service` or the bridge kernel
-      modules the docker extension also enables, turning a loud startup failure
-      into a silent connect failure on every sync. The runtime that composes the
-      image is the only place the pairing can be expressed, so it is stated here
-      for whoever writes it; the agent's own startup preflight is what makes a
-      missing engine fail loudly rather than silently.
+      it can do. Declaring it here would not enforce it: the schema does accept
+      an inter-extension dependency as `packages: {<name>: {extensions: <ext>}}`,
+      but avocado-cli only parses and logs those - `ext/install.rs` prints
+      "should be installed via main install command" and installs nothing,
+      deliberately, to avoid circular dependencies. A declaration would read
+      like a guarantee and deliver none, which is the failure shape this
+      extension already had once. Pulling `docker: '*'` in as a plain package is
+      worse: it installs the binary without `docker.service` or the bridge
+      kernel modules the docker extension also enables, turning a loud startup
+      failure into a silent connect failure on every sync. So the pairing is
+      stated here for whoever composes the runtime, and the agent's own startup
+      preflight is what actually makes a missing engine fail loudly. Declare it
+      once avocado-cli installs extension dependencies rather than logging them.
     license: Apache-2.0
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
