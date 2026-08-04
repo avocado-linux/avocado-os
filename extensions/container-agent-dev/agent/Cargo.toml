@@ -8,6 +8,12 @@ name = "avocado-container-agent-dev"
 path = "src/main.rs"
 
 [dependencies]
+# `sync` is used directly (`Notify` for the sync-worker wakeup and the
+# re-bootstrap signal, `mpsc` for the outbound frame channel). It builds today
+# only because hyper 1.x depends on tokio with `sync` enabled and cargo unifies
+# features - `cargo tree -e features -i tokio` shows it sourced from hyper, not
+# from here. A hyper bump that drops that dependency would break this crate with
+# no local change, so the feature it actually uses is declared.
 tokio = { version = "1", features = [
     "rt-multi-thread",
     "macros",
@@ -15,6 +21,7 @@ tokio = { version = "1", features = [
     "time",
     "io-util",
     "process",
+    "sync",
 ] }
 # WS client only. We deliberately DO NOT enable tokio-tungstenite's
 # `rustls-tls-*` features: those pull `tokio-rustls` with its default features,

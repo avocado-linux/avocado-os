@@ -30,6 +30,7 @@
 
 use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -55,14 +56,22 @@ const CONTAINER_ENV: &str = "AVOCADO_CONTAINER_DEV_CONTAINER";
 /// Env var overriding the writable state root (used by tests and staging).
 const STATE_ROOT_ENV: &str = "AVOCADO_CONTAINER_DEV_STATE_ROOT";
 /// Env var naming the systemd unit that OWNS the container, restarted instead of
-/// the container itself when set.
+/// the container itself when set. A per-device override; the normal source is
+/// the `Sync` frame's `service`, which the host fills from the project's own
+/// `container_dev.images[].service`.
 ///
 /// `<engine> restart <container>` re-executes the container's existing config,
 /// which pins the image by ID at create time - so a freshly pulled image for the
 /// same tag is ignored and the sync silently no-ops while reporting success. The
 /// unit that launched the container re-runs `<engine> run` on restart, which
-/// re-resolves the tag and therefore adopts the new image. This mirrors the
-/// `service:` field each entry under `container_dev.images` already declares.
+/// re-resolves the tag and therefore adopts the new image.
+///
+/// Nothing set this on a shipped device: the unit exports only `RUST_LOG` and
+/// `AVOCADO_CONTAINER_DEV_ENGINE`, and the agent had no other way to learn a
+/// unit name, so every installation took the container branch and every sync
+/// no-opped. The `service:` field the host already parses is the answer, and it
+/// now rides the frame rather than depending on an operator setting this by
+/// hand.
 const SERVICE_ENV: &str = "AVOCADO_CONTAINER_DEV_SERVICE";
 
 // ---------------------------------------------------------------------------
@@ -117,7 +126,17 @@ pub(crate) trait Engine: Send + Sync + 'static {
     fn pull(&self, reference: &str) -> impl Future<Output = Result<()>> + Send;
     /// Point `target` (the ref the service names) at `source` (what we just pulled).
     fn tag(&self, source: &str, target: &str) -> impl Future<Output = Result<()>> + Send;
-    fn restart(&self, container: &str) -> impl Future<Output = Result<()>> + Send;
+    /// Restart whatever owns the image so the pulled build takes effect.
+    ///
+    /// `service` is the systemd unit the HOST says owns this image (the
+    /// `service:` field on the matching `container_dev.images` entry, carried on
+    /// the `Sync` frame). It is the only input that makes the default
+    /// installation work: see [`SERVICE_ENV`].
+    fn restart(
+        &self,
+        container: &str,
+        service: Option<&str>,
+    ) -> impl Future<Output = Result<()>> + Send;
     /// The image ID `container` is currently running, or `None` when the
     /// container does not exist.
     ///
@@ -265,6 +284,21 @@ pub(crate) fn service_from_env() -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+/// Which systemd unit to restart, given the frame's `service` and the env
+/// override. `None` keeps the container-restart path.
+///
+/// Split out so the precedence is testable without mutating process env: the
+/// frame wins because the host reads it from the project's own
+/// `container_dev.images[].service`, and a blank or whitespace-only value on the
+/// wire is treated as absent rather than as a unit named "".
+fn restart_unit(frame_service: Option<&str>, env_service: Option<String>) -> Option<String> {
+    frame_service
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
+        .or(env_service)
+}
+
 impl Engine for CommandEngine {
     async fn pull(&self, reference: &str) -> Result<()> {
         run_engine(&self.binary, &["pull", reference]).await
@@ -274,12 +308,15 @@ impl Engine for CommandEngine {
         run_engine(&self.binary, &["tag", source, target]).await
     }
 
-    /// Restart the owning systemd unit when one is configured, else the container.
+    /// Restart the owning systemd unit when one is known, else the container.
     ///
-    /// See [`SERVICE_ENV`]: restarting the container re-executes its pinned image
-    /// ID, so the pulled image would never actually run.
-    async fn restart(&self, container: &str) -> Result<()> {
-        match service_from_env() {
+    /// The frame's service wins over the env var: the host reads it from the
+    /// project's own `container_dev.images[].service`, which is where the answer
+    /// actually lives, while the env var is a per-device override for a unit the
+    /// host does not know about. See [`SERVICE_ENV`] for why restarting the
+    /// container is not enough.
+    async fn restart(&self, container: &str, service: Option<&str>) -> Result<()> {
+        match restart_unit(service, service_from_env()) {
             Some(service) => {
                 info!(service = %service, "restarting owning systemd unit to adopt the pulled image");
                 run_engine("systemctl", &["restart", &service]).await
@@ -314,6 +351,7 @@ impl Engine for CommandEngine {
 async fn engine_output(binary: &str, args: &[&str]) -> Result<Option<String>> {
     let out = Command::new(binary)
         .args(args)
+        .kill_on_drop(true)
         .output()
         .await
         .with_context(|| format!("spawning `{binary} {}`", args.join(" ")))?;
@@ -325,9 +363,16 @@ async fn engine_output(binary: &str, args: &[&str]) -> Result<Option<String>> {
 }
 
 /// Run `<binary> <args...>` to completion, mapping a non-zero exit to an error.
+///
+/// `kill_on_drop` because the sync runs on a task the session loop aborts when
+/// the link drops (`main.rs`'s `AbortOnDrop`). An abort lands on whichever await
+/// point is current, and without this the in-flight `docker pull` would keep
+/// running with nothing owning it - burning bandwidth on a superseded digest
+/// while the next session starts its own pull.
 async fn run_engine(binary: &str, args: &[&str]) -> Result<()> {
     let status = Command::new(binary)
         .args(args)
+        .kill_on_drop(true)
         .status()
         .await
         .with_context(|| format!("spawning `{binary} {}`", args.join(" ")))?;
@@ -373,6 +418,40 @@ impl SyncConfig {
     }
 }
 
+/// How long a restarted unit gets to bring its container up before the sync
+/// treats the absence as a failure.
+///
+/// `systemctl restart` returns once the unit is active, which for a `Type=simple`
+/// unit is before its `<engine> run` has necessarily created the container. A
+/// single immediate probe would race that and fail a sync that was about to
+/// work, so the check waits rather than asking once.
+const CONTAINER_APPEAR_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Gap between container-existence probes inside [`CONTAINER_APPEAR_TIMEOUT`].
+const CONTAINER_POLL_INTERVAL: Duration = Duration::from_millis(500);
+
+/// The image id running in `container`, waiting up to
+/// [`CONTAINER_APPEAR_TIMEOUT`] for the container to exist at all.
+///
+/// Returns `None` only when it never appeared, which the caller treats as a
+/// failed sync.
+async fn running_image_id_once_up<E: Engine>(
+    engine: &E,
+    container: &str,
+) -> Result<Option<String>> {
+    let deadline = tokio::time::Instant::now() + CONTAINER_APPEAR_TIMEOUT;
+    loop {
+        let running = engine
+            .running_image_id(container)
+            .await
+            .with_context(|| format!("reading the image id running in {container}"))?;
+        if running.is_some() || tokio::time::Instant::now() >= deadline {
+            return Ok(running);
+        }
+        tokio::time::sleep(CONTAINER_POLL_INTERVAL).await;
+    }
+}
+
 /// Handle a `Sync`: pull -> restart -> record digest -> rewrite pointer.
 ///
 /// The order is load-bearing at both ends. A pull failure aborts before the
@@ -388,6 +467,7 @@ pub(crate) async fn on_sync<E: Engine>(
     image: &str,
     tag: &str,
     digest: &str,
+    service: Option<&str>,
     state: &AgentState,
 ) -> Result<()> {
     // 1. Pull through the device loopback proxy (never over the control WS).
@@ -412,7 +492,7 @@ pub(crate) async fn on_sync<E: Engine>(
 
     // 3. Restart the container AFTER the pull and tag so the new image takes effect.
     engine
-        .restart(&cfg.container)
+        .restart(&cfg.container, service)
         .await
         .with_context(|| format!("restarting container {}", cfg.container))?;
 
@@ -428,30 +508,47 @@ pub(crate) async fn on_sync<E: Engine>(
     //     developer saw unchanged behaviour with every layer reporting success.
     //
     //     Comparing IDs is engine-generic and catches the failure on whichever
-    //     branch produced it. An unknown ID on either side is NOT treated as a
-    //     mismatch: the container may legitimately not exist yet on a device
-    //     whose unit creates it lazily, and inventing a failure there would
-    //     break a working setup to guard a broken one.
+    //     branch produced it. BOTH ids must be known: an unknown one is a
+    //     failure, not a pass. Skipping the check when the container is absent
+    //     read as tolerance for a unit that creates its container lazily, but
+    //     there is no such case left - on the container branch `restart` has
+    //     already failed with "no such container" before reaching here, and on
+    //     the service branch the unit was just restarted, so a container that is
+    //     still missing once it has had time to appear means the restart did not
+    //     produce one. Passing there recorded the new digest for a device
+    //     running nothing at all, which is the same false success this probe
+    //     exists to end, reached by the other door.
     let wanted = engine
         .resolve_image_id(&service_ref)
         .await
-        .with_context(|| format!("resolving the image id of {service_ref}"))?;
-    let running = engine
-        .running_image_id(&cfg.container)
-        .await
-        .with_context(|| format!("reading the image id running in {}", cfg.container))?;
-    if let (Some(wanted), Some(running)) = (wanted.as_ref(), running.as_ref())
-        && wanted != running
-    {
-        anyhow::bail!(
-            "restart did not adopt the pulled image: container {} still runs image {running}, \
-             expected {wanted}. `{}` restarts the existing container object, which stays bound \
-             to its create-time image id; set AVOCADO_CONTAINER_DEV_SERVICE to the systemd unit \
-             that owns the container so the restart re-runs it and re-resolves the tag",
-            cfg.container,
-            cfg.container,
-        );
-    }
+        .with_context(|| format!("resolving the image id of {service_ref}"))?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "{service_ref} resolves to no image even though the tag step just succeeded; \
+                 there is nothing for the container to run"
+            )
+        })?;
+    let running = running_image_id_once_up(engine, &cfg.container)
+        .await?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "restart succeeded but container {} does not exist after {}s, so nothing is \
+                 running the pulled image. Check that the restarted unit actually starts it",
+                cfg.container,
+                CONTAINER_APPEAR_TIMEOUT.as_secs(),
+            )
+        })?;
+    ensure!(
+        wanted == running,
+        "restart did not adopt the pulled image: container {} still runs image {running}, \
+         expected {wanted}. `{} restart {}` re-executes the existing container object, which \
+         stays bound to its create-time image id; name the systemd unit that owns the container \
+         in this image's `service:` field under `container_dev.images` so the restart re-runs \
+         the unit and re-resolves the tag",
+        cfg.container,
+        engine_binary_from_env(),
+        cfg.container,
+    );
 
     // 4. Record the now-running digest. This happens IMMEDIATELY after the
     //    restart, before the pointer write, because at this instant the
@@ -522,6 +619,9 @@ mod tests {
         /// What `<engine> inspect <container>` answers AFTER the restart. The
         /// default matches `wanted_id`, i.e. a restart that adopted the image.
         running_id: Option<String>,
+        /// Probes that answer "no such container" before `running_id` is
+        /// returned - a unit whose container takes a moment to come up.
+        absent_probes: Mutex<usize>,
     }
 
     impl FakeEngine {
@@ -533,6 +633,7 @@ mod tests {
                 fail_restart: false,
                 wanted_id: Some("sha256:newid".to_string()),
                 running_id: Some("sha256:newid".to_string()),
+                absent_probes: Mutex::new(0),
             }
         }
 
@@ -572,11 +673,29 @@ mod tests {
             }
         }
 
-        /// A device whose unit creates the container lazily: nothing is running
-        /// yet, so there is no id to compare against.
-        fn no_container_yet(calls: Arc<Mutex<Vec<String>>>) -> Self {
+        /// A restart that reported success but never produced a container.
+        fn container_never_appears(calls: Arc<Mutex<Vec<String>>>) -> Self {
             Self {
                 running_id: None,
+                ..Self::new(calls)
+            }
+        }
+
+        /// A unit whose container takes `probes` polls to come up - what a
+        /// `Type=simple` unit does, since `systemctl restart` returns before its
+        /// `<engine> run` has necessarily created anything.
+        fn container_appears_after(calls: Arc<Mutex<Vec<String>>>, probes: usize) -> Self {
+            Self {
+                absent_probes: Mutex::new(probes),
+                ..Self::new(calls)
+            }
+        }
+
+        /// A tag step that reported success but left the ref resolving to
+        /// nothing.
+        fn tag_resolves_to_nothing(calls: Arc<Mutex<Vec<String>>>) -> Self {
+            Self {
+                wanted_id: None,
                 ..Self::new(calls)
             }
         }
@@ -602,11 +721,11 @@ mod tests {
             Ok(())
         }
 
-        async fn restart(&self, container: &str) -> Result<()> {
-            self.calls
-                .lock()
-                .unwrap()
-                .push(format!("restart:{container}"));
+        async fn restart(&self, container: &str, service: Option<&str>) -> Result<()> {
+            self.calls.lock().unwrap().push(match service {
+                Some(service) => format!("restart-unit:{service}"),
+                None => format!("restart:{container}"),
+            });
             if self.fail_restart {
                 anyhow::bail!("simulated restart failure");
             }
@@ -618,6 +737,11 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push(format!("running_image_id:{container}"));
+            let mut absent = self.absent_probes.lock().unwrap();
+            if *absent > 0 {
+                *absent -= 1;
+                return Ok(None);
+            }
             Ok(self.running_id.clone())
         }
 
@@ -649,7 +773,7 @@ mod tests {
         let cfg = test_cfg(tmp.path().to_path_buf());
         let state = crate::AgentState::new("dev-01".to_string());
 
-        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", None, &state)
             .await
             .expect("sync succeeds");
 
@@ -686,7 +810,7 @@ mod tests {
         let cfg = test_cfg(tmp.path().to_path_buf());
         let state = crate::AgentState::new("dev-01".to_string());
 
-        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", None, &state)
             .await
             .expect("sync succeeds");
 
@@ -776,7 +900,7 @@ mod tests {
         let cfg = test_cfg(tmp.path().to_path_buf());
         let state = crate::AgentState::new("dev-01".to_string());
 
-        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", None, &state)
             .await
             .expect_err("a failed tag must fail the sync");
         assert!(
@@ -813,7 +937,7 @@ mod tests {
         let cfg = test_cfg(tmp.path().to_path_buf());
         let state = crate::AgentState::new("dev-01".to_string());
 
-        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", None, &state)
             .await
             .expect_err("a restart that kept the old image must fail the sync");
         assert!(
@@ -821,8 +945,9 @@ mod tests {
             "the error must say the restart did not adopt the image: {err:#}"
         );
         assert!(
-            format!("{err:#}").contains("AVOCADO_CONTAINER_DEV_SERVICE"),
-            "the error must name the remedy: {err:#}"
+            format!("{err:#}").contains("`service:` field"),
+            "the error must name the remedy - the config field, not the env \
+             override, since the field is what the host reads: {err:#}"
         );
         assert_eq!(
             *state.running_digest.lock().unwrap(),
@@ -835,21 +960,145 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn a_container_that_does_not_exist_yet_is_not_a_mismatch() {
-        // A device whose unit creates the container lazily has nothing running
-        // at sync time. Treating an unknown id as a mismatch would break that
-        // setup to guard the broken one.
+    #[tokio::test(start_paused = true)]
+    async fn a_container_that_never_appears_fails_the_sync() {
+        // The probe used to skip the check whenever either id was unknown, so a
+        // device with no container at all passed vacuously and recorded the new
+        // digest - reporting "running sha256:new" while running nothing. That is
+        // the same false success the probe exists to end, reached through the
+        // other branch, and it covered exactly the population the mismatch arm
+        // does not.
         let calls = Arc::new(Mutex::new(Vec::new()));
-        let engine = FakeEngine::no_container_yet(calls);
+        let engine = FakeEngine::container_never_appears(calls);
         let tmp = tempfile::tempdir().unwrap();
         let cfg = test_cfg(tmp.path().to_path_buf());
         let state = crate::AgentState::new("dev-01".to_string());
 
-        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", None, &state)
             .await
-            .expect("an absent container must not fail the sync");
+            .expect_err("a container that never appears must fail the sync");
+        assert!(
+            format!("{err:#}").contains("does not exist"),
+            "the error must say the container is absent: {err:#}"
+        );
+        assert_eq!(
+            *state.running_digest.lock().unwrap(),
+            "",
+            "a device running no container must not report the new digest"
+        );
+        assert!(
+            !active_image_path(&cfg.writable_root).exists(),
+            "the pointer must not claim an image nothing is running"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_container_that_takes_a_moment_to_come_up_still_syncs() {
+        // `systemctl restart` returns when the unit is active, which for a
+        // Type=simple unit is before its `<engine> run` has necessarily created
+        // the container. Asking once and failing would break every service-owned
+        // device the frame's `service:` field is meant to fix, so absence is
+        // only fatal after CONTAINER_APPEAR_TIMEOUT.
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let engine = FakeEngine::container_appears_after(calls.clone(), 3);
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = test_cfg(tmp.path().to_path_buf());
+        let state = crate::AgentState::new("dev-01".to_string());
+
+        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", None, &state)
+            .await
+            .expect("a container that comes up within the window must sync");
+
         assert_eq!(*state.running_digest.lock().unwrap(), "sha256:new");
+        let probes = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|c| c.starts_with("running_image_id:"))
+            .count();
+        assert_eq!(probes, 4, "three absent probes then the one that answered");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_tag_that_resolves_to_nothing_fails_the_sync() {
+        // The tag step reported success, so the ref must resolve. If it does
+        // not, there is no image for the container to run and the old probe
+        // passed vacuously on the unknown id.
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let engine = FakeEngine::tag_resolves_to_nothing(calls);
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = test_cfg(tmp.path().to_path_buf());
+        let state = crate::AgentState::new("dev-01".to_string());
+
+        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", None, &state)
+            .await
+            .expect_err("an unresolvable service ref must fail the sync");
+        assert!(
+            format!("{err:#}").contains("resolves to no image"),
+            "the error must name the unresolvable ref: {err:#}"
+        );
+        assert_eq!(*state.running_digest.lock().unwrap(), "");
+    }
+
+    #[tokio::test]
+    async fn the_frames_service_is_what_gets_restarted() {
+        // The whole point of carrying `service` on the wire: without it the
+        // agent restarts the container, which stays bound to its create-time
+        // image id, and the sync no-ops on every shipped device.
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let engine = FakeEngine::new(calls.clone());
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = test_cfg(tmp.path().to_path_buf());
+        let state = crate::AgentState::new("dev-01".to_string());
+
+        on_sync(
+            &engine,
+            &cfg,
+            "my-app",
+            "dev",
+            "sha256:new",
+            Some("app.service"),
+            &state,
+        )
+        .await
+        .expect("sync succeeds");
+
+        let recorded = calls.lock().unwrap().clone();
+        assert!(
+            recorded.contains(&"restart-unit:app.service".to_string()),
+            "the frame's service must be what is restarted: {recorded:?}"
+        );
+        assert!(
+            !recorded.iter().any(|c| c.starts_with("restart:")),
+            "the container must NOT be restarted when a service is named: {recorded:?}"
+        );
+    }
+
+    #[test]
+    fn the_frames_service_beats_the_env_override_and_blanks_are_ignored() {
+        // The host reads `service:` from the project's own config, so it is the
+        // better answer; the env var stays as a per-device override for a unit
+        // the host does not know about. A blank on the wire must fall through to
+        // it rather than name a unit called "".
+        assert_eq!(
+            restart_unit(Some("app.service"), Some("override.service".to_string())),
+            Some("app.service".to_string())
+        );
+        assert_eq!(
+            restart_unit(None, Some("override.service".to_string())),
+            Some("override.service".to_string())
+        );
+        assert_eq!(
+            restart_unit(Some("   "), Some("override.service".to_string())),
+            Some("override.service".to_string()),
+            "a blank service on the wire must not shadow the env override"
+        );
+        assert_eq!(restart_unit(Some(""), None), None);
+        assert_eq!(
+            restart_unit(None, None),
+            None,
+            "no service anywhere keeps the container-restart path"
+        );
     }
 
     // Falsifier 2: the pointer lands on the writable partition, never a rootFS
@@ -863,7 +1112,7 @@ mod tests {
         let cfg = test_cfg(root.clone());
         let state = crate::AgentState::new("dev-01".to_string());
 
-        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", None, &state)
             .await
             .expect("sync succeeds");
 
@@ -925,7 +1174,7 @@ mod tests {
         let cfg = test_cfg(tmp.path().to_path_buf());
         let state = crate::AgentState::new("dev-01".to_string());
 
-        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", None, &state)
             .await
             .expect("sync succeeds");
 
@@ -944,7 +1193,7 @@ mod tests {
         // A prior digest that must survive an aborted sync unchanged.
         *state.running_digest.lock().unwrap() = "sha256:old".to_string();
 
-        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", None, &state)
             .await
             .expect_err("pull failure must abort the sync");
         assert!(
@@ -983,7 +1232,7 @@ mod tests {
         let state = crate::AgentState::new("dev-01".to_string());
         *state.running_digest.lock().unwrap() = "sha256:old".to_string();
 
-        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", None, &state)
             .await
             .expect_err("restart failure must fail the sync");
         assert!(
@@ -1034,7 +1283,7 @@ mod tests {
         let state = crate::AgentState::new("dev-01".to_string());
         *state.running_digest.lock().unwrap() = "sha256:old".to_string();
 
-        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", None, &state)
             .await
             .expect("a pointer-write failure must not fail a sync that already took effect");
 
