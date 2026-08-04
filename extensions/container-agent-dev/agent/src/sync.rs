@@ -118,6 +118,24 @@ pub(crate) trait Engine: Send + Sync + 'static {
     /// Point `target` (the ref the service names) at `source` (what we just pulled).
     fn tag(&self, source: &str, target: &str) -> impl Future<Output = Result<()>> + Send;
     fn restart(&self, container: &str) -> impl Future<Output = Result<()>> + Send;
+    /// The image ID `container` is currently running, or `None` when the
+    /// container does not exist.
+    ///
+    /// Exists so the sync can PROVE the restart adopted the new image rather
+    /// than assume it. `<engine> restart` re-executes the container object,
+    /// which is bound to the image ID it was created with and does not
+    /// re-resolve the tag - so on the branch the shipped unit actually takes,
+    /// every step reported success while the container went on running the old
+    /// image.
+    fn running_image_id(
+        &self,
+        container: &str,
+    ) -> impl Future<Output = Result<Option<String>>> + Send;
+    /// The image ID `reference` resolves to locally, or `None` when absent.
+    fn resolve_image_id(
+        &self,
+        reference: &str,
+    ) -> impl Future<Output = Result<Option<String>>> + Send;
 }
 
 /// The real engine: shells out to the docker/podman CLI. This is the only
@@ -181,6 +199,61 @@ pub(crate) fn warn_if_unsupported_engine(binary: &str) {
     }
 }
 
+/// Whether `binary` resolves to something executable on `PATH`.
+///
+/// Split from the check below so the lookup rule is testable without an
+/// environment: an absolute or relative path is probed directly, a bare name is
+/// searched along `PATH` the way the kernel's exec would.
+pub(crate) fn engine_on_path(binary: &str, path_var: Option<&str>) -> bool {
+    fn executable(p: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::metadata(p)
+                .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+                .unwrap_or(false)
+        }
+        #[cfg(not(unix))]
+        {
+            p.is_file()
+        }
+    }
+
+    if binary.contains('/') {
+        return executable(Path::new(binary));
+    }
+    let Some(path_var) = path_var else {
+        return false;
+    };
+    path_var
+        .split(':')
+        .filter(|dir| !dir.is_empty())
+        .any(|dir| executable(&Path::new(dir).join(binary)))
+}
+
+/// Fail startup when the configured engine binary is not present.
+///
+/// Nothing verified this before, and the consequence was the shape the unit's
+/// own `Environment=` comment calls the worst available: merging the dev
+/// extension onto a device without the separate `docker` extension left the unit
+/// `active (running)` and silent, because `warn_if_unsupported_engine` only
+/// string-matches podman. The first `Sync` then failed at
+/// `Command::new("docker").status()` with ENOENT, which the swallowed-error path
+/// reduced to a `warn!` - so `running_digest` kept its old value, the WS stayed
+/// up, the host saw a connected device, and every sync no-oped forever.
+///
+/// Refusing here turns that into a unit that fails at start and says why, which
+/// is visible in `systemctl status` without knowing to look for it.
+pub(crate) fn ensure_engine_available(binary: &str) -> Result<()> {
+    ensure!(
+        engine_on_path(binary, std::env::var("PATH").ok().as_deref()),
+        "container engine `{binary}` was not found on PATH. The agent execs it directly on \
+         every sync, so there is nothing it can do without it - install the `docker` extension \
+         in this runtime, or set {ENGINE_ENV} to an engine that is present."
+    );
+    Ok(())
+}
+
 /// The systemd unit owning the container, from `$AVOCADO_CONTAINER_DEV_SERVICE`.
 ///
 /// `None` keeps the container-restart path, so a device that does not launch its
@@ -214,6 +287,41 @@ impl Engine for CommandEngine {
             None => run_engine(&self.binary, &["restart", container]).await,
         }
     }
+
+    async fn running_image_id(&self, container: &str) -> Result<Option<String>> {
+        engine_output(
+            &self.binary,
+            &["inspect", container, "--format", "{{.Image}}"],
+        )
+        .await
+    }
+
+    async fn resolve_image_id(&self, reference: &str) -> Result<Option<String>> {
+        engine_output(
+            &self.binary,
+            &["image", "inspect", reference, "--format", "{{.Id}}"],
+        )
+        .await
+    }
+}
+
+/// Run `<binary> <args...>` and capture stdout, mapping a non-zero exit to
+/// `None` rather than an error.
+///
+/// A non-zero exit from `inspect` means "no such object", which is a legitimate
+/// answer here (the container has never been created) and not a failure to
+/// report.
+async fn engine_output(binary: &str, args: &[&str]) -> Result<Option<String>> {
+    let out = Command::new(binary)
+        .args(args)
+        .output()
+        .await
+        .with_context(|| format!("spawning `{binary} {}`", args.join(" ")))?;
+    if !out.status.success() {
+        return Ok(None);
+    }
+    let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    Ok(if text.is_empty() { None } else { Some(text) })
 }
 
 /// Run `<binary> <args...>` to completion, mapping a non-zero exit to an error.
@@ -308,6 +416,43 @@ pub(crate) async fn on_sync<E: Engine>(
         .await
         .with_context(|| format!("restarting container {}", cfg.container))?;
 
+    // 3b. PROVE the restart adopted the new image, rather than assume it.
+    //
+    //     `<engine> restart <container>` re-executes the existing container
+    //     object, which is bound to the image ID it was created with and does
+    //     not re-resolve the tag. That is the branch the shipped unit takes,
+    //     because nothing sets AVOCADO_CONTAINER_DEV_SERVICE - so the pull
+    //     succeeded, the tag succeeded, the restart succeeded, and the container
+    //     went on running the previous image while step 4 recorded the new
+    //     digest and the host's reconcile saw its desired state satisfied. The
+    //     developer saw unchanged behaviour with every layer reporting success.
+    //
+    //     Comparing IDs is engine-generic and catches the failure on whichever
+    //     branch produced it. An unknown ID on either side is NOT treated as a
+    //     mismatch: the container may legitimately not exist yet on a device
+    //     whose unit creates it lazily, and inventing a failure there would
+    //     break a working setup to guard a broken one.
+    let wanted = engine
+        .resolve_image_id(&service_ref)
+        .await
+        .with_context(|| format!("resolving the image id of {service_ref}"))?;
+    let running = engine
+        .running_image_id(&cfg.container)
+        .await
+        .with_context(|| format!("reading the image id running in {}", cfg.container))?;
+    if let (Some(wanted), Some(running)) = (wanted.as_ref(), running.as_ref())
+        && wanted != running
+    {
+        anyhow::bail!(
+            "restart did not adopt the pulled image: container {} still runs image {running}, \
+             expected {wanted}. `{}` restarts the existing container object, which stays bound \
+             to its create-time image id; set AVOCADO_CONTAINER_DEV_SERVICE to the systemd unit \
+             that owns the container so the restart re-runs it and re-resolves the tag",
+            cfg.container,
+            cfg.container,
+        );
+    }
+
     // 4. Record the now-running digest. This happens IMMEDIATELY after the
     //    restart, before the pointer write, because at this instant the
     //    container really is running `digest` - that is an observed fact, not a
@@ -370,7 +515,13 @@ mod tests {
     struct FakeEngine {
         calls: Arc<Mutex<Vec<String>>>,
         fail_pull: bool,
+        fail_tag: bool,
         fail_restart: bool,
+        /// What `<engine> image inspect <service_ref>` answers.
+        wanted_id: Option<String>,
+        /// What `<engine> inspect <container>` answers AFTER the restart. The
+        /// default matches `wanted_id`, i.e. a restart that adopted the image.
+        running_id: Option<String>,
     }
 
     impl FakeEngine {
@@ -378,23 +529,55 @@ mod tests {
             Self {
                 calls,
                 fail_pull: false,
+                fail_tag: false,
                 fail_restart: false,
+                wanted_id: Some("sha256:newid".to_string()),
+                running_id: Some("sha256:newid".to_string()),
             }
         }
 
         fn failing_pull(calls: Arc<Mutex<Vec<String>>>) -> Self {
             Self {
-                calls,
                 fail_pull: true,
-                fail_restart: false,
+                ..Self::new(calls)
+            }
+        }
+
+        /// `docker tag` rejects some refs outright - an uppercase letter in a
+        /// host-supplied `image`, for instance - so the step CAN fail, and the
+        /// fake could not express it. Without this the `?` on `engine.tag(...)`
+        /// had zero coverage: replacing it with `let _ = ...` left all eight
+        /// sync tests green while production fell through to a restart that
+        /// re-ran the previous image and then recorded the new digest.
+        fn failing_tag(calls: Arc<Mutex<Vec<String>>>) -> Self {
+            Self {
+                fail_tag: true,
+                ..Self::new(calls)
             }
         }
 
         fn failing_restart(calls: Arc<Mutex<Vec<String>>>) -> Self {
             Self {
-                calls,
-                fail_pull: false,
                 fail_restart: true,
+                ..Self::new(calls)
+            }
+        }
+
+        /// A restart that completed but left the container on its old image -
+        /// what `<engine> restart` does on the branch the shipped unit takes.
+        fn restart_that_does_not_adopt(calls: Arc<Mutex<Vec<String>>>) -> Self {
+            Self {
+                running_id: Some("sha256:oldid".to_string()),
+                ..Self::new(calls)
+            }
+        }
+
+        /// A device whose unit creates the container lazily: nothing is running
+        /// yet, so there is no id to compare against.
+        fn no_container_yet(calls: Arc<Mutex<Vec<String>>>) -> Self {
+            Self {
+                running_id: None,
+                ..Self::new(calls)
             }
         }
     }
@@ -413,6 +596,9 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push(format!("tag:{source}->{target}"));
+            if self.fail_tag {
+                anyhow::bail!("simulated tag failure");
+            }
             Ok(())
         }
 
@@ -425,6 +611,22 @@ mod tests {
                 anyhow::bail!("simulated restart failure");
             }
             Ok(())
+        }
+
+        async fn running_image_id(&self, container: &str) -> Result<Option<String>> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("running_image_id:{container}"));
+            Ok(self.running_id.clone())
+        }
+
+        async fn resolve_image_id(&self, reference: &str) -> Result<Option<String>> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("resolve_image_id:{reference}"));
+            Ok(self.wanted_id.clone())
         }
     }
 
@@ -454,8 +656,8 @@ mod tests {
         let recorded = calls.lock().unwrap().clone();
         assert_eq!(
             recorded.len(),
-            3,
-            "expected pull, tag, then restart, got {recorded:?}"
+            5,
+            "expected pull, tag, restart, then the two adoption probes, got {recorded:?}"
         );
         assert!(
             recorded[0].starts_with("pull:"),
@@ -495,9 +697,159 @@ mod tests {
                 "pull:127.0.0.1:15151/my-app@sha256:new".to_string(),
                 "tag:127.0.0.1:15151/my-app@sha256:new->my-app:dev".to_string(),
                 "restart:avocado-dev".to_string(),
+                "resolve_image_id:my-app:dev".to_string(),
+                "running_image_id:avocado-dev".to_string(),
             ],
             "the pulled digest must be tagged as the service's ref BEFORE the restart: {recorded:?}"
         );
+    }
+
+    #[test]
+    fn a_missing_engine_binary_is_detected_before_the_first_sync() {
+        // The unit reported `active (running)` with no engine installed, and the
+        // first Sync failed at Command::new("docker") with ENOENT - reduced to a
+        // warn! by the swallowed-error path, so the host went on seeing a
+        // connected device whose syncs no-oped forever.
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().to_str().unwrap();
+
+        assert!(
+            !engine_on_path("docker", Some(dir)),
+            "an empty PATH dir must not resolve the engine"
+        );
+
+        let exe = tmp.path().join("docker");
+        std::fs::write(&exe, b"#!/bin/sh\nexit 0\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        assert!(
+            engine_on_path("docker", Some(dir)),
+            "an executable on PATH must resolve"
+        );
+    }
+
+    #[test]
+    fn a_present_but_non_executable_engine_does_not_count() {
+        // Mode 0644 is not runnable; treating presence as availability would
+        // move the ENOENT to the first sync, which is the whole failure.
+        let tmp = tempfile::tempdir().unwrap();
+        let exe = tmp.path().join("docker");
+        std::fs::write(&exe, b"not executable").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o644)).unwrap();
+            assert!(!engine_on_path(
+                "docker",
+                Some(tmp.path().to_str().unwrap())
+            ));
+        }
+    }
+
+    #[test]
+    fn an_absolute_engine_path_bypasses_path_lookup() {
+        let tmp = tempfile::tempdir().unwrap();
+        let exe = tmp.path().join("myengine");
+        std::fs::write(&exe, b"#!/bin/sh\nexit 0\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+            assert!(engine_on_path(exe.to_str().unwrap(), None));
+        }
+        assert!(!engine_on_path("/nonexistent/engine", None));
+    }
+
+    #[tokio::test]
+    async fn a_failed_tag_aborts_before_the_restart() {
+        // Replacing the `?` on `engine.tag(...)` with `let _ = ...` used to leave
+        // every sync test green, because the fake could not fail the step. In
+        // production that fall-through restarts the PREVIOUS image, then records
+        // the new digest and writes the pointer claiming it - the exact
+        // false-success the tag step exists to prevent.
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let engine = FakeEngine::failing_tag(calls.clone());
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = test_cfg(tmp.path().to_path_buf());
+        let state = crate::AgentState::new("dev-01".to_string());
+
+        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+            .await
+            .expect_err("a failed tag must fail the sync");
+        assert!(
+            format!("{err:#}").contains("tagging"),
+            "the error must name the tag step: {err:#}"
+        );
+
+        let recorded = calls.lock().unwrap().clone();
+        assert!(
+            !recorded.iter().any(|c| c.starts_with("restart:")),
+            "a failed tag must abort BEFORE the restart: {recorded:?}"
+        );
+        assert_eq!(
+            *state.running_digest.lock().unwrap(),
+            "",
+            "a failed tag must not record the new digest"
+        );
+        assert!(
+            !active_image_path(&cfg.writable_root).exists(),
+            "a failed tag must not write the active-image pointer"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_restart_that_does_not_adopt_the_image_fails_the_sync() {
+        // `<engine> restart <container>` re-executes the existing container
+        // object, bound to its create-time image id, and does not re-resolve the
+        // tag. Nothing in the shipped unit sets AVOCADO_CONTAINER_DEV_SERVICE, so
+        // that is the branch every device takes - and every step reported success
+        // while the container went on running the old image.
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let engine = FakeEngine::restart_that_does_not_adopt(calls.clone());
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = test_cfg(tmp.path().to_path_buf());
+        let state = crate::AgentState::new("dev-01".to_string());
+
+        let err = on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+            .await
+            .expect_err("a restart that kept the old image must fail the sync");
+        assert!(
+            format!("{err:#}").contains("did not adopt"),
+            "the error must say the restart did not adopt the image: {err:#}"
+        );
+        assert!(
+            format!("{err:#}").contains("AVOCADO_CONTAINER_DEV_SERVICE"),
+            "the error must name the remedy: {err:#}"
+        );
+        assert_eq!(
+            *state.running_digest.lock().unwrap(),
+            "",
+            "a container still on the old image must not be reported as synced"
+        );
+        assert!(
+            !active_image_path(&cfg.writable_root).exists(),
+            "the pointer must not claim a digest the container is not running"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_container_that_does_not_exist_yet_is_not_a_mismatch() {
+        // A device whose unit creates the container lazily has nothing running
+        // at sync time. Treating an unknown id as a mismatch would break that
+        // setup to guard the broken one.
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let engine = FakeEngine::no_container_yet(calls);
+        let tmp = tempfile::tempdir().unwrap();
+        let cfg = test_cfg(tmp.path().to_path_buf());
+        let state = crate::AgentState::new("dev-01".to_string());
+
+        on_sync(&engine, &cfg, "my-app", "dev", "sha256:new", &state)
+            .await
+            .expect("an absent container must not fail the sync");
+        assert_eq!(*state.running_digest.lock().unwrap(), "sha256:new");
     }
 
     // Falsifier 2: the pointer lands on the writable partition, never a rootFS
@@ -647,7 +999,7 @@ mod tests {
                 "tag:127.0.0.1:15151/my-app@sha256:new->my-app:dev".to_string(),
                 "restart:avocado-dev".to_string(),
             ],
-            "the pull and the restart attempt should both be recorded: {recorded:?}"
+            "a failed restart must abort before the adoption probes: {recorded:?}"
         );
         assert!(
             !active_image_path(tmp.path()).exists(),
@@ -693,6 +1045,8 @@ mod tests {
                 "pull:127.0.0.1:15151/my-app@sha256:new".to_string(),
                 "tag:127.0.0.1:15151/my-app@sha256:new->my-app:dev".to_string(),
                 "restart:avocado-dev".to_string(),
+                "resolve_image_id:my-app:dev".to_string(),
+                "running_image_id:avocado-dev".to_string(),
             ],
             "the pull and restart must both have run: {recorded:?}"
         );

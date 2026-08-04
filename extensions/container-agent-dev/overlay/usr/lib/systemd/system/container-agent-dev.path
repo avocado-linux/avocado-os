@@ -1,0 +1,32 @@
+[Unit]
+Description=Watch for the Container Dev Mode bootstrap and start the agent
+Documentation=https://github.com/avocadolinux/avocado-os
+# This unit exists because the service cannot start itself at merge time.
+#
+# The service carries ConditionPathExists=<bootstrap.json>, and the extension's
+# on_merge hook runs `systemctl start` BEFORE any bootstrap exists - so the
+# condition skipped it, ExecStart never ran, and the journal recorded only
+# "Condition check resulted in ... being skipped". Restart=always does not help:
+# it applies to a unit that reached a running state, and this one never did.
+#
+# Nothing re-triggered a start afterwards either. `avocado container dev up`
+# delivers bootstrap.json over SSH and issues no systemctl call at all (there is
+# no `systemctl` anywhere in the CLI's container-dev paths), so the agent stayed
+# down until an unrelated reboot while `up` reported success and every sync
+# reached nobody.
+#
+# A .path unit is the systemd-native answer: it is startable at merge time
+# because it has no such condition, and it activates the service the moment the
+# file lands - which is exactly the event that was missing.
+
+[Path]
+PathExists=/var/lib/avocado/container-dev/bootstrap.json
+# Also fire when the file is REPLACED, not only when it first appears. Re-running
+# `avocado container dev up` overwrites bootstrap.json with a freshly minted
+# token; a device whose agent had exited then needs starting again, and one that
+# is already running is unaffected (systemd will not re-start an active service).
+PathChanged=/var/lib/avocado/container-dev/bootstrap.json
+Unit=container-agent-dev.service
+
+[Install]
+WantedBy=multi-user.target
