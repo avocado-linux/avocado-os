@@ -1,0 +1,53 @@
+supported_targets: '*'
+
+# 2026, not the 2024 the other extensions in this repo carry: this demo is
+# exercised on a wrynose 6.18 board, and 2024/edge resolves a 6.6.36 kernel
+# whose extension modules are inert there. Reconcile once the sibling
+# extensions move off 2024.
+distro:
+  release: 2026
+  channel: edge
+
+extensions:
+  avocado-ext-hello:
+    # confext is not optional here: enable_services writes its .wants symlink
+    # into /etc/systemd/system/<target>.wants, and sysext carries the unit
+    # itself under /usr/lib/systemd/system. Dropping either leaves the unit
+    # present but disabled.
+    types:
+      - sysext
+      - confext
+    version: 1.0.0
+    release: r0
+    summary: Hello-from-Avocado demo container
+    description: >
+      Worked example of the container dev loop: a container that starts at boot,
+      returns after a reboot, and hot-reloads when `avocado container dev sync`
+      pushes a new image. Development only - it is a demo payload, not a
+      platform component.
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    enable_services:
+      - container-hello.service
+
+    overlay: overlay
+
+    # Primes the image into the /var partition during a RUNTIME build, so a
+    # provisioned device has it locally at first boot. Silently ignored on a
+    # standalone `avocado ext build` - see the comment in the unit file.
+    # runtime/build.rs adds --privileged to the SDK container on its own when
+    # any extension in the runtime declares this, so no container_args here.
+    docker_images:
+      - image: docker.io/peridionick/hello-flask
+        tag: py311
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
+
+  packages:
+    # The SDK container ships no mkfs.erofs; without this the extension content
+    # builds and then the image step dies on command-not-found. Same reason the
+    # docker extension carries it.
+    nativesdk-erofs-utils: '*'
