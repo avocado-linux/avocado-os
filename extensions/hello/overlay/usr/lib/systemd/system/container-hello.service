@@ -1,0 +1,36 @@
+[Unit]
+Description=Hello-from-Avocado demo container
+# ExecStart execs the docker CLI, which reaches dockerd over its socket, so a
+# daemon that has not started is a startup ordering problem. Requires=
+# guarantees docker.service was started, not that the socket is accepting;
+# Restart=always below is what covers that race rather than a sleep.
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=simple
+
+# The image is primed into /var/lib/docker at runtime-build time by the
+# docker_images: declaration in this extension's avocado.yaml, so a
+# factory-provisioned device runs it without ever contacting a registry - which
+# matters on a minimal Avocado rootfs that carries no CA bundle of its own.
+#
+# docker_images is honored only on a RUNTIME build. A standalone
+# `avocado ext build` of this extension ignores it silently, and the container
+# then falls back to pulling at start, which works only because the docker
+# extension installs a CA bundle.
+ExecStartPre=-/usr/bin/docker rm -f container-hello
+ExecStart=/usr/bin/docker run --rm --name container-hello \
+  -p 8080:8080 \
+  docker.io/peridionick/hello-flask:py311
+ExecStop=/usr/bin/docker stop container-hello
+
+# always, not on-failure. With --rm and Type=simple a container that exits
+# cleanly - the app shutting down, an external `docker stop` - leaves the unit
+# inactive with nothing to bring it back, so the device silently stops running
+# what it was told to run. on-failure covers only the crash case.
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
