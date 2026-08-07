@@ -1,0 +1,52 @@
+#!/bin/sh
+# Rebuild /etc/ssl/certs/ca-certificates.crt without openssl.
+#
+# ca-certificates ships the certs but builds the bundle in a postinst, which
+# runs from run-postinsts on first boot of a normal image and never runs for a
+# sysext - the extension is merged read-only with no equivalent hook. The device
+# cannot fall back to update-ca-certificates either: that shells out to openssl,
+# and the minimal rootfs ships libcrypto.so.3 without libssl.so.3, so openssl
+# exits on a missing shared library before reading a single certificate.
+#
+# Concatenating PEM files needs neither. What it does need is the same *choice*
+# of certificates update-ca-certificates would have made, which lives in
+# /etc/ca-certificates.conf: one path per line relative to
+# /usr/share/ca-certificates, '#' for comments, a leading '!' to exclude a
+# certificate. Globbing a single vendor directory instead - as the first version
+# of this did - silently drops every other directory the package ships
+# (letsencrypt, alongside mozilla) and ignores any exclusion an operator made.
+#
+# Only the bundle is generated, not the hashed symlinks update-ca-certificates
+# also creates. Those serve OpenSSL's directory lookup; Go's crypto/x509 - and
+# therefore dockerd - reads the bundle, which is what this exists to fix.
+set -eu
+
+bundle=/etc/ssl/certs/ca-certificates.crt
+conf=/etc/ca-certificates.conf
+src=/usr/share/ca-certificates
+
+# An existing bundle wins, so an operator who has installed a private or
+# corporate CA keeps it instead of having it overwritten on the next start.
+[ -s "$bundle" ] && exit 0
+[ -r "$conf" ] || exit 0
+
+mkdir -p "$(dirname "$bundle")"
+
+tmp="$bundle.tmp.$$"
+: > "$tmp"
+
+while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+        ''|'#'*|'!'*) continue ;;
+    esac
+    [ -r "$src/$line" ] || continue
+    cat "$src/$line" >> "$tmp"
+done < "$conf"
+
+# Never leave a truncated bundle behind: a partial one fails verification in a
+# way that reads as a bad certificate rather than a bad write.
+if [ -s "$tmp" ]; then
+    mv "$tmp" "$bundle"
+else
+    rm -f "$tmp"
+fi
