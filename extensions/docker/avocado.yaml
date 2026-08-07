@@ -19,8 +19,33 @@ extensions:
 
     packages:
       docker: '*'
+      # Declared explicitly rather than relied on transitively: the minimal
+      # rootfs ships no CA bundle at all, so this extension is the only thing
+      # putting one on the device, and a dependency change in docker would take
+      # public-registry pulls with it.
+      #
+      # Note the certs alone are not sufficient. ca-certificates generates
+      # /etc/ssl/certs/ca-certificates.crt from a postinst, which never runs for
+      # a sysext, so a merged device has /usr/share/ca-certificates/mozilla/*.crt
+      # and an empty /etc/ssl/certs, and every pull still fails with "x509:
+      # certificate signed by unknown authority". references/docker-registry
+      # works around that in a docker.service drop-in that cats the mozilla
+      # certs into the bundle; that workaround belongs here too, but is left out
+      # of this change so it can be reviewed on its own.
+      ca-certificates: '*'
       kernel-module-br-netfilter: '*'
       kernel-module-bridge: '*'
+      # Docker 28+ writes a raw-table PREROUTING DROP rule ("direct access
+      # filtering") for every container on the default bridge. Without this
+      # module every `docker run` dies at network setup with "can't initialize
+      # iptables table `raw'" and only --network host works.
+      kernel-module-iptable-raw: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
+
+  # The image step shells out to mkfs.erofs, which the 2026-edge SDK container
+  # does not carry; without this the extension content builds and then
+  # "Creating image" dies on command not found.
+  packages:
+    nativesdk-erofs-utils: '*'
