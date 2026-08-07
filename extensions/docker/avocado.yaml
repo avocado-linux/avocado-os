@@ -17,6 +17,8 @@ extensions:
     enable_services:
       - docker.service
 
+    overlay: overlay
+
     packages:
       docker: '*'
       # Declared explicitly rather than relied on transitively: the minimal
@@ -24,14 +26,8 @@ extensions:
       # putting one on the device, and a dependency change in docker would take
       # public-registry pulls with it.
       #
-      # Note the certs alone are not sufficient. ca-certificates generates
-      # /etc/ssl/certs/ca-certificates.crt from a postinst, which never runs for
-      # a sysext, so a merged device has /usr/share/ca-certificates/mozilla/*.crt
-      # and an empty /etc/ssl/certs, and every pull still fails with "x509:
-      # certificate signed by unknown authority". references/docker-registry
-      # works around that in a docker.service drop-in that cats the mozilla
-      # certs into the bundle; that workaround belongs here too, but is left out
-      # of this change so it can be reviewed on its own.
+      # The certs alone are not sufficient - see the docker.service drop-in in
+      # overlay/, which generates the bundle they cannot generate themselves.
       ca-certificates: '*'
       kernel-module-br-netfilter: '*'
       kernel-module-bridge: '*'
