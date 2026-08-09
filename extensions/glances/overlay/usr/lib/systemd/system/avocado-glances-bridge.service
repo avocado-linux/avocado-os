@@ -1,0 +1,17 @@
+[Unit]
+Description=Avocado Glances -> avocado-conn telemetry bridge
+Documentation=https://github.com/avocado-linux/avocado-os
+# The bridge just needs its listener up before glances starts POSTing; it
+# tolerates avocado-conn/socket being absent (forwards fail, glances retries).
+Before=avocado-glances.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/glances/avocado-glances-bridge.env
+ExecStart=/usr/bin/python3 /usr/libexec/avocado-glances-bridge
+Restart=always
+RestartSec=5
+SyslogIdentifier=avocado-glances-bridge
+
+[Install]
+WantedBy=multi-user.target

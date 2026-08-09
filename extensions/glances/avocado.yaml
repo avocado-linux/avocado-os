@@ -1,0 +1,43 @@
+supported_targets: '*'
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-ext-glances:
+    version: 0.1.0
+    release: r0
+    summary: Glances device telemetry collector
+    description: >-
+      Glances-based observability agent. Collects device vitals and any
+      user-selected metrics and exports them (MQTT by default). WHAT is
+      collected and WHERE it is sent are fully user-configurable in
+      /etc/glances/glances.conf; the transmit interval and export module are
+      set in /etc/glances/avocado-glances.env.
+    license: LGPL-3.0-only
+    url: https://github.com/avocado-linux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    overlay: overlay
+
+    enable_services:
+      - avocado-glances-bridge.service
+      - avocado-glances.service
+
+    on_merge:
+      - systemctl start --no-block avocado-glances-bridge.service
+      - systemctl start --no-block avocado-glances.service
+
+    on_unmerge:
+      - systemctl stop avocado-glances.service
+      - systemctl stop avocado-glances-bridge.service
+
+    packages:
+      python3-glances: '*'
+      # RESTful exporter (default M2 path) needs requests; paho-mqtt for the
+      # direct-broker fallback is pulled via python3-glances RDEPENDS.
+      python3-requests: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}

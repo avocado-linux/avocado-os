@@ -1,0 +1,18 @@
+[Unit]
+Description=Avocado Glances telemetry collector
+Documentation=https://glances.readthedocs.io/
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+# HOME so glances can resolve its user cache dir under systemd.
+Environment=HOME=/root
+EnvironmentFile=/etc/glances/avocado-glances.env
+ExecStart=/usr/bin/glances $GLANCES_ARGS --config /etc/glances/glances.conf
+Restart=always
+RestartSec=10
+SyslogIdentifier=avocado-glances
+
+[Install]
+WantedBy=multi-user.target
