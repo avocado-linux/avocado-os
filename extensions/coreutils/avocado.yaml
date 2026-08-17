@@ -1,0 +1,58 @@
+supported_targets: '*'
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-ext-coreutils:
+    # sysext only. Every package here lands under /usr, and none of them needs
+    # a unit or anything in /etc, so there is nothing for a confext to carry.
+    types:
+      - sysext
+    version: 1.0.0
+    release: r0
+    summary: GNU userland in place of the BusyBox applets
+    description: >
+      Replaces the BusyBox applets with their GNU equivalents on a bench board.
+      A minimal Avocado image gets ls, grep, sed, find, ps and the rest from
+      BusyBox, whose flags and output are a subset of GNU's and differ in ways
+      that break otherwise-correct commands. That is fine for a shipped image
+      and costly on a board someone - or an agent - is driving interactively.
+      Development only.
+
+    packages:
+      # The applets people actually trip over. coreutils alone is not enough:
+      # find, grep, sed and awk are separate BusyBox applets with their own
+      # divergences, and each has its own GNU package.
+      coreutils: '*'
+      findutils: '*'
+      grep: '*'
+      sed: '*'
+      gawk: '*'
+      diffutils: '*'
+      procps: '*'
+      tar: '*'
+      which: '*'
+      file: '*'
+      # A real shell, not ash. BusyBox ash lacks arrays, `local -n`, process
+      # substitution and `[[ =~ ]]`, so scripts written against bash fail on it
+      # in ways that read as logic bugs rather than as a missing feature.
+      bash: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
+
+  packages:
+    # avocado-cli emits an erofs formatter call for every extension whose type
+    # is erofs (commands/ext/image.rs:921) without declaring the tool it needs,
+    # so on a clean SDK the content builds and the image step then dies on
+    # command-not-found.
+    #
+    # avocado-debt: per-project workaround for a CLI/SDK gap. Ceiling:
+    # one project at a time - most of the in-tree bsp/ and extensions/ configs
+    # still lack this and fail identically the moment someone builds them on a
+    # clean SDK. Upgrade trigger: avocado-cli declares the formatter alongside
+    # the call site, or the SDK image ships it - then delete this block rather
+    # than copying it to the next config.
+    nativesdk-erofs-utils: '*'
