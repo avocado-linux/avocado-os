@@ -200,3 +200,17 @@ extensions:
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
+
+  packages:
+    # avocado-cli emits an erofs formatter call for every extension whose type
+    # is erofs (commands/ext/image.rs:921) without declaring the tool it needs,
+    # so on a clean SDK the content builds and the image step then dies on
+    # command-not-found.
+    #
+    # avocado-debt: per-project workaround for a CLI/SDK gap. Ceiling:
+    # one project at a time - 42 of the 46 in-tree bsp/ and extensions/ configs
+    # still lack this and fail identically the moment someone builds them on a
+    # clean SDK. Upgrade trigger: avocado-cli declares the formatter alongside
+    # the call site, or the SDK image ships it - then delete this block rather
+    # than copying it to a 44th config.
+    nativesdk-erofs-utils: '*'
