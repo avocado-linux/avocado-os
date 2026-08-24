@@ -12,6 +12,17 @@ matches=""
 # here - a binary for the wrong architecture packages, publishes and installs
 # successfully, and only fails when the device tries to exec it, several layers
 # from the cause. Refusing to guess keeps the failure local and attributable.
+#
+# devtool-debt: this block is duplicated, still unfixed, in five sibling
+# extensions - cli, connect and tunnels carry it in both their compile and
+# install scripts, jtop and microclaw in their compile script only.
+# Ceiling: safe while each of those five targets a single architecture family,
+# because a single-family architecture can only ever prefix-match one target
+# JSON, so the first-match-and-break behaves identically to enumeration.
+# Upgrade trigger: any of those five declaring support for a target whose
+# architecture prefix-matches more than one target JSON - at which point that
+# extension silently ships a wrong-architecture binary exactly as this one
+# would have.
 for json_file in "$RUST_TARGET_PATH"/*.json; do
     if [ -f "$json_file" ]; then
         json_name=$(basename "$json_file" .json)
