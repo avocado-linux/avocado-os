@@ -3,11 +3,24 @@
 # check-provider.sh - enforce the ring-only rustls crypto provider for the
 # Container Dev Mode device agent.
 #
-# aws-lc-rs is forbidden in this crate (assumption A9: the agent cross-compiles
-# against the musl SDK, which clears only the `ring` stack - the same rule
-# avocado-conn enforces). This guard fails the build if aws-lc-rs ever resolves
-# into the dependency tree, and also asserts that `ring` IS present so a guard
-# that cannot see the tree at all can never masquerade as a pass.
+# aws-lc-rs is forbidden in this crate. The constraint stands; the reason
+# previously recorded for it did not survive checking, so it is restated here.
+#
+# The old reason claimed the agent cross-compiles against a libc whose SDK
+# clears only the `ring` stack. No build has ever targeted that libc. The one
+# triple this crate has been compiled for is aarch64-avocado-linux-gnu - glibc -
+# and no published feed carries a target for the other, so that case is untested
+# rather than satisfied. Do not read this guard as evidence that it works there.
+#
+# What the constraint actually rests on: aws-lc-rs builds C and assembly through
+# cc/cmake, so it needs a working C toolchain for the exact cross target, while
+# ring's pure-Rust path does not. Every target this crate gains is one more
+# target aws-lc-rs would have to be proven to build for; ring costs nothing per
+# target. avocado-conn enforces the same rule for the same reason.
+#
+# This guard fails the build if aws-lc-rs ever resolves into the dependency
+# tree, and also asserts that `ring` IS present so a guard that cannot see the
+# tree at all can never masquerade as a pass.
 #
 # Exit contract (three-way, deliberately NOT a bare `! cargo tree`):
 #   0 - clean ring-only tree (aws-lc-rs absent, ring present)
