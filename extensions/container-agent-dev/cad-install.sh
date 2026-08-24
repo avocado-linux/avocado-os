@@ -2,14 +2,22 @@
 set -euo pipefail
 
 RUST_TARGET=""
+match_count=0
+matches=""
 
-# Find the Rust target from RUST_TARGET_PATH
+# Resolution must stay byte-for-byte equivalent to cad-compile.sh's. The two run
+# in separate invocations against the same SDK, so a divergence here silently
+# installs a different triple's binary than the one that was compiled - the
+# install would look successful and ship the wrong artifact. Enumerate every
+# candidate rather than stopping at the first; see cad-compile.sh for why an
+# ambiguous match must refuse rather than pick.
 for json_file in "$RUST_TARGET_PATH"/*.json; do
     if [ -f "$json_file" ]; then
         json_name=$(basename "$json_file" .json)
         if [[ "$json_name" == "${OECORE_TARGET_ARCH}-"* ]]; then
             RUST_TARGET="$json_name"
-            break
+            match_count=$((match_count + 1))
+            matches="$matches $json_name"
         fi
     fi
 done
@@ -18,9 +26,19 @@ done
 # empty, BINARY_PATH collapses to "$AVOCADO_BUILD_DIR//release/...", and the -f
 # check below reports a missing binary instead of the actual fault.
 if [ -z "$RUST_TARGET" ]; then
-    echo "Error: Could not find Rust target for $OECORE_TARGET_ARCH"
+    echo "Error: Could not find Rust target for $OECORE_TARGET_ARCH" >&2
     exit 1
 fi
+
+if [ "$match_count" -gt 1 ]; then
+    echo "Error: $OECORE_TARGET_ARCH matches $match_count Rust targets:$matches" >&2
+    echo "Error: refusing to pick one - installing a different triple's binary than was compiled would ship a wrong-architecture artifact that looks installed." >&2
+    exit 1
+fi
+
+# Stable marker, same contract as cad-compile.sh's: the resolution fixture test
+# greps for it to separate a successful resolution from a later failure.
+echo "resolved-target: $RUST_TARGET"
 
 BINARY_PATH="$AVOCADO_BUILD_DIR/$RUST_TARGET/release/avocado-container-agent-dev"
 

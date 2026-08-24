@@ -2,22 +2,43 @@
 set -euo pipefail
 
 RUST_TARGET=""
+match_count=0
+matches=""
 
-# Find the Rust target from RUST_TARGET_PATH
+# Resolve the Rust target from RUST_TARGET_PATH. Enumerate every candidate
+# instead of stopping at the first: an OECORE_TARGET_ARCH that prefix-matches
+# two target JSONs used to take whichever the glob happened to return first and
+# discard the rest without a word. That is the worst failure shape available
+# here - a binary for the wrong architecture packages, publishes and installs
+# successfully, and only fails when the device tries to exec it, several layers
+# from the cause. Refusing to guess keeps the failure local and attributable.
 for json_file in "$RUST_TARGET_PATH"/*.json; do
     if [ -f "$json_file" ]; then
         json_name=$(basename "$json_file" .json)
         if [[ "$json_name" == "${OECORE_TARGET_ARCH}-"* ]]; then
             RUST_TARGET="$json_name"
-            break
+            match_count=$((match_count + 1))
+            matches="$matches $json_name"
         fi
     fi
 done
 
 if [ -z "$RUST_TARGET" ]; then
-    echo "Error: Could not find Rust target for $OECORE_TARGET_ARCH"
+    echo "Error: Could not find Rust target for $OECORE_TARGET_ARCH" >&2
     exit 1
 fi
+
+if [ "$match_count" -gt 1 ]; then
+    echo "Error: $OECORE_TARGET_ARCH matches $match_count Rust targets:$matches" >&2
+    echo "Error: refusing to pick one - the wrong triple yields a binary that packages and installs but cannot exec on the device." >&2
+    exit 1
+fi
+
+# Stable marker: the resolution fixture test greps for this to tell "resolution
+# succeeded and a later step failed" from "resolution itself failed", which exit
+# code alone cannot distinguish when the test runs without a real SDK. Load-
+# bearing test surface, not a debug echo.
+echo "resolved-target: $RUST_TARGET"
 
 echo "Compiling avocado-container-agent-dev for target: $RUST_TARGET"
 
