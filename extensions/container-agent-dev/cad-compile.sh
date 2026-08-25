@@ -26,6 +26,18 @@ matches=""
 for json_file in "$RUST_TARGET_PATH"/*.json; do
     if [ -f "$json_file" ]; then
         json_name=$(basename "$json_file" .json)
+
+        # Skip the SDK's own nativesdk triple. It shares the architecture prefix
+        # with the device triple whenever the SDK host arch matches the target
+        # arch, which on x86_64 means RUST_TARGET_PATH holds both
+        # x86_64-avocado-linux-gnu and x86_64-avocadosdk-linux-gnu. The
+        # avocadosdk vendor is host-side by construction - avocado-cli tags every
+        # nativesdk artifact <arch>_avocadosdk - so it is never a candidate for a
+        # device binary and must not count as a competing match.
+        case "$json_name" in
+        "${OECORE_TARGET_ARCH}-avocadosdk-"*) continue ;;
+        esac
+
         if [[ "$json_name" == "${OECORE_TARGET_ARCH}-"* ]]; then
             RUST_TARGET="$json_name"
             match_count=$((match_count + 1))

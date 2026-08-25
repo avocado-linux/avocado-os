@@ -14,6 +14,16 @@ matches=""
 for json_file in "$RUST_TARGET_PATH"/*.json; do
     if [ -f "$json_file" ]; then
         json_name=$(basename "$json_file" .json)
+
+        # Skip the SDK's own nativesdk triple - see cad-compile.sh for why. This
+        # exclusion must stay identical in both scripts: if only one of them
+        # skipped it, that script would refuse while the other resolved, and the
+        # extension would compile but fail to install (or worse, install a
+        # host-triple binary onto the device).
+        case "$json_name" in
+        "${OECORE_TARGET_ARCH}-avocadosdk-"*) continue ;;
+        esac
+
         if [[ "$json_name" == "${OECORE_TARGET_ARCH}-"* ]]; then
             RUST_TARGET="$json_name"
             match_count=$((match_count + 1))
