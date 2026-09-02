@@ -1,0 +1,20 @@
+[Unit]
+Description=Avocado Log — stream journald to MQTT
+After=network-online.target systemd-journald.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/avocado-log/avocado-log.env
+# journald (collector) piped straight to mosquitto_pub. One JSON line = one message.
+# ponytail: on broker drop the whole pipe restarts and -b -n all replays the boot
+# (duplicates). Fine for M1; avocado-logd tracks a journal cursor to resume clean.
+ExecStart=/bin/sh -c 'H=$(hostname); T=$(printf %%s "$LOG_TOPIC" | sed "s/{host}/$H/"); \
+  AUTH=""; [ -n "$LOG_USER" ] && AUTH="-u $LOG_USER -P $LOG_PASSWORD"; \
+  journalctl $JOURNAL_ARGS | mosquitto_pub -h "$LOG_BROKER" -p "$LOG_PORT" -t "$T" $AUTH -l'
+Restart=always
+RestartSec=5
+User=root
+Group=systemd-journal
+
+[Install]
+WantedBy=multi-user.target

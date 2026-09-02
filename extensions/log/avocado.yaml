@@ -1,0 +1,36 @@
+supported_targets: '*'
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-ext-log:
+    version: 0.1.0
+    release: r0
+    summary: Journald log streaming over MQTT
+    description: >-
+      Ships device logs to an MQTT broker. journald is the collector (already
+      running); this extension only persists the journal to disk and streams it
+      out. WHAT is shipped (unit, level, grep, boot window) and WHERE it goes are
+      set in /etc/avocado-log/avocado-log.env. Milestone 1: journalctl piped to
+      mosquitto_pub, no redaction/TLS — point it only at a broker you trust. The
+      filtered/redacted/backpressured version is avocado-logd (see logging RFC).
+    license: MIT
+    url: https://github.com/avocado-linux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    overlay: overlay
+
+    enable_services:
+      - avocado-log.service
+
+    on_merge:
+      - systemctl restart --no-block systemd-journald.service
+      - systemctl start --no-block avocado-log.service
+
+    on_unmerge:
+      - systemctl stop avocado-log.service
+
+    packages:
+      mosquitto-clients: '*'
