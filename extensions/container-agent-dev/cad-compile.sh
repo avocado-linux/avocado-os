@@ -13,16 +13,22 @@ matches=""
 # successfully, and only fails when the device tries to exec it, several layers
 # from the cause. Refusing to guess keeps the failure local and attributable.
 #
-# devtool-debt: this block is duplicated, still unfixed, in five sibling
-# extensions - cli, connect and tunnels carry it in both their compile and
-# install scripts, jtop and microclaw in their compile script only.
-# Ceiling: safe while each of those five targets a single architecture family,
-# because a single-family architecture can only ever prefix-match one target
-# JSON, so the first-match-and-break behaves identically to enumeration.
-# Upgrade trigger: any of those five declaring support for a target whose
-# architecture prefix-matches more than one target JSON - at which point that
-# extension silently ships a wrong-architecture binary exactly as this one
-# would have.
+# devtool-debt: this block is duplicated, still unfixed, in the three sibling
+# extensions that have not yet moved to their own ext-* repo - cli, connect and
+# tunnels - in both their compile and install scripts. jtop and microclaw carry
+# a copy too, but theirs are superseded: both migrated to ext-* repos, and
+# ext-microclaw resolves the architecture with a plain case statement that does
+# not have this defect at all.
+# Ceiling: those three are safe by GLOB ORDERING ALONE, not by construction.
+# Every target whose architecture matches the SDK host architecture has two
+# matching JSONs - the device triple and the SDK's own <arch>-avocadosdk-* - and
+# first-match-and-break survives only because "avocado-" sorts ahead of
+# "avocadosdk-" on the hyphen. Nothing enforces that ordering. This is not a
+# theoretical ceiling: it is exactly what broke qemux86-64 here the first time
+# the guard below ran.
+# Upgrade trigger: a vendor string that reorders those two, a third triple
+# sorting between them, or any of the three gaining a target whose architecture
+# prefix-matches more than one device triple.
 for json_file in "$RUST_TARGET_PATH"/*.json; do
     if [ -f "$json_file" ]; then
         json_name=$(basename "$json_file" .json)
