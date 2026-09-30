@@ -70,11 +70,15 @@ extensions:
       kernel-module-ina3221: '*'
       kernel-module-mc-hwpm: '*'
       kernel-module-mc-utils: '*'
-      # Ethernet stack — onboard 1GbE on the P3737 carrier goes through the
-      # Tegra234 MGBE controller (NVIDIA OOT nvethernet driver, resolved
-      # via nv-kernel-module-nvethernet's `Provides: kernel-module-nvethernet`)
-      # with a Realtek RTL8211F PHY (kernel-module-realtek). r8169 covers any
-      # discrete PCIe Realtek NIC; stmmac is the alt-kernel (5.15) MAC path.
+      # Ethernet stack, copied from the AGX Orin devkit extension. The
+      # Tegra234 MGBE path (NVIDIA OOT nvethernet driver, resolved via
+      # nv-kernel-module-nvethernet's `Provides: kernel-module-nvethernet`)
+      # applies to any AGX Orin carrier; stmmac is the alt-kernel (5.15) MAC
+      # path. The realtek and r8169 modules here are the devkit's (a Realtek
+      # PHY and discrete NIC) and are kept until an inventory of this
+      # carrier shows which PHY and NICs it has: Seeed's device tree
+      # includes dt-bindings/net/ti-dp83867.h, so it may use a TI DP83867
+      # PHY instead. Reconcile the list against that inventory.
       kernel-module-nvethernet: '*'
       kernel-module-realtek: '*'
       kernel-module-r8169: '*'
