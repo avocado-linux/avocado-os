@@ -1,0 +1,26 @@
+/dts-v1/;
+
+/*
+ * MB2 BCT misc override for the Seeed reComputer Robotics J501x carrier.
+ *
+ * Stock NVIDIA tegra234-mb2-bct-misc-p3701-0000.dts only includes
+ * tegra234-mb2-bct-common.dtsi, which directs MB2 to read 256 bytes of
+ * CVB (carrier) EEPROM data from I2C0 slave 0xac. Seeed's own
+ * bootloader/tegra234-mb2-bct-common.dtsi (Seeed-Studio/Linux_for_Tegra,
+ * commit f9a68317fbe3d276efc25b14b8b72339a1cc5d5c) differs from stock in
+ * exactly one line: cvb_eeprom_read_size = <0>, so MB2 skips the carrier
+ * EEPROM read.
+ *
+ * This file re-includes the stock common.dtsi and applies that same single
+ * change; cvm_eeprom_* (SOM EEPROM at 0xa0) is unchanged.
+ */
+
+#include "tegra234-mb2-bct-common.dtsi"
+
+/ {
+    mb2-misc {
+        eeprom {
+            cvb_eeprom_read_size = <0x0>;
+        };
+    };
+};
