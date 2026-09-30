@@ -1,0 +1,181 @@
+default_target: jetson-agx-orin-devkit
+supported_targets:
+  - jetson-agx-orin-devkit
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-bsp-recomputer-robotics-j5012:
+    version: 2024.1.0
+    release: r0
+    summary: Board support for the Seeed reComputer Robotics J5012 (carrier extension on jetson-agx-orin)
+    description: |
+      Layered carrier support for the Seeed reComputer Robotics J5012:
+      Seeed's J501 carrier board with an NVIDIA Jetson AGX Orin 64GB
+      module (P3701-0005, board_sku 0005). The SOM-side BSP comes from
+      the jetson-agx-orin-devkit target; this extension carries only
+      the carrier-specific boot files and the flash-flow overrides that
+      point the devkit flash profile at them.
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+      - sysext
+      - confext
+
+    package_files:
+      - overlay
+      - stone
+      - avocado.yaml
+
+    # Carrier overlay files for the reComputer Robotics J5012 live under
+    # stone/. avocado-cli composes the path below into the runtime's
+    # effective AVOCADO_STONE_INCLUDE_PATHS, scoped to this extension's
+    # location (so for consumers that fetch this BSP as a remote extension,
+    # stone finds the carrier files at
+    # $AVOCADO_PREFIX/includes/avocado-bsp-recomputer-robotics-j5012/stone/).
+    stone_include_paths:
+      - stone
+
+    # Confext overlay - ships /etc/hostname so the device identifies as
+    # `recomputer-robotics-j5012` instead of inheriting the SOM's
+    # MACHINE-derived `avocado-jetson-agx-orin` default.
+    overlay: overlay
+
+    on_merge:
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+      - nvbootctrl verify
+
+    # Common packages: same name in both kernel feeds (linux-yocto 6.6 and
+    # linux-jammy-nvidia-tegra 5.15). avocado-cli auto-suffixes kernel-family
+    # names with -${KERNEL_VERSION} at install time; the nv-kernel-module-*
+    # RPMs (from nvidia-kernel-oot) Provide both prefixed and unprefixed
+    # variants so unqualified `kernel-module-*` references resolve to the
+    # versioned NVIDIA OOT package.
+    packages:
+      kernel-module-at24: '*'
+      kernel-module-cec: '*'
+      kernel-module-crct10dif-ce: '*'
+      kernel-module-fusb301: '*'
+      kernel-module-governor-pod-scaling: '*'
+      kernel-module-governor-userspace: '*'
+      nv-kernel-module-host1x: '*'
+      kernel-module-host1x-fence: '*'
+      kernel-module-host1x-nvhost: '*'
+      kernel-module-ina3221: '*'
+      kernel-module-mc-hwpm: '*'
+      kernel-module-mc-utils: '*'
+      # Ethernet stack — onboard 1GbE on the P3737 carrier goes through the
+      # Tegra234 MGBE controller (NVIDIA OOT nvethernet driver, resolved
+      # via nv-kernel-module-nvethernet's `Provides: kernel-module-nvethernet`)
+      # with a Realtek RTL8211F PHY (kernel-module-realtek). r8169 covers any
+      # discrete PCIe Realtek NIC; stmmac is the alt-kernel (5.15) MAC path.
+      kernel-module-nvethernet: '*'
+      kernel-module-realtek: '*'
+      kernel-module-r8169: '*'
+      kernel-module-stmmac: '*'
+      kernel-module-nvgpu: '*'
+      kernel-module-nvhwpm: '*'
+      kernel-module-nvidia: '*'
+      kernel-module-nvidia-drm: '*'
+      kernel-module-nvidia-modeset: '*'
+      kernel-module-nvidia-vrs-pseq: '*'
+      kernel-module-nvmap: '*'
+      kernel-module-nvme: '*'
+      kernel-module-nvme-core: '*'
+      kernel-module-nvpmodel-clk-cap: '*'
+      kernel-module-nvsciipc: '*'
+      kernel-module-nvvrs-pseq-rtc: '*'
+      kernel-module-pcie-tegra194: '*'
+      kernel-module-phy-tegra194-p2u: '*'
+      kernel-module-pwm-fan: '*'
+      kernel-module-pwm-tegra: '*'
+      kernel-module-pwm-tegra-tachometer: '*'
+      kernel-module-snd-hda-codec: '*'
+      kernel-module-snd-hda-codec-hdmi: '*'
+      kernel-module-snd-hda-core: '*'
+      kernel-module-snd-hda-tegra: '*'
+      kernel-module-snd-soc-audio-graph-card: '*'
+      kernel-module-snd-soc-simple-card-utils: '*'
+      kernel-module-snd-soc-tegra-audio-graph-card: '*'
+      kernel-module-snd-soc-tegra-pcm: '*'
+      kernel-module-snd-soc-tegra-utils: '*'
+      kernel-module-snd-soc-tegra186-arad: '*'
+      nv-kernel-module-snd-soc-tegra186-asrc: '*'
+      nv-kernel-module-snd-soc-tegra186-dspk: '*'
+      nv-kernel-module-snd-soc-tegra210-admaif: '*'
+      nv-kernel-module-snd-soc-tegra210-adx: '*'
+      nv-kernel-module-snd-soc-tegra210-ahub: '*'
+      nv-kernel-module-snd-soc-tegra210-amx: '*'
+      nv-kernel-module-snd-soc-tegra210-dmic: '*'
+      nv-kernel-module-snd-soc-tegra210-i2s: '*'
+      nv-kernel-module-snd-soc-tegra210-mixer: '*'
+      nv-kernel-module-snd-soc-tegra210-mvc: '*'
+      nv-kernel-module-snd-soc-tegra210-ope: '*'
+      nv-kernel-module-snd-soc-tegra210-sfc: '*'
+      kernel-module-spi-tegra114: '*'
+      kernel-module-spidev: '*'
+      kernel-module-tegra-aconnect: '*'
+      kernel-module-tegra-bpmp-thermal: '*'
+      kernel-module-tegra-cactmon-mc-all: '*'
+      kernel-module-tegra-dce: '*'
+      nv-kernel-module-tegra-drm: '*'
+      kernel-module-tegra-wmark: '*'
+      kernel-module-tegra-xudc: '*'
+      kernel-module-tegra210-adma: '*'
+      kernel-module-tegra234-aon: '*'
+      kernel-module-tegra234-oc-event: '*'
+      kernel-module-thermal-trip-event: '*'
+      kernel-module-tsecriscv: '*'
+      linux-firmware-rtl8168: '*'
+      swupdate: '*'
+      tegra-redundant-boot-base: '*'
+
+      # L4T GPU userspace + boot-time daemons. tegra-firmware-tegra234 (the
+      # ga10b kernel firmware blobs) is delivered via
+      # packagegroup-avocado-tegra-rootfs in the rootfs erofs base, *not*
+      # here, because the kernel firmware loader returns -40 (ELOOP) when
+      # reading firmware files through the sysext /usr overlay.
+      cuda-cudart: '*'
+      tegra-configs-udev: '*'
+      tegra-libraries-cuda: '*'
+      tegra-nvphs: '*'
+      tegra-nvpower: '*'
+      tegra-nvsciipc: '*'
+      tegra-nvstartup: '*'
+
+    # 5.15 (linux-jammy-nvidia-tegra) uses NVIDIA's downstream Realtek shim
+    # for the M.2 wifi card; mainline rtw88 isn't built for this kernel.
+    # Mirrors meta-tegra/conf/machine/include/devkit-wifi.inc:NVIDIA_WIFI which
+    # avocado-pkg-rootfs doesn't pick up automatically (devkit-wifi.inc routes
+    # via MACHINE_EXTRA_RRECOMMENDS, not MACHINE_ESSENTIAL_EXTRA_RDEPENDS).
+    #
+    # The L4T rtl8822ce driver expects firmware at top-level /lib/firmware
+    # (rtl8822_setting.bin, rtl8822cu_fw, rtl8822cu_config) which only
+    # tegra-firmware-rtl8822 ships. linux-firmware-rtl8822 ships rtl_bt/* and
+    # rtw88/* — wrong path/format for the L4T driver.
+    kernel-5.15.*:
+      packages:
+        nv-kernel-module-rtl8822ce: '*'
+        tegra-firmware-rtl8822: '*'
+
+    # 6.6 (linux-yocto) uses the upstream rtw88 driver family for the 8822CE,
+    # and ships drm-display-helper as a separate module (5.15 statically links
+    # the helpers into drm.ko). linux-firmware-rtl8822 ships rtl_bt/* and
+    # rtw88/* firmware blobs at the paths the upstream drivers expect.
+    kernel-6.6.*:
+      packages:
+        kernel-module-drm-display-helper: '*'
+        kernel-module-rtw88-8822c: '*'
+        kernel-module-rtw88-8822ce: '*'
+        kernel-module-rtw88-core: '*'
+        kernel-module-rtw88-pci: '*'
+        linux-firmware-rtl8822: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
