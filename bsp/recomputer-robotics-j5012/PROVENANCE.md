@@ -19,7 +19,7 @@ ship in the extension package.
 gh api repos/Seeed-Studio/Linux_for_Tegra/commits/r36.5.0 --jq .sha
 ```
 
-The branch moves; the commit is the pin. Later tasks fetch every Seeed file at
+The branch moves; the commit is the pin. Every Seeed file is fetched at
 `?ref=f9a68317fbe3d276efc25b14b8b72339a1cc5d5c`, never at `r36.5.0`.
 
 ## meta-avocado (2024 feed)
@@ -97,8 +97,8 @@ gh api "repos/avocado-linux/vendor-meta-tegra/contents/recipes-bsp/tegra-binarie
 curl -sIL https://developer.download.nvidia.com/embedded/L4T/r36_Release_v5.2/releases/Jetson_Linux_R36.5.2_aarch64.tbz2
 ```
 
-The sha256 is the recipe's `SRC_URI[sha256sum]`. It was not re-hashed from a
-download here; task 2.2 verifies it before extracting.
+The sha256 is the recipe's `SRC_URI[sha256sum]`. Verify the downloaded archive
+against it before extracting anything from it.
 
 ### NVIDIA device-tree sources
 
@@ -213,11 +213,12 @@ sha256sum stone/carrier-bsp/recomputer-robotics-agx-orin-j501x-pinmux.dtsi stone
   `<0x100>`, so MB2 skips the carrier EEPROM read. cvm_eeprom_* is unchanged.
 - Evidence for the delta: Seeed's own `bootloader/tegra234-mb2-bct-common.dtsi`
   at the pinned commit differs from the stock common dtsi in exactly this one
-  line (stock `<0x100>`, Seeed `<0>`). The diff is kept in the change's
-  `evidence/mb2-common.diff`.
-- No SCR file ships. Task 2.3 concluded the stock SCR config is used unchanged
-  (verdict stock, user decision 2026-09-29). The diff Seeed's SCR would have
-  added is recorded in the change's `evidence/mb2-scr.md` and is not shipped.
+  line (stock `<0x100>`, Seeed `<0>`). The command below reproduces the diff.
+- No SCR file ships; the stock SCR config is used unchanged. Seeed's SCR file
+  adds one entry, `reg@322` (`GPIO_M_SCR_00_0`, value `0x38009696`), whose
+  meaning is not documented in any source reachable when this was written. An
+  SCR entry only takes effect on a QSPI write, and a security-configuration
+  change nobody can explain is not carried until its purpose is established.
 
 ```sh
 sha256sum stone/carrier-bsp/tegra234-mb2-bct-misc-p3701-0000-seeed.dts
@@ -229,7 +230,8 @@ gh api -H 'Accept: application/vnd.github.raw' 'repos/Seeed-Studio/Linux_for_Teg
 
 - Committed file: `tegra234-j501x-0000+p3701-0005-recomputer-robo.dtb`
 - sha256: `f3f7eb9ecacf18d7f7be03002eaf2954c3bd8d74e5627c1af68268334109b44b`,
-  the value `dtb/build-dtb.sh --verify` enforces (it rebuilds and compares).
+  the hash `dtb/build-dtb.sh --verify` reproduces: it rebuilds from the pinned
+  inputs and compares the result with the committed file.
 - Built from Seeed commit `f9a68317fbe3d276efc25b14b8b72339a1cc5d5c`. Four
   Seeed files are overlaid onto NVIDIA's `hardware/nvidia/t23x/nv-public`, all
   under `source/hardware/nvidia/t23x/nv-public/` in the Seeed repo, each checked
@@ -262,7 +264,7 @@ bash bsp/recomputer-robotics-j5012/dtb/build-dtb.sh --verify
 ### carrier.env
 
 - Committed file: `carrier.env`
-- sha256: `8c8e4f5746680c8793da3607c82d0882d1201ddd00f297bd1e9692cbd9fc764d`
+- sha256: `70ad88a266f5a5a5b6b8f31dafcbf4d53f3554e3b6b54cdf00e7702ccb198493`
 - Authored in this extension; there is no upstream copy. Its values are taken
   from Seeed's `recomputer-robo-agx-orin-j501x.conf` at the pinned commit (git
   blob `b642384ac4a2b1477724f22179d41018d719b541`): the `DTB_FILE`,
