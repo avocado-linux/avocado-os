@@ -7,17 +7,16 @@ distro:
   channel: edge
 
 extensions:
-  avocado-bsp-recomputer-robotics-j5012:
+  avocado-bsp-recomputer-mini-j5012:
     version: 2024.1.0
     release: r0
-    summary: Board support for the Seeed reComputer Robotics J5012 (carrier extension on jetson-agx-orin)
+    summary: Board support for the Seeed reComputer Mini J5012 (carrier extension on jetson-agx-orin)
     description: |
-      Layered carrier support for the Seeed reComputer Robotics J5012:
-      Seeed's J501 carrier board with an NVIDIA Jetson AGX Orin 64GB
-      module (P3701-0005, board_sku 0005). The SOM-side BSP comes from
-      the jetson-agx-orin-devkit target; this extension carries only
-      the carrier-specific boot files and the flash-flow overrides that
-      point the devkit flash profile at them.
+      Layered carrier support for the Seeed reComputer Mini J5012: the
+      J501 carrier board with a Jetson AGX Orin 64GB module (P3701-0005).
+      The flash flow, BPMP firmware, PMIC config and partition layout
+      inherit unchanged from the jetson-agx-orin-devkit flash profile;
+      the carrier-specific files under stone/ are layered over it.
     license: Apache-2.0
     url: https://github.com/avocadolinux/avocado-os
     vendor: Avocado Linux <info@avocadolinux.org>
@@ -31,18 +30,17 @@ extensions:
       - stone
       - avocado.yaml
 
-    # Carrier overlay files for the reComputer Robotics J5012 live under
-    # stone/. avocado-cli composes the path below into the runtime's
-    # effective AVOCADO_STONE_INCLUDE_PATHS, scoped to this extension's
-    # location (so for consumers that fetch this BSP as a remote extension,
-    # stone finds the carrier files at
-    # $AVOCADO_PREFIX/includes/avocado-bsp-recomputer-robotics-j5012/stone/).
+    # Carrier overlay files for the reComputer Mini J5012 live under stone/.
+    # avocado-cli composes the path below into the runtime's effective
+    # AVOCADO_STONE_INCLUDE_PATHS, scoped to this extension's location
+    # (so for consumers that fetch this BSP as a remote extension, stone
+    # finds the carrier files at $AVOCADO_PREFIX/includes/avocado-bsp-recomputer-mini-j5012/stone/).
     stone_include_paths:
       - stone
 
     # Confext overlay - ships /etc/hostname so the device identifies as
-    # `recomputer-robotics-j5012` instead of inheriting the SOM's
-    # MACHINE-derived `avocado-jetson-agx-orin` default.
+    # `recomputer-mini-j5012` instead of inheriting the SOM's MACHINE-derived
+    # `avocado-jetson-agx-orin` default.
     overlay: overlay
 
     on_merge:
@@ -70,15 +68,11 @@ extensions:
       kernel-module-ina3221: '*'
       kernel-module-mc-hwpm: '*'
       kernel-module-mc-utils: '*'
-      # Ethernet stack, copied from the AGX Orin devkit extension. The
-      # Tegra234 MGBE path (NVIDIA OOT nvethernet driver, resolved via
-      # nv-kernel-module-nvethernet's `Provides: kernel-module-nvethernet`)
-      # applies to any AGX Orin carrier; stmmac is the alt-kernel (5.15) MAC
-      # path. The realtek and r8169 modules here are the devkit's (a Realtek
-      # PHY and discrete NIC) and are kept until an inventory of this
-      # carrier shows which PHY and NICs it has: Seeed's device tree
-      # includes dt-bindings/net/ti-dp83867.h, so it may use a TI DP83867
-      # PHY instead. Reconcile the list against that inventory.
+      # Ethernet stack — onboard 1GbE on the P3737 carrier goes through the
+      # Tegra234 MGBE controller (NVIDIA OOT nvethernet driver, resolved
+      # via nv-kernel-module-nvethernet's `Provides: kernel-module-nvethernet`)
+      # with a Realtek RTL8211F PHY (kernel-module-realtek). r8169 covers any
+      # discrete PCIe Realtek NIC; stmmac is the alt-kernel (5.15) MAC path.
       kernel-module-nvethernet: '*'
       kernel-module-realtek: '*'
       kernel-module-r8169: '*'
