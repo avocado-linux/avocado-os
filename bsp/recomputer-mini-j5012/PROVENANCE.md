@@ -191,5 +191,106 @@ dtc --version
 
 ## Carrier files
 
-To be filled by task 5.4: every committed carrier file, with its origin and
-sha256.
+Every file in `stone/carrier-bsp/`, with its origin. All Seeed paths are read at
+commit `f9a68317fbe3d276efc25b14b8b72339a1cc5d5c`. For the three Seeed-copied
+files the upstream and committed sha256 are equal (the copy is byte-exact).
+
+This extension was derived by retargeting an earlier build of the same extension
+for the sibling Seeed board configuration. No file name or value here comes from
+that sibling; its differences from the Mini configuration are recorded in
+`EVIDENCE/robo-vs-mini.diff` (sha256
+`b04e1bb2d52f734f30716e93564262809af08f85d2dbb4b77f195eb69596c924`), so a reader
+comparing the Mini files with Seeed's other configuration can see why they differ.
+
+```sh
+sha256sum "$EVIDENCE/robo-vs-mini.diff"
+```
+
+### Seeed-copied files
+
+| Committed file (`stone/carrier-bsp/`) | Seeed path | Upstream sha256 | Committed sha256 |
+|---|---|---|---|
+| `recomputer-mini-agx-orin-j501x-gpio-default.dtsi` | `bootloader/generic/BCT/recomputer-mini-agx-orin-j501x-gpio-default.dtsi` | `5efec361e3c01d0c185c4489ba7f1964fd16a8a6f625dedf01de4a8dfc7b0cdb` | `5efec361e3c01d0c185c4489ba7f1964fd16a8a6f625dedf01de4a8dfc7b0cdb` |
+| `recomputer-mini-agx-orin-j501x-padvoltage-default.dtsi` | `bootloader/generic/BCT/recomputer-mini-agx-orin-j501x-padvoltage-default.dtsi` | `aede16fea255ea7b87669eeece54fe5d2ee7e28388812597c199922609017ed5` | `aede16fea255ea7b87669eeece54fe5d2ee7e28388812597c199922609017ed5` |
+| `recomputer-mini-agx-orin-j501x-pinmux.dtsi` | `bootloader/generic/BCT/recomputer-mini-agx-orin-j501x-pinmux.dtsi` | `18115da2682e03a50b893756958e3fb6c399c751bb8d91ab09f328977dbc7698` | `18115da2682e03a50b893756958e3fb6c399c751bb8d91ab09f328977dbc7698` |
+
+```sh
+# upstream sha256, per Seeed path in the table
+gh api -H 'Accept: application/vnd.github.raw' 'repos/Seeed-Studio/Linux_for_Tegra/contents/<Seeed path>?ref=f9a68317fbe3d276efc25b14b8b72339a1cc5d5c' | sha256sum
+# committed sha256
+sha256sum bsp/recomputer-mini-j5012/stone/carrier-bsp/<committed file>
+```
+
+### MB2 BCT misc override (authored, builds on a stock file)
+
+- Committed file: `tegra234-mb2-bct-misc-p3701-0000-seeed.dts`
+- Committed sha256: `5611b92a6bceda9af9494611155287151972d474bb3c7809c3e5b5aa2c0727d0`
+- Builds on the stock file `Linux_for_Tegra/bootloader/generic/BCT/tegra234-mb2-bct-misc-p3701-0000.dts`
+  and its include `Linux_for_Tegra/bootloader/tegra234-mb2-bct-common.dtsi`, both in
+  `Jetson_Linux_R36.5.2_aarch64.tbz2` (sha256
+  `752326264c5e16826d3044a78e59ae06109467d37705143b94e664c91a471f47`, listed above;
+  paths recorded in `EVIDENCE/mb2-common.notes.txt`).
+- One delta against stock, taken from Seeed's `bootloader/tegra234-mb2-bct-common.dtsi`:
+  `cvb_eeprom_read_size` from `0x100` to `0` (`EVIDENCE/mb2-common.diff`, the only hunk).
+
+```sh
+sha256sum bsp/recomputer-mini-j5012/stone/carrier-bsp/tegra234-mb2-bct-misc-p3701-0000-seeed.dts
+grep '^[-+] ' "$EVIDENCE/mb2-common.diff"
+```
+
+### SCR
+
+No SCR file ships. Seeed's `tegra234-mb2-bct-scr-p3701-0000.dts` (sha256
+`8fe59ec54fd93bb63b4b22bd4d4dfb2b20b49efd93cb5e904bfbe2096b941eb0`) differs from stock
+by one undocumented `reg@322` (`GPIO_M_SCR_00_0`) entry that is not carried, and
+Seeed's Mini configuration never sets `SCR_CONFIG`, so Seeed's own flash applies
+the stock file (`EVIDENCE/mb2-scr.md`).
+
+```sh
+grep -n -i scr "$EVIDENCE/recomputer-mini-agx-orin-j501x.conf"   # prints nothing, exit 1
+```
+
+### carrier.env (authored, not copied from Seeed)
+
+- Committed sha256: `48fcfdb8b62b08942704a7894e327d920ff053599798bde311d70a1fd2948d79`
+- Encodes Seeed `recomputer-mini-agx-orin-j501x.conf` at the commit above, sha256
+  `a45a06424c320019cbbaa70b2f01c9f5f49fc0d0cb4048183a00ce5e131fa506`
+  (`gh api` command in the "Board configuration" section).
+
+| Knob | Seeed conf line |
+|---|---|
+| `CARRIER_ENV_DTBFILE` | 44 (`DTB_FILE`, SKU 0005 branch, lines 41-44) |
+| `CARRIER_FV_PINMUX_CONFIG` | 61 (`PINMUX_CONFIG`) |
+| `CARRIER_FV_PMC_CONFIG` | 62 (`PMC_CONFIG`) |
+| `CARRIER_ENV_ODMDATA` | 60 (`ODMDATA`) |
+| `CARRIER_FV_CHECK_BOARDID`, `CARRIER_FV_CHECK_BOARDSKU` | 37-48 (SKU branches; also in the stock flashvars) |
+| `CARRIER_FV_MB2BCT_CFG` | none; names the authored MB2 file above |
+| `TBCDTB_FILE` (deliberately unset) | 50 |
+
+```sh
+sha256sum "$EVIDENCE/recomputer-mini-agx-orin-j501x.conf"
+cat -n "$EVIDENCE/recomputer-mini-agx-orin-j501x.conf" | sed -n 35,65p
+```
+
+### Kernel DTB
+
+- Committed file: `tegra234-j501x-0000+p3701-0005-recomputer-mini.dtb`
+- Output sha256 (enforced by `dtb/build-dtb.sh --verify`):
+  `07d830c48c1a697d7e0baa05e8f9ea9d32de64dc7b56027721f4474bc800953d`
+- Built with `DTC v1.8.1`; `public_sources.tbz2` sha256
+  `4347a718e828edebee0d776d2110870d02a1d5766665d06c0abd3f325b1801d5` (see above).
+- Seeed inputs, git blob sha at the commit above (paths under
+  `source/hardware/nvidia/t23x/nv-public/`):
+
+| Blob sha | Path |
+|---|---|
+| `ca325af7ef26132460504d59aa1b031f7f6eddd3` | `nv-platform/tegra234-j501x-0000+p3701-0000-recomputer-mini.dts` |
+| `e01b6915d8cbf758fd6a9f01296b3c70b08f6eeb` | `nv-platform/tegra234-j501x-0000+p3701-0005-recomputer-mini.dts` |
+| `72289c86ac0bb14350a7a3126f1077aa11b6f134` | `nv-platform/tegra234-p3737-0000+p3701-xxxx-nv-common.dtsi` |
+| `b4013dab7f6cd34b948cf162eea677990bce5d72` | `tegra234-j501x-0000+p3701-0000.dts` |
+
+```sh
+sha256sum bsp/recomputer-mini-j5012/stone/carrier-bsp/tegra234-j501x-0000+p3701-0005-recomputer-mini.dtb
+grep -n 'SEEED_FILES=' -A4 bsp/recomputer-mini-j5012/dtb/build-dtb.sh
+dtc --version
+```
