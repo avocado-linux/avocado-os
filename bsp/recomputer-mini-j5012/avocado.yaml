@@ -59,24 +59,43 @@ extensions:
       kernel-module-at24: '*'
       kernel-module-cec: '*'
       kernel-module-crct10dif-ce: '*'
-      kernel-module-fusb301: '*'
+      # fusb301 (the devkit's USB-C controller) removed: the Mini's factory
+      # system never loads it. It loads the UCSI CCG stack (ucsi_ccg ->
+      # typec_ucsi -> typec) instead, so that stack is listed here.
+      kernel-module-typec: '*'
+      kernel-module-typec-ucsi: '*'
+      kernel-module-ucsi-ccg: '*'
       kernel-module-governor-pod-scaling: '*'
       kernel-module-governor-userspace: '*'
       nv-kernel-module-host1x: '*'
       kernel-module-host1x-fence: '*'
       kernel-module-host1x-nvhost: '*'
       kernel-module-ina3221: '*'
+      # tmp451 temperature sensor (i2c 4-004c) is driven by lm90.
+      kernel-module-lm90: '*'
+      # VRS11 voltage regulators (i2c 4-0020, 4-0022).
+      nv-kernel-module-i2c-nvvrs11: '*'
       kernel-module-mc-hwpm: '*'
       kernel-module-mc-utils: '*'
-      # Ethernet stack — onboard 1GbE on the P3737 carrier goes through the
-      # Tegra234 MGBE controller (NVIDIA OOT nvethernet driver, resolved
-      # via nv-kernel-module-nvethernet's `Provides: kernel-module-nvethernet`)
-      # with a Realtek RTL8211F PHY (kernel-module-realtek). r8169 covers any
-      # discrete PCIe Realtek NIC; stmmac is the alt-kernel (5.15) MAC path.
+      # Ethernet stack - both ports (eno1, eth1) are bound to the NVIDIA OOT
+      # nvethernet driver under the factory system (resolved via
+      # nv-kernel-module-nvethernet's `Provides: kernel-module-nvethernet`).
+      # The Mini's PHYs are not Realtek: the live device tree has an Aquantia
+      # AQR113C on MGBE0 (built into the 6.6 image kernel, CONFIG_AQUANTIA_PHY=y)
+      # and an RGMII PHY carrying ti,* delay properties on the EQOS port
+      # (the dp83867 driver, a module in 6.6).
+      # kernel-module-realtek, kernel-module-r8169 and linux-firmware-rtl8168
+      # are removed: no Realtek device appears in the factory pci or net
+      # inventory. stmmac stays as the in-tree alternative MAC path.
       kernel-module-nvethernet: '*'
-      kernel-module-realtek: '*'
-      kernel-module-r8169: '*'
+      kernel-module-dp83867: '*'
       kernel-module-stmmac: '*'
+      # Both CAN controllers (can0, can1) are bound to the NVIDIA OOT mttcan
+      # driver; can_dev is its dependency. nvpps is mttcan's and nvethernet's
+      # PPS helper (use count 2 under the factory system).
+      nv-kernel-module-mttcan: '*'
+      kernel-module-can-dev: '*'
+      nv-kernel-module-nvpps: '*'
       kernel-module-nvgpu: '*'
       kernel-module-nvhwpm: '*'
       kernel-module-nvidia: '*'
@@ -98,6 +117,10 @@ extensions:
       kernel-module-snd-hda-codec-hdmi: '*'
       kernel-module-snd-hda-core: '*'
       kernel-module-snd-hda-tegra: '*'
+      # AFC and the Tegra machine driver are loaded by the factory audio stack
+      # next to the modules below.
+      nv-kernel-module-snd-soc-tegra210-afc: '*'
+      nv-kernel-module-snd-soc-tegra-machine-driver: '*'
       kernel-module-snd-soc-audio-graph-card: '*'
       kernel-module-snd-soc-simple-card-utils: '*'
       kernel-module-snd-soc-tegra-audio-graph-card: '*'
@@ -125,12 +148,20 @@ extensions:
       nv-kernel-module-tegra-drm: '*'
       kernel-module-tegra-wmark: '*'
       kernel-module-tegra-xudc: '*'
+      # USB device-mode gadget functions the factory system loads for its
+      # usb0/usb1 gadget interfaces (NCM, RNDIS, ACM serial, mass storage).
+      kernel-module-libcomposite: '*'
+      kernel-module-u-ether: '*'
+      kernel-module-u-serial: '*'
+      kernel-module-usb-f-acm: '*'
+      kernel-module-usb-f-mass-storage: '*'
+      kernel-module-usb-f-ncm: '*'
+      kernel-module-usb-f-rndis: '*'
       kernel-module-tegra210-adma: '*'
       kernel-module-tegra234-aon: '*'
       kernel-module-tegra234-oc-event: '*'
       kernel-module-thermal-trip-event: '*'
       kernel-module-tsecriscv: '*'
-      linux-firmware-rtl8168: '*'
       swupdate: '*'
       tegra-redundant-boot-base: '*'
 
@@ -147,33 +178,17 @@ extensions:
       tegra-nvsciipc: '*'
       tegra-nvstartup: '*'
 
-    # 5.15 (linux-jammy-nvidia-tegra) uses NVIDIA's downstream Realtek shim
-    # for the M.2 wifi card; mainline rtw88 isn't built for this kernel.
-    # Mirrors meta-tegra/conf/machine/include/devkit-wifi.inc:NVIDIA_WIFI which
-    # avocado-pkg-rootfs doesn't pick up automatically (devkit-wifi.inc routes
-    # via MACHINE_EXTRA_RRECOMMENDS, not MACHINE_ESSENTIAL_EXTRA_RDEPENDS).
+    # The devkit's M.2 Wi-Fi stanzas (kernel-5.15.* rtl8822ce + tegra-firmware-
+    # rtl8822, kernel-6.6.* rtw88 + linux-firmware-rtl8822) are removed: the
+    # Mini's factory pci inventory holds only the PCIe root bridge and the
+    # NVMe controller, so no M.2 Key E / Wi-Fi device exists on this carrier.
     #
-    # The L4T rtl8822ce driver expects firmware at top-level /lib/firmware
-    # (rtl8822_setting.bin, rtl8822cu_fw, rtl8822cu_config) which only
-    # tegra-firmware-rtl8822 ships. linux-firmware-rtl8822 ships rtl_bt/* and
-    # rtw88/* — wrong path/format for the L4T driver.
-    kernel-5.15.*:
-      packages:
-        nv-kernel-module-rtl8822ce: '*'
-        tegra-firmware-rtl8822: '*'
-
-    # 6.6 (linux-yocto) uses the upstream rtw88 driver family for the 8822CE,
-    # and ships drm-display-helper as a separate module (5.15 statically links
-    # the helpers into drm.ko). linux-firmware-rtl8822 ships rtl_bt/* and
-    # rtw88/* firmware blobs at the paths the upstream drivers expect.
+    # 6.6 (linux-yocto) ships drm-display-helper as a separate module (5.15
+    # statically links the helpers into drm.ko). Kept from the devkit list
+    # for the display stack the Mini also loads (nvidia-drm, tegra-drm).
     kernel-6.6.*:
       packages:
         kernel-module-drm-display-helper: '*'
-        kernel-module-rtw88-8822c: '*'
-        kernel-module-rtw88-8822ce: '*'
-        kernel-module-rtw88-core: '*'
-        kernel-module-rtw88-pci: '*'
-        linux-firmware-rtl8822: '*'
 
 sdk:
   image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
