@@ -1,7 +1,7 @@
 /dts-v1/;
 
 /*
- * MB2 BCT misc override for the Seeed reComputer Robotics J501x carrier.
+ * MB2 BCT misc override for the Seeed reComputer Mini J501x carrier.
  *
  * Stock NVIDIA tegra234-mb2-bct-misc-p3701-0000.dts only includes
  * tegra234-mb2-bct-common.dtsi, which directs MB2 to read 256 bytes of
