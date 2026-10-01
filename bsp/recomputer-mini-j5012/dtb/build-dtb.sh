@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # devtool-debt: one committed DTB per L4T release. Ceiling: the 2024 feed's L4T 36.5.x device-tree ABI. Upgrade trigger: this board is needed on the 2026 feed, or Seeed changes its J501 DTS - then build it in the Yocto device-tree recipe instead.
 #
-# Reproducible build of the reComputer Robotics J5012 kernel DTB.
+# Reproducible build of the reComputer Mini J5012 kernel DTB.
 #
 #   build-dtb.sh            fetch, verify, build, write the DTB into stone/carrier-bsp/
 #   build-dtb.sh --verify   fetch, verify, rebuild, compare the sha256 with the committed DTB
@@ -18,7 +18,7 @@
 #
 # Environment overrides (all optional):
 #   J5012_DTB_CACHE_DIR    download cache for public_sources.tbz2
-#                          (default: ${XDG_CACHE_HOME:-$HOME/.cache}/avocado-os/recomputer-robotics-j5012-dtb)
+#                          (default: ${XDG_CACHE_HOME:-$HOME/.cache}/avocado-os/recomputer-mini-j5012-dtb)
 #   J5012_DTB_WORK_PARENT  directory the scratch dir is created in (default: ${TMPDIR:-/tmp})
 #   COMMITTED_DTB          DTB path to write, or to compare against in --verify
 #
@@ -42,19 +42,19 @@ KSRC_MEMBER="Linux_for_Tegra/source/kernel_src.tbz2"
 KSRC_SHA256="2a26015d13a2c4551c1266c8ec7503fc27b487d1cf74ccf3965d0633dacced1d"
 KSRC_BINDINGS="kernel/kernel-jammy-src/include/dt-bindings"
 
-DTS_NAME="tegra234-j501x-0000+p3701-0005-recomputer-robo"
+DTS_NAME="tegra234-j501x-0000+p3701-0005-recomputer-mini"
 
 # Seeed files overlaid onto NVIDIA's hardware/nvidia/t23x/nv-public: the include closure of
 # the DTS that Seeed carries. Format: <git blob sha>  <path under nv-public>
-SEEED_FILES="33f9b31e2d4ab642f6cff1db6ee69a60969456d5  nv-platform/tegra234-j501x-0000+p3701-0000-recomputer-robo.dts
-2dc696746cee3872e6ff0a3432d0ad8d48d82365  nv-platform/tegra234-j501x-0000+p3701-0005-recomputer-robo.dts
+SEEED_FILES="ca325af7ef26132460504d59aa1b031f7f6eddd3  nv-platform/tegra234-j501x-0000+p3701-0000-recomputer-mini.dts
+e01b6915d8cbf758fd6a9f01296b3c70b08f6eeb  nv-platform/tegra234-j501x-0000+p3701-0005-recomputer-mini.dts
 72289c86ac0bb14350a7a3126f1077aa11b6f134  nv-platform/tegra234-p3737-0000+p3701-xxxx-nv-common.dtsi
 b4013dab7f6cd34b948cf162eea677990bce5d72  tegra234-j501x-0000+p3701-0000.dts"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXT_DIR="$(dirname "$SCRIPT_DIR")"
 COMMITTED_DTB="${COMMITTED_DTB:-$EXT_DIR/stone/carrier-bsp/$DTS_NAME.dtb}"
-CACHE_DIR="${J5012_DTB_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/avocado-os/recomputer-robotics-j5012-dtb}"
+CACHE_DIR="${J5012_DTB_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/avocado-os/recomputer-mini-j5012-dtb}"
 WORK_PARENT="${J5012_DTB_WORK_PARENT:-${TMPDIR:-/tmp}}"
 
 MODE="build"
