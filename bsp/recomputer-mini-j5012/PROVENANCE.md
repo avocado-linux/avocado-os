@@ -294,3 +294,27 @@ sha256sum bsp/recomputer-mini-j5012/stone/carrier-bsp/tegra234-j501x-0000+p3701-
 grep -n 'SEEED_FILES=' -A4 bsp/recomputer-mini-j5012/dtb/build-dtb.sh
 dtc --version
 ```
+
+## Masked unit: getty@getty.service
+
+- Committed file: `overlay/etc/systemd/system/getty@getty.service`, a symlink to
+  `/dev/null` (the form systemd uses for a masked unit).
+- Why: OE-core's `90-systemd.preset` has `enable getty@.service`, a template with
+  no instance. The offline enabler turns it into a bare `getty@.service` link in
+  `getty.target.wants`, systemd instantiates it as `getty@getty.service`, and
+  agetty exits 208/STDIN. The `scarthgap` line of meta-avocado does not carry the
+  `systemd-jetson-masks` recipe that fixes this, so the feed the test image is
+  built from lacks it. The console is `serial-getty@ttyTCU0`, started by
+  `systemd-getty-generator` from `SERIAL_CONSOLES`, so masking the bare unit
+  costs nothing.
+
+```sh
+readlink bsp/recomputer-mini-j5012/overlay/etc/systemd/system/getty@getty.service
+```
+
+<!-- devtool-debt: this mask only hides the failing bare getty on images built
+from a feed without the systemd-jetson-masks preset fix; the console is
+unaffected. Ceiling: that one failing instance. Upgrade trigger: remove it when
+the feed the image is built from carries systemd-jetson-masks, i.e. when
+`systemctl --failed` on a booted image no longer lists getty@getty without the
+mask. -->
