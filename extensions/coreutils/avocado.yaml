@@ -33,7 +33,9 @@ extensions:
       diffutils: '*'
       procps: '*'
       tar: '*'
-      which: '*'
+      # No `which` here: the 2026/next target repos publish none, so the whole
+      # extension fails to install with "Unable to find a match: which".
+      # /usr/bin/which stays available from BusyBox.
       file: '*'
       # A real shell, not ash. BusyBox ash lacks arrays, `local -n`, process
       # substitution and `[[ =~ ]]`, so scripts written against bash fail on it
