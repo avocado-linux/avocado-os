@@ -1,0 +1,212 @@
+default_target: jetson-agx-orin
+supported_targets:
+  - jetson-agx-orin
+
+distro:
+  release: 2026
+  channel: next
+
+extensions:
+  avocado-bsp-recomputer-mini-j5012-r39:
+    version: 2026.1.0
+    release: r0
+    summary: Board support for the Seeed reComputer Mini J5012 on JetPack 7.2 (L4T R39.2.0), carrier extension on jetson-agx-orin
+    description: |
+      Layered carrier support for the Seeed reComputer Mini J5012: the
+      J501 carrier board with a Jetson AGX Orin 64GB module (P3701-0005).
+      This extension targets JetPack 7.2 (L4T R39.2.0) on the 2026 feed
+      (channel next, linux-yocto 6.18). The flash flow, BPMP firmware, PMIC
+      config and partition layout inherit unchanged from the
+      jetson-agx-orin flash profile; the carrier-specific files under
+      stone/ are layered over it. The JetPack 6.x (L4T R36.5.2) variant
+      lives in bsp/recomputer-mini-j5012.
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+      - sysext
+      - confext
+
+    package_files:
+      - overlay
+      - stone
+      - avocado.yaml
+
+    # Carrier overlay files for the reComputer Mini J5012 live under stone/.
+    # avocado-cli composes the path below into the runtime's effective
+    # AVOCADO_STONE_INCLUDE_PATHS, scoped to this extension's location
+    # (so for consumers that fetch this BSP as a remote extension, stone
+    # finds the carrier files at $AVOCADO_PREFIX/includes/avocado-bsp-recomputer-mini-j5012-r39/stone/).
+    stone_include_paths:
+      - stone
+
+    # Confext overlay - ships /etc/hostname so the device identifies as
+    # `recomputer-mini-j5012` instead of inheriting the SOM's MACHINE-derived
+    # `avocado-jetson-agx-orin` default, and the login PATH drop-in.
+    overlay: overlay
+
+    on_merge:
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+      - nvbootctrl verify
+
+    # Package names were checked against the 2026/next jetson-agx-orin feed
+    # (snapshot 311, see PROVENANCE.md): every entry below has a package or a
+    # Provides for the linux-yocto 6.18.35 kernel. avocado-cli auto-suffixes
+    # kernel-family names with -${KERNEL_VERSION} at install time; the
+    # nv-kernel-module-* RPMs (from nvidia-kernel-oot) Provide both prefixed
+    # and unprefixed variants so unqualified `kernel-module-*` references
+    # resolve to the versioned NVIDIA OOT package.
+    packages:
+      kernel-module-at24: '*'
+      kernel-module-cec: '*'
+      # kernel-module-crct10dif-ce removed: the 2026/next feed builds it only
+      # for the 6.8 kernel (kernel-module-crct10dif-ce-6.8.12-...); there is no
+      # 6.18 package, and the unqualified name would pull the 6.8 one.
+      # fusb301 (the devkit's USB-C controller) removed: the Mini's factory
+      # system never loads it. It loads the UCSI CCG stack (ucsi_ccg ->
+      # typec_ucsi -> typec) instead, so that stack is listed here.
+      kernel-module-typec: '*'
+      kernel-module-typec-ucsi: '*'
+      kernel-module-ucsi-ccg: '*'
+      kernel-module-governor-pod-scaling: '*'
+      kernel-module-governor-userspace: '*'
+      nv-kernel-module-host1x: '*'
+      kernel-module-host1x-fence: '*'
+      kernel-module-host1x-nvhost: '*'
+      kernel-module-ina3221: '*'
+      # tmp451 temperature sensor (i2c 4-004c) is driven by lm90.
+      kernel-module-lm90: '*'
+      # VRS11 voltage regulators (i2c 4-0020, 4-0022).
+      nv-kernel-module-i2c-nvvrs11: '*'
+      kernel-module-mc-hwpm: '*'
+      kernel-module-mc-utils: '*'
+      # Ethernet stack - both ports (eno1, eth1) are bound to the NVIDIA OOT
+      # nvethernet driver under the factory system (resolved via
+      # nv-kernel-module-nvethernet's `Provides: kernel-module-nvethernet`).
+      # The Mini's PHYs are not Realtek: the live device tree has an Aquantia
+      # AQR113C on MGBE0 (CONFIG_AQUANTIA_PHY=y in the 6.6 image kernel; not
+      # re-checked for 6.18) and an RGMII PHY carrying ti,* delay properties on
+      # the EQOS port (the dp83867 driver, a module in 6.18).
+      # kernel-module-realtek, kernel-module-r8169 and linux-firmware-rtl8168
+      # are removed: no Realtek device appears in the factory pci or net
+      # inventory. stmmac stays as the in-tree alternative MAC path.
+      kernel-module-nvethernet: '*'
+      kernel-module-dp83867: '*'
+      kernel-module-stmmac: '*'
+      # Both CAN controllers (can0, can1) are bound to the NVIDIA OOT mttcan
+      # driver; can_dev is its dependency. nvpps is mttcan's and nvethernet's
+      # PPS helper (use count 2 under the factory system).
+      nv-kernel-module-mttcan: '*'
+      kernel-module-can-dev: '*'
+      nv-kernel-module-nvpps: '*'
+      kernel-module-nvgpu: '*'
+      kernel-module-nvhwpm: '*'
+      kernel-module-nvidia: '*'
+      kernel-module-nvidia-drm: '*'
+      kernel-module-nvidia-modeset: '*'
+      kernel-module-nvidia-vrs-pseq: '*'
+      kernel-module-nvmap: '*'
+      kernel-module-nvme: '*'
+      kernel-module-nvme-core: '*'
+      kernel-module-nvpmodel-clk-cap: '*'
+      kernel-module-nvsciipc: '*'
+      kernel-module-nvvrs-pseq-rtc: '*'
+      kernel-module-pcie-tegra194: '*'
+      kernel-module-phy-tegra194-p2u: '*'
+      kernel-module-pwm-fan: '*'
+      kernel-module-pwm-tegra: '*'
+      kernel-module-pwm-tegra-tachometer: '*'
+      kernel-module-snd-hda-codec: '*'
+      kernel-module-snd-hda-codec-hdmi: '*'
+      kernel-module-snd-hda-core: '*'
+      kernel-module-snd-hda-tegra: '*'
+      # Tegra audio stack. On the 2026 line the tegra186/tegra210 ASoC drivers
+      # (asrc, dspk, admaif, adx, ahub, amx, dmic, i2s, mixer, mvc, ope, sfc)
+      # are in-tree kernel modules: the feed ships them as
+      # kernel-module-snd-soc-tegra*-6.18.35-yocto-standard and no longer as
+      # nv-kernel-module-snd-soc-*, so they are renamed here from the
+      # nv-kernel-module- spelling the 6.6 line used. AFC (still an
+      # nv-kernel-module- package in the feed) and the arad/tegra-utils
+      # modules (resolved through their nv-kernel-module- Provides) keep
+      # their names.
+      # nv-kernel-module-snd-soc-tegra-machine-driver removed: the 2026/next
+      # feed has no package or Provides of that name for either kernel.
+      nv-kernel-module-snd-soc-tegra210-afc: '*'
+      kernel-module-snd-soc-audio-graph-card: '*'
+      kernel-module-snd-soc-simple-card-utils: '*'
+      kernel-module-snd-soc-tegra-audio-graph-card: '*'
+      kernel-module-snd-soc-tegra-pcm: '*'
+      kernel-module-snd-soc-tegra-utils: '*'
+      kernel-module-snd-soc-tegra186-arad: '*'
+      kernel-module-snd-soc-tegra186-asrc: '*'
+      kernel-module-snd-soc-tegra186-dspk: '*'
+      kernel-module-snd-soc-tegra210-admaif: '*'
+      kernel-module-snd-soc-tegra210-adx: '*'
+      kernel-module-snd-soc-tegra210-ahub: '*'
+      kernel-module-snd-soc-tegra210-amx: '*'
+      kernel-module-snd-soc-tegra210-dmic: '*'
+      kernel-module-snd-soc-tegra210-i2s: '*'
+      kernel-module-snd-soc-tegra210-mixer: '*'
+      kernel-module-snd-soc-tegra210-mvc: '*'
+      kernel-module-snd-soc-tegra210-ope: '*'
+      kernel-module-snd-soc-tegra210-sfc: '*'
+      kernel-module-spi-tegra114: '*'
+      kernel-module-spidev: '*'
+      kernel-module-tegra-aconnect: '*'
+      kernel-module-tegra-bpmp-thermal: '*'
+      kernel-module-tegra-cactmon-mc-all: '*'
+      kernel-module-tegra-dce: '*'
+      nv-kernel-module-tegra-drm: '*'
+      kernel-module-tegra-wmark: '*'
+      kernel-module-tegra-xudc: '*'
+      # USB device-mode gadget functions the factory system loads for its
+      # usb0/usb1 gadget interfaces (NCM, RNDIS, ACM serial, mass storage).
+      kernel-module-libcomposite: '*'
+      kernel-module-u-ether: '*'
+      kernel-module-u-serial: '*'
+      kernel-module-usb-f-acm: '*'
+      kernel-module-usb-f-mass-storage: '*'
+      kernel-module-usb-f-ncm: '*'
+      kernel-module-usb-f-rndis: '*'
+      kernel-module-tegra210-adma: '*'
+      kernel-module-tegra234-aon: '*'
+      kernel-module-tegra234-oc-event: '*'
+      kernel-module-thermal-trip-event: '*'
+      kernel-module-tsecriscv: '*'
+      swupdate: '*'
+      tegra-redundant-boot-base: '*'
+
+      # L4T GPU userspace + boot-time daemons. tegra-firmware-tegra234 (the
+      # ga10b kernel firmware blobs) is delivered via
+      # packagegroup-avocado-tegra-rootfs in the rootfs erofs base, *not*
+      # here, because the kernel firmware loader returns -40 (ELOOP) when
+      # reading firmware files through the sysext /usr overlay.
+      # tegra-nvphs and tegra-nvstartup removed: neither exists in the
+      # 2026/next feed and meta-tegra at the R39.2.0 pin has no recipe for
+      # them (only tegra-nvpower remains of the three nv power daemons).
+      cuda-cudart: '*'
+      tegra-configs-udev: '*'
+      tegra-libraries-cuda: '*'
+      tegra-nvpower: '*'
+      tegra-nvsciipc: '*'
+
+    # The devkit's M.2 Wi-Fi stanza (kernel-6.18.* rtw88 + linux-firmware-
+    # rtl8822) is removed: the Mini's factory pci inventory holds only the PCIe
+    # root bridge and the NVMe controller, so no M.2 Key E / Wi-Fi device
+    # exists on this carrier.
+    #
+    # 6.18 (linux-yocto) ships drm-display-helper as a separate module. Kept
+    # from the devkit list for the display stack the Mini also loads
+    # (nvidia-drm, tegra-drm).
+    kernel-6.18.*:
+      packages:
+        kernel-module-drm-display-helper: '*'
+
+sdk:
+  # The 2026 SDK image has no per-channel tag: docker.io/avocadolinux/sdk
+  # carries `2026` and `2026-edge` (same digest) but no `2026-next`. The
+  # channel comes from distro.channel through the CLI, not from this tag.
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}
