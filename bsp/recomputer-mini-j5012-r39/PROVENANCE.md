@@ -46,8 +46,8 @@ gh api -H 'Accept: application/vnd.github.raw' 'repos/Seeed-Studio/Linux_for_Teg
 gh api -H 'Accept: application/vnd.github.raw' 'repos/Seeed-Studio/Linux_for_Tegra/contents/recomputer-mini-agx-orin-j501x.conf?ref=f9a68317fbe3d276efc25b14b8b72339a1cc5d5c' | diff - <(gh api -H 'Accept: application/vnd.github.raw' 'repos/Seeed-Studio/Linux_for_Tegra/contents/recomputer-mini-agx-orin-j501x.conf?ref=df17ed28201645fcaeb6c8e6fb82a0b4592faefb')
 ```
 
-Carrier DTS present on the same branch (content not yet read; task 2.2 ports
-the DTB build): `source/hardware/nvidia/t23x/nv-public/nv-platform/tegra234-j501x-0000+p3701-0005-recomputer-mini.dts`.
+Carrier DTS present on the same branch (the kernel DTB is built from it; see
+"DTB port to R39.2.0" below): `source/hardware/nvidia/t23x/nv-public/nv-platform/tegra234-j501x-0000+p3701-0005-recomputer-mini.dts`.
 
 ```sh
 gh api 'repos/Seeed-Studio/Linux_for_Tegra/git/trees/df17ed28201645fcaeb6c8e6fb82a0b4592faefb?recursive=1' --jq '.tree[].path' | grep 'recomputer-mini'
@@ -264,29 +264,125 @@ gh api -H 'Accept: application/vnd.github.raw' 'repos/Seeed-Studio/Linux_for_Teg
 gh api -H 'Accept: application/vnd.github.raw' 'repos/Seeed-Studio/Linux_for_Tegra/contents/recomputer-mini-agx-orin-j501x.conf?ref=df17ed28201645fcaeb6c8e6fb82a0b4592faefb' | cat -n | sed -n 83,115p
 ```
 
-### Kernel DTB (not yet ported)
+### Kernel DTB
 
-`stone/carrier-bsp/tegra234-j501x-0000+p3701-0005-recomputer-mini.dtb` and
-`dtb/build-dtb.sh` are copied unchanged from the R36.5.2 extension. The DTB was
-built from R36.5.2 public sources (see the superseded sections below) and the
-script still pins them. The R39.2.0 port is a separate step; until it lands this
-DTB is an R36.5.2 artifact and must not be read as the R39 one.
+`stone/carrier-bsp/tegra234-j501x-0000+p3701-0005-recomputer-mini.dtb` is the
+R39.2.0 build described in "DTB port to R39.2.0" below; `dtb/build-dtb.sh` pins
+the R39.2.0 inputs.
+
+## DTB port to R39.2.0
+
+`dtb/build-dtb.sh` was ported from the R36.5.2 script. Every input it fetches is
+pinned and re-hashed on each run; `bash dtb/build-dtb.sh --verify` rebuilds and
+compares against the committed DTB.
+
+| Input | R36.5.2 script | R39.2.0 script |
+|---|---|---|
+| Seeed commit | `f9a68317fbe3d276efc25b14b8b72339a1cc5d5c` | `df17ed28201645fcaeb6c8e6fb82a0b4592faefb` |
+| `public_sources.tbz2` | `r36_Release_v5.2`, sha256 `4347a718...1801d5` | `r39_Release_v2.0`, sha256 `87d2e31ff55beaf2373e2f288538585995b231fd5745ec21f39a668e36efab2f` |
+| `kernel_oot_modules_src.tbz2` (carries `hardware/nvidia/`) | `d5f33421...aaf2812` | `c1db05b32d7429c27b15bd4fd8d826bd56ee03690a337e19f03097b48aa03206` |
+| `kernel_src.tbz2` (dt-bindings only) | `2a26015d...cced1d`, `kernel/kernel-jammy-src/include/dt-bindings` | `2bc287ba8193e8b686f23b6e14ac25fbe8fcbfac457a3432d634c46f217a350e`, `kernel/kernel-noble/include/dt-bindings` |
+| Seeed `nv-platform/tegra234-p3737-0000+p3701-xxxx-nv-common.dtsi` blob | `72289c86...` | `16639d55a3fc83f8163ee7db4ed857098b5b44ca` |
+| other three Seeed DTS files | blobs `ca325af7...`, `e01b6915...`, `b4013dab...` | the same three blobs at r39.2.0 |
+| cpp defines | `-DLINUX_VERSION=600 -DTEGRA_HOST1X_DT_VERSION=2` | the same plus `-DOS_LINUX` |
+| include order | ad hoc | `DT_INCLUDE:tegra234` of `tegra-devicetree.bbclass` |
+
+The `public_sources.tbz2` hash equals `SRC_URI[sha256sum]` in meta-tegra
+`recipes-bsp/tegra-sources/tegra-sources-39.2.0.inc`, and the member list equals
+`TEGRA_SRC_SUBARCHIVE` of `nvidia-kernel-oot_39.2.0.bb`. The Seeed r39
+`nv-common.dtsi` differs from NVIDIA's own R39 copy by one line
+(`os_gpio_hotplug_a`, a Seeed addition), which is why it is overlaid. The
+build used `DTC v1.8.1` and `cpp (GCC) 16.2.1` from the host: the
+avocadolinux/sdk:2026 image carries neither tool. The R36 DTB's recorded sha256
+is `07d830c4...00953d`.
+
+```sh
+git -C ~/repos/work/peridio/meta-tegra show 727633de:recipes-bsp/tegra-sources/tegra-sources-39.2.0.inc | grep sha256sum
+git -C ~/repos/work/peridio/meta-tegra show 727633de:classes-recipe/tegra-devicetree.bbclass | grep -n 'DT_INCLUDE:tegra234\|DTC_PPFLAGS'
+bash bsp/recomputer-mini-j5012-r39/dtb/build-dtb.sh --verify
+```
+
+New DTB: `stone/carrier-bsp/tegra234-j501x-0000+p3701-0005-recomputer-mini.dtb`,
+214501 bytes, sha256
+`c315aeabc824af5a4b63759be8b1ebdfdcdb7c079c7f3e81bf3849f8e2b57deb`.
 
 ```sh
 sha256sum bsp/recomputer-mini-j5012-r39/stone/carrier-bsp/tegra234-j501x-0000+p3701-0005-recomputer-mini.dtb
-grep -n 'R36\|36.5' bsp/recomputer-mini-j5012-r39/dtb/build-dtb.sh | head
+dtc -I dtb -O dts bsp/recomputer-mini-j5012-r39/stone/carrier-bsp/tegra234-j501x-0000+p3701-0005-recomputer-mini.dtb | grep -c nvidia,tegra234
+```
+
+The second command prints `168`. Three of the four Seeed DTS files are
+byte-identical between r36.5.0 and r39.2.0 (same git blob shas), so every
+difference below comes from NVIDIA's R39.2.0 SoC and platform dtsi and from
+Seeed's updated `nv-common.dtsi`.
+
+### Difference from the R36.5.2 DTB
+
+Both DTBs were decompiled with `dtc -I dtb -O dts -s` and compared node by node
+(1777 nodes in R36, 1244 in R39). Root `model`, root `compatible` and the
+`/chosen` bootargs (`console=ttyTCU0,115200n8`) are identical. Phandle values
+renumber across the two trees, so the comparison ignores phandle numbers.
+
+- Removed: 549 nodes under `/sound` (183 per-link `nvidia-audio-card,dai-link@N`
+  groups) and the stray `/bus@0/xusb_padctl@3520000` node. R36 carried the USB pad
+  prod-settings on that stray node; R39 carries them on
+  `/bus@0/padctl@3520000/prod-settings`.
+- Added: `/bwmgr`, `/tegra-capture-isp`, `/memory@60000000` (a
+  `nvidia,tegra234-syncpoint-shim` region, not RAM),
+  `/bus@0/reserved-memory/reservation-ape`, `tegra-hsp@16160000`,
+  `tegra-hsp@b150000`, `timer@3010000`, `nvrng@3ae0000`, `tachometer@39b0000`,
+  `aconnect` `admaif@290f000` and `adsp@2993000`, `audio-codec@1c` on
+  `i2c@31e0000`, `/sound/mixer-controls`, `/tsc_sig_gen@c6a0000/fsync-groups`.
+- Status changes: ahub `afc` (6 nodes), `arad`, `dmic` (3), `dspk` (2),
+  `i2s@2901200` and `i2s@2901400` went from `okay` to `disabled`;
+  `/tsc_sig_gen@c6a0000` and its `generator@380` went from `disabled` to `okay`.
+- Property changes: `fuse@3810000` reg size `0x10000` to `0x20000`; `spi@3210000`,
+  `spi@3230000` and `spi@c260000` gain a `nvidia,tegra234-spi` compatible;
+  `tsc_sig_gen` compatible `nvidia,tegra234-cam-cdi-tsc` to
+  `nvidia,tegra234-cdi-tsc`; `/sound` drops `nvidia,tegra186-ape`; `/aliases`
+  gains `ethernet0`; `ethernet@6800000` gains `nvidia,pps_op_ctrl`; new I2C,
+  SPI and QSPI timing and tap-delay properties under `prod-settings`; `iommus`
+  added on `serial@3100000` and `serial@3140000`; `nvpps` swaps its timestamp
+  properties; `hardware-timestamp@c1e0000` drops `nvidia,num-slices`;
+  `host1x@13e00000` gains `nvidia,syncpoint-shim`; `display@13800000` gains four
+  `nvidia,*-khz` properties; `chosen/framebuffer` gains `display` and
+  `#power-domain-cells`.
+- Everything else (including `gpu@17000000`, `hda`, `ufshci`, the `cpus`
+  caches, `rtcpu@bc00000`, `pwm-fan`) differs only by phandle renumbering: one
+  extra phandle shifts the regulator, GPIO-controller and pinctrl references.
+
+Boot-critical nodes, compared property by property:
+
+| Node | Result |
+|---|---|
+| `pcie@14160000` and the other ten PCIe controller nodes (`140a0000` to `141e0000`) | identical except `vddio-pex-ctl-supply` phandle 0xf5 to 0xf6 on `14160000` (renumbering) |
+| `mmc@3460000` (eMMC) | identical |
+| `mmc@3400000` (SD) | `pinctrl-0`, `pinctrl-1`, `vmmc-supply` phandles shifted by one; no value change |
+| `ethernet@6800000` (mgbe, `eno1`) and `ethernet@2310000` | phandle shifts on `phy-handle`, `snps,axi-config`, `nvidia,vm-irq-config`, `nvidia,phy-reset-gpio`; PHY reset GPIO pin numbers (0x91, 0x35) unchanged; `ethernet@6800000` gains `nvidia,pps_op_ctrl` and the `ethernet0` alias |
+| `serial@3100000` (console UART) and `/serial` (tcu) | `serial@3100000` gains `iommus`; `status`, `compatible`, `reg` unchanged; `/serial` identical; `/chosen` `bootargs` and `stdout-path` identical |
+| `/bpmp` | identical except the `shmem` phandles (0x12a 0x12b to 0x12e 0x12f) |
+| memory, `/reserved-memory` | no `/memory` node in either DTB; the four `/reserved-memory` children are the same, only `iommu-addresses` phandle numbers changed; R39 adds `/bus@0/reserved-memory/reservation-ape` |
+
+Verdict: no boot-critical node (NVMe and PCIe controllers, eMMC, mgbe/`eno1`,
+console UART and tcu, bpmp, memory and reserved-memory) differs in a `reg`,
+`status`, `compatible`, GPIO number or clock value. The differences are phandle
+renumbering, an added `iommus` on the two UARTs, an added `ethernet0` alias and an
+added APE reservation. This is a static comparison; the DTB was not booted.
+
+```sh
+dtc -I dtb -O dts -s <dtb> > <out>.dts
 ```
 
 ## Superseded R36.5.x inputs
 
 Inherited from `bsp/recomputer-mini-j5012`. Nothing below is an input to the
-R39.2.0 extension except where a line says the unported DTB build still reads it.
+R39.2.0 extension; the DTB build no longer reads any of it.
 
 ### Seeed carrier sources (r36.5.0), superseded
 
 - Branch `r36.5.0`, commit `f9a68317fbe3d276efc25b14b8b72339a1cc5d5c`, conf
   sha256 `a45a06424c320019cbbaa70b2f01c9f5f49fc0d0cb4048183a00ce5e131fa506`.
-  Still read by the unported DTB build for its four device-tree inputs
+  Read by the R36.5.2 DTB build for its four device-tree inputs
   (git blob shas, paths under `source/hardware/nvidia/t23x/nv-public/`):
 
 | Blob sha | Path |
@@ -320,7 +416,7 @@ gh api repos/avocado-linux/meta-avocado/commits/e5b750c61c09b16deea4cd21cb01586e
 gh api repos/avocado-linux/vendor-meta-tegra/commits/053a4e97d356499ab028a59c17a5ee36e2c5b8c2 --jq '.sha + " " + .commit.committer.date'
 ```
 
-### NVIDIA R36.5.2 archives, still read by the unported DTB build
+### NVIDIA R36.5.2 archives, read by the R36.5.2 DTB build
 
 - `Jetson_Linux_R36.5.2_aarch64.tbz2`, sha256
   `752326264c5e16826d3044a78e59ae06109467d37705143b94e664c91a471f47`,
@@ -345,10 +441,10 @@ tar -xjOf public_sources.tbz2 Linux_for_Tegra/source/kernel_src.tbz2 | sha256sum
 ### Device-tree compiler and the R36.5.2 DTB
 
 - `DTC v1.8.1` (`dtc --version`).
-- R36.5.2 DTB output sha256 (enforced by the unported `dtb/build-dtb.sh --verify`):
+- R36.5.2 DTB output sha256 (enforced by `dtb/build-dtb.sh --verify` of `bsp/recomputer-mini-j5012`):
   `07d830c48c1a697d7e0baa05e8f9ea9d32de64dc7b56027721f4474bc800953d`.
 
 ```sh
 dtc --version
-sha256sum bsp/recomputer-mini-j5012-r39/stone/carrier-bsp/tegra234-j501x-0000+p3701-0005-recomputer-mini.dtb
+sha256sum bsp/recomputer-mini-j5012/stone/carrier-bsp/tegra234-j501x-0000+p3701-0005-recomputer-mini.dtb
 ```
