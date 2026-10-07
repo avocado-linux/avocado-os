@@ -87,13 +87,15 @@ extensions:
       # nvethernet driver under the factory system (resolved via
       # nv-kernel-module-nvethernet's `Provides: kernel-module-nvethernet`).
       # The Mini's PHYs are not Realtek: the live device tree has an Aquantia
-      # AQR113C on MGBE0 (CONFIG_AQUANTIA_PHY=y in the 6.6 image kernel; not
-      # re-checked for 6.18) and an RGMII PHY carrying ti,* delay properties on
+      # AQR113C on MGBE0 (CONFIG_AQUANTIA_PHY=y in the 6.6 image kernel; a
+      # module in 6.18.35, CONFIG_AQUANTIA_PHY=m in its IKCONFIG block, so it
+      # is installed here) and an RGMII PHY carrying ti,* delay properties on
       # the EQOS port (the dp83867 driver, a module in 6.18).
       # kernel-module-realtek, kernel-module-r8169 and linux-firmware-rtl8168
       # are removed: no Realtek device appears in the factory pci or net
       # inventory. stmmac stays as the in-tree alternative MAC path.
       kernel-module-nvethernet: '*'
+      kernel-module-aquantia: '*'
       kernel-module-dp83867: '*'
       kernel-module-stmmac: '*'
       # Both CAN controllers (can0, can1) are bound to the NVIDIA OOT mttcan
