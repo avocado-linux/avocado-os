@@ -74,10 +74,15 @@ Named by `kas/vendor/nvidia.yml` on meta-avocado `wrynose` (head
 `86202be527224f2b5da7549ba3cbe66a0c4b4189`, committer date
 2026-10-02T07:23:25-06:00 when read), key `repos.meta-tegra.commit`:
 
+The commands in this file assume `META_TEGRA` is a checkout of meta-tegra and
+`META_AVOCADO` a checkout of meta-avocado, and they run from a scratch directory:
+the feed name list in the section below is written to `snapshot311-names.txt`
+there and read back by the later commands.
+
 ```sh
 gh api 'repos/avocado-linux/meta-avocado/contents/kas/vendor/nvidia.yml?ref=wrynose' --jq .content | base64 -d | grep -A4 'meta-tegra:'
-git -C ~/repos/work/peridio/meta-tegra log -1 --format='%H %cI' 727633de
-git -C ~/repos/work/peridio/meta-tegra show 727633de:classes/l4t_version.bbclass | grep -n L4T_VERSION
+git -C "$META_TEGRA" log -1 --format='%H %cI' 727633de
+git -C "$META_TEGRA" show 727633de:classes/l4t_version.bbclass | grep -n L4T_VERSION
 ```
 
 `TEGRA_FLASHVAR_ODMDATA` is the BitBake variable that bakes the ODMDATA default
@@ -86,7 +91,7 @@ lists the flashvars key `ODMDATA`. See `stone/carrier-bsp/carrier.env` for why
 the carrier knob keeps the name `CARRIER_ENV_ODMDATA`.
 
 ```sh
-git -C ~/repos/work/peridio/meta-tegra grep -n 'ODMDATA' 727633de -- conf/machine/include/agx-orin.inc conf/machine/include/tegra-common.inc
+git -C "$META_TEGRA" grep -n 'ODMDATA' 727633de -- conf/machine/include/agx-orin.inc conf/machine/include/tegra-common.inc
 ```
 
 ### 2026/next feed (jetson-agx-orin)
@@ -115,7 +120,7 @@ Versions below were read from the snapshot-311 primary metadata:
 ```sh
 B=https://repo.avocadolinux.org/2026/next/snapshots/311/target/jetson-agx-orin
 P=$(curl -s $B/repodata/repomd.xml | grep -o 'href="[^"]*primary.xml.gz"' | cut -d'"' -f2)
-curl -s $B/$P | zcat | grep -o '<name>[^<]*</name>' | sort -u > /var/tmp/claude-code/peridio/2026-10-06-jp72/snapshot311-names.txt
+curl -s $B/$P | zcat | grep -o '<name>[^<]*</name>' | sort -u > snapshot311-names.txt
 ```
 
 - Kernels: `kernel-6.18.35-yocto-standard` (linux-yocto 6.18.35, the default) and
@@ -129,12 +134,12 @@ curl -s $B/$P | zcat | grep -o '<name>[^<]*</name>' | sort -u > /var/tmp/claude-
   `avocado-ext-sshd-dev` 0.1.0.
 
 ```sh
-grep -x -e '<name>kernel-6.18.35-yocto-standard</name>' -e '<name>kernel-6.8.12-l4t-r39.2.0-1021.21</name>' -e '<name>l4t-launcher</name>' -e '<name>systemd-jetson-masks</name>' /var/tmp/claude-code/peridio/2026-10-06-jp72/snapshot311-names.txt
-grep -c 'nv-kernel-module-\(nvethernet\|mttcan\|i2c-nvvrs11\|nvpps\)-6.18.35-yocto-standard</name>' /var/tmp/claude-code/peridio/2026-10-06-jp72/snapshot311-names.txt
+grep -x -e '<name>kernel-6.18.35-yocto-standard</name>' -e '<name>kernel-6.8.12-l4t-r39.2.0-1021.21</name>' -e '<name>l4t-launcher</name>' -e '<name>systemd-jetson-masks</name>' snapshot311-names.txt
+grep -c 'nv-kernel-module-\(nvethernet\|mttcan\|i2c-nvvrs11\|nvpps\)-6.18.35-yocto-standard</name>' snapshot311-names.txt
 ```
 
-The probe note with the full inventory is `jp72-probe.md` in the devspec
-change `jetson-agx-emmc-window-prep` (evidence directory).
+The full package inventory these notes were read from is the name list the first
+command above writes to `snapshot311-names.txt`.
 
 ### Module list changes against the R36.5.2 extension
 
@@ -161,10 +166,10 @@ no notes about it (`git grep -i 'audio\|snd' 727633de -- conf recipes-kernel`
 prints nothing).
 
 ```sh
-git -C ~/repos/work/peridio/meta-tegra grep -n -i 'audio\|snd' 727633de -- conf recipes-kernel
-git -C ~/repos/work/peridio/meta-tegra ls-tree -r --name-only 727633de | grep -i 'nvphs\|nvstartup'
-grep -c 'kernel-module-snd-soc-tegra210-i2s-6.18.35-yocto-standard' /var/tmp/claude-code/peridio/2026-10-06-jp72/snapshot311-names.txt
-grep -c 'nv-kernel-module-snd-soc-tegra210-i2s' /var/tmp/claude-code/peridio/2026-10-06-jp72/snapshot311-names.txt
+git -C "$META_TEGRA" grep -n -i 'audio\|snd' 727633de -- conf recipes-kernel
+git -C "$META_TEGRA" ls-tree -r --name-only 727633de | grep -i 'nvphs\|nvstartup'
+grep -c 'kernel-module-snd-soc-tegra210-i2s-6.18.35-yocto-standard' snapshot311-names.txt
+grep -c 'nv-kernel-module-snd-soc-tegra210-i2s' snapshot311-names.txt
 ```
 
 The last command prints `0`, the one before it a non-zero count.
@@ -177,7 +182,7 @@ packagegroup pulled in, and the 6.8 `linux-noble-nvidia-tegra` kernel is built
 alongside it.
 
 ```sh
-git -C ~/repos/work/.worktrees/meta-avocado/jetson-orin-nano-ethernet-modules-wrynose show origin/wrynose:meta-avocado-nvidia/recipes-kernel/linux/linux-yocto_6.18.bbappend | head -20
+git -C "$META_AVOCADO" show origin/wrynose:meta-avocado-nvidia/recipes-kernel/linux/linux-yocto_6.18.bbappend | head -20
 ```
 
 ### Provisioning script (2026 line)
@@ -188,7 +193,7 @@ recorded above. It applies `CARRIER_FV_*` / `CARRIER_ENV_*` knobs and warns
 `target not found` for a knob naming a key the file does not carry.
 
 ```sh
-git -C ~/repos/work/.worktrees/meta-avocado/jetson-orin-nano-ethernet-modules-wrynose rev-parse origin/wrynose:meta-avocado-nvidia/stone/tegra/stone-provision-tegraflash.sh
+git -C "$META_AVOCADO" rev-parse origin/wrynose:meta-avocado-nvidia/stone/tegra/stone-provision-tegraflash.sh
 ```
 
 ### Overlay files
@@ -297,8 +302,8 @@ avocadolinux/sdk:2026 image carries neither tool. The R36 DTB's recorded sha256
 is `07d830c4...00953d`.
 
 ```sh
-git -C ~/repos/work/peridio/meta-tegra show 727633de:recipes-bsp/tegra-sources/tegra-sources-39.2.0.inc | grep sha256sum
-git -C ~/repos/work/peridio/meta-tegra show 727633de:classes-recipe/tegra-devicetree.bbclass | grep -n 'DT_INCLUDE:tegra234\|DTC_PPFLAGS'
+git -C "$META_TEGRA" show 727633de:recipes-bsp/tegra-sources/tegra-sources-39.2.0.inc | grep sha256sum
+git -C "$META_TEGRA" show 727633de:classes-recipe/tegra-devicetree.bbclass | grep -n 'DT_INCLUDE:tegra234\|DTC_PPFLAGS'
 bash bsp/recomputer-mini-j5012-r39/dtb/build-dtb.sh --verify
 ```
 
