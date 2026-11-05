@@ -1,0 +1,48 @@
+supported_targets: '*'
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-ext-bringup:
+    version: 2024.1.0
+    release: r0
+    summary: Hardware bringup tools and a root serial console
+    description: Bringup tools (network, bus probing, storage, device tree, tracing) and a serial console that logs in as root without a password. DO NOT USE IN PRODUCTION.
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    types:
+      - sysext
+      - confext
+
+    overlay: overlay
+
+    # The serial getty may already be up when the overlay merges; restart it so the autologin drop-in applies.
+    on_merge:
+      - systemctl try-restart --no-block serial-getty@*.service
+
+    packages:
+      curl: '*'
+      devmem2: '*'
+      dosfstools: '*'
+      dtc: '*'
+      e2fsprogs: '*'
+      ethtool: '*'
+      htop: '*'
+      i2c-tools: '*'
+      iproute2: '*'
+      iputils: '*'
+      libgpiod: '*'
+      libgpiod-tools: '*'
+      parted: '*'
+      pciutils: '*'
+      procps: '*'
+      strace: '*'
+      tcpdump: '*'
+      usbutils: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
