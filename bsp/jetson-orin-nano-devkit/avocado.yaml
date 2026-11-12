@@ -1,3 +1,5 @@
+# The 2026 release names this target jetson-orin-nano.
+# This directory keeps its 2024 name for existing consumers.
 default_target: jetson-orin-nano-devkit
 supported_targets:
   - jetson-orin-nano-devkit
