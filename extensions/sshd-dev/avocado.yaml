@@ -1,8 +1,13 @@
+cli_requirement: '>=1.1.0'
+
 supported_targets: '*'
 
 distro:
   release: 2024
   channel: edge
+  target-qemux86-64:
+    release: 2026
+    channel: edge
 
 extensions:
   avocado-ext-sshd-dev:
