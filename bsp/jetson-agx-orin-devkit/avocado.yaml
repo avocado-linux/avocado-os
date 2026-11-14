@@ -1,3 +1,4 @@
+# 2024-only BSP. 2026 projects target jetson-agx-orin (see bsp/recomputer-mini-j5012-r39); there is no 2026 BSP for it here yet.
 default_target: jetson-agx-orin-devkit
 supported_targets:
   - jetson-agx-orin-devkit
