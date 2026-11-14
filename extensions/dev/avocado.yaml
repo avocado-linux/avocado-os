@@ -8,6 +8,9 @@ distro:
   target-qemux86-64:
     release: 2026
     channel: edge
+  target-qemuarm64:
+    release: 2026
+    channel: edge
 
 extensions:
   avocado-ext-dev:
