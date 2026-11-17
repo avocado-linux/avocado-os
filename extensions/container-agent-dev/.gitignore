@@ -1,3 +1,0 @@
-# Build artifacts produced by `avocado build`; not source.
-avocado.lock
-.avocado/
