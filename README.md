@@ -9,7 +9,7 @@ This repository used to hold the shared Avocado OS extensions and the board supp
 
 | Former path | Now |
 |-------------|-----|
-| bsp/alif-e8-devkit | [bsp-alif-e8-devkit](https://github.com/avocado-linux/bsp-alif-e8-devkit) |
+| bsp/alif-e8-devkit | [bsp-alif-e8-devkit](https://github.com/avocado-linux/bsp-alif-e8-devkit), not yet published to the package feed |
 | bsp/fr202 | [bsp-fr202](https://github.com/avocado-linux/bsp-fr202) |
 | bsp/grinn-astra-1680-sbc | [bsp-grinn-astra-1680-sbc](https://github.com/avocado-linux/bsp-grinn-astra-1680-sbc) |
 | bsp/icam-540 | [bsp-icam-540](https://github.com/avocado-linux/bsp-icam-540) |
@@ -19,27 +19,27 @@ This repository used to hold the shared Avocado OS extensions and the board supp
 | bsp/imx93-frdm | [bsp-imx93-frdm](https://github.com/avocado-linux/bsp-imx93-frdm) |
 | bsp/intel-x86-64-v2 | [bsp-intel-x86-64-v2](https://github.com/avocado-linux/bsp-intel-x86-64-v2) |
 | bsp/intel-x86-64-v3 | [bsp-intel-x86-64-v3](https://github.com/avocado-linux/bsp-intel-x86-64-v3) |
-| bsp/intel-x86-64-v4 | [bsp-intel-x86-64-v4](https://github.com/avocado-linux/bsp-intel-x86-64-v4) |
+| bsp/intel-x86-64-v4 | [bsp-intel-x86-64-v4](https://github.com/avocado-linux/bsp-intel-x86-64-v4), not yet published to the package feed |
 | bsp/jetson-agx-orin-devkit | [bsp-jetson-agx-orin](https://github.com/avocado-linux/bsp-jetson-agx-orin) |
 | bsp/jetson-orin-nano-devkit | [bsp-jetson-orin-nano](https://github.com/avocado-linux/bsp-jetson-orin-nano) |
 | bsp/jetson-orin-nx | [bsp-jetson-orin-nx](https://github.com/avocado-linux/bsp-jetson-orin-nx) |
 | bsp/mic-733-ao5a1 | [bsp-mic-733-ao5a1](https://github.com/avocado-linux/bsp-mic-733-ao5a1) |
 | bsp/mic-733-ao6a1 | [bsp-mic-733-ao6a1](https://github.com/avocado-linux/bsp-mic-733-ao6a1) |
-| bsp/orangepi-5-plus | [bsp-orangepi-5-plus](https://github.com/avocado-linux/bsp-orangepi-5-plus) |
+| bsp/orangepi-5-plus | [bsp-orangepi-5-plus](https://github.com/avocado-linux/bsp-orangepi-5-plus), not yet published to the package feed |
 | bsp/qemuarm64 | [bsp-qemuarm64](https://github.com/avocado-linux/bsp-qemuarm64) |
 | bsp/qemux86-64 | [bsp-qemux86-64](https://github.com/avocado-linux/bsp-qemux86-64) |
 | bsp/raspberrypi0-2w | [bsp-raspberrypi0-2w](https://github.com/avocado-linux/bsp-raspberrypi0-2w) |
 | bsp/raspberrypi4 | [bsp-raspberrypi4](https://github.com/avocado-linux/bsp-raspberrypi4) |
 | bsp/raspberrypi5 | [bsp-raspberrypi5](https://github.com/avocado-linux/bsp-raspberrypi5) |
-| bsp/recomputer-j301x | [bsp-recomputer-j301x](https://github.com/avocado-linux/bsp-recomputer-j301x) |
-| bsp/recomputer-j401x | [bsp-recomputer-j401x](https://github.com/avocado-linux/bsp-recomputer-j401x) |
+| bsp/recomputer-j301x | [bsp-recomputer-j301x](https://github.com/avocado-linux/bsp-recomputer-j301x), not yet published to the package feed |
+| bsp/recomputer-j401x | [bsp-recomputer-j401x](https://github.com/avocado-linux/bsp-recomputer-j401x), not yet published to the package feed |
 | bsp/recomputer-mini-j5012-r39 | [bsp-recomputer-mini-j5012-r39](https://github.com/avocado-linux/bsp-recomputer-mini-j5012-r39) |
 | bsp/recomputer-mini-j5012 | not moved, see [the tree at 41c9c39e65](https://github.com/avocado-linux/avocado-os/tree/41c9c39e65/bsp/recomputer-mini-j5012) |
 | bsp/reterminal-dm | [bsp-reterminal-dm](https://github.com/avocado-linux/bsp-reterminal-dm) |
 | bsp/reterminal | [bsp-reterminal](https://github.com/avocado-linux/bsp-reterminal) |
 | bsp/rubikpi3 | [bsp-rubikpi3](https://github.com/avocado-linux/bsp-rubikpi3) |
 | bsp/rzv2n-sr-som | [bsp-rzv2n-sr-som](https://github.com/avocado-linux/bsp-rzv2n-sr-som) |
-| bsp/stm32mp25-dk | [bsp-stm32mp25-dk](https://github.com/avocado-linux/bsp-stm32mp25-dk) |
+| bsp/stm32mp25-dk | [bsp-stm32mp25-dk](https://github.com/avocado-linux/bsp-stm32mp25-dk), not yet published to the package feed |
 | extensions/ca-certificates | [ext-ca-certificates](https://github.com/avocado-linux/ext-ca-certificates) |
 | extensions/cli | [avocado-cli](https://github.com/avocado-linux/avocado-cli) |
 | extensions/cockpit | [ext-cockpit](https://github.com/avocado-linux/ext-cockpit) |
