@@ -1,0 +1,35 @@
+default_target: imx95-frdm
+supported_targets:
+  - imx95-frdm
+
+distro:
+  release: 2024
+  channel: edge
+
+extensions:
+  avocado-bsp-imx95-frdm:
+    version: 2024.1.0
+    release: r0
+    summary: Board support for the i.MX 95 FRDM
+    description: Board support for the i.MX 95 FRDM
+    license: Apache-2.0
+    url: https://github.com/avocadolinux/avocado-os
+    vendor: Avocado Linux <info@avocadolinux.org>
+
+    on_merge:
+      - udevadm control --reload
+      - udevadm trigger --type=subsystems --action=add --settle
+      - udevadm trigger --type=devices --action=add --settle
+
+    packages:
+      kernel-module-mali-dp: '*'
+      libmali-libvulkan: '*'
+      libmali-opencl-icd: '*'
+      libmali0: '*'
+      mali-imx-libegl: '*'
+      mali-imx-libgbm: '*'
+      mali-imx-libgles1: '*'
+      mali-imx-libgles2: '*'
+
+sdk:
+  image: docker.io/avocadolinux/sdk:{{ avocado.distro.release }}-{{ avocado.distro.channel }}
