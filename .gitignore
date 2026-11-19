@@ -1,5 +1,0 @@
-build-*
-.avocado-state
-*.rpm
-_repo/
-.avocado
